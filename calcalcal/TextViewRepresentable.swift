@@ -13,7 +13,7 @@ struct TextViewRepresentable: UIViewRepresentable {
         textView.isEditable = true
         textView.backgroundColor = .clear
         // Reduced right padding to 88 (80 for calories + 8 for spacing)
-        textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 8, right: 88)
+        textView.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 8, right: 120)
         return textView
     }
     
