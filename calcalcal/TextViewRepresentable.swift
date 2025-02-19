@@ -12,7 +12,8 @@ struct TextViewRepresentable: UIViewRepresentable {
         textView.isScrollEnabled = true
         textView.isEditable = true
         textView.backgroundColor = .clear
-        textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 108) // Right padding for calorie display
+        // Reduced right padding to 88 (80 for calories + 8 for spacing)
+        textView.textContainerInset = UIEdgeInsets(top: 16, left: 24, bottom: 8, right: 88)
         return textView
     }
     
