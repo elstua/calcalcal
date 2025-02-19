@@ -8,7 +8,8 @@ protocol SlotViewProvider {
 
 struct CalorieSlotProvider: SlotViewProvider {
     let slotId = "calories"
-    let requiredWidth: CGFloat = 80 // Reduced width to fix padding issue
+    // Use centralized constant
+    var requiredWidth: CGFloat { LayoutConstants.calorieSlotWidth }
     
     func createView(for paragraph: TextLineManager.ParagraphData) -> AnyView {
         // Get calories from metadata or return empty view for empty paragraphs
@@ -22,8 +23,8 @@ struct CalorieSlotProvider: SlotViewProvider {
             Text("\(calories) kcal")
                 .foregroundColor(.secondary)
                 .font(.system(size: 18))
-//                .frame(width: requiredWidth, alignment: .trailing)
-                .padding(.trailing, -200) // Small padding
+                .frame(width: requiredWidth, alignment: .trailing)
+                .padding(LayoutConstants.calorieTextPadding)
         )
     }
 }

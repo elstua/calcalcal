@@ -15,8 +15,9 @@ struct SlotViewsLayer: View {
                     if lastLineIndex < lineManager.lineData.count {
                         let lastLine = lineManager.lineData[lastLineIndex]
                         
-                        HStack(spacing: 0) {
-                            Spacer(minLength: lastLine.lineRect.width)
+                        HStack(spacing: LayoutConstants.slotSpacing) {
+                            // This ensures slot views are positioned at the end of text
+                            Spacer()
                             
                             // Render slot views
                             ForEach(0..<slotProviders.count, id: \.self) { index in
@@ -25,8 +26,10 @@ struct SlotViewsLayer: View {
                                     .frame(width: provider.requiredWidth)
                             }
                         }
+                        .frame(width: lastLine.lineRect.width + LayoutConstants.calorieSlotWidth)
                         .position(
-                            x: lastLine.lineRect.width/2,
+                            // Center of HStack should be at half of text width plus half of slot width
+                            x: (lastLine.lineRect.width + LayoutConstants.calorieSlotWidth)/2,
                             y: lastLine.lineRect.minY + lastLine.lineRect.height/2
                         )
                     }

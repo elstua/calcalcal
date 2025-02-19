@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 
+
 struct TextViewRepresentable: UIViewRepresentable {
     @Binding var text: String
     var lineManager: TextLineManager
@@ -12,8 +13,8 @@ struct TextViewRepresentable: UIViewRepresentable {
         textView.isScrollEnabled = true
         textView.isEditable = true
         textView.backgroundColor = .clear
-        // Reduced right padding to 88 (80 for calories + 8 for spacing)
-        textView.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 8, right: 120)
+        // Use centralized constants
+        textView.textContainerInset = LayoutConstants.textContainerInsets
         return textView
     }
     

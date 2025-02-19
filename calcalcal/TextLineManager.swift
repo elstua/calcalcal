@@ -49,9 +49,10 @@ class TextLineManager: ObservableObject {
             ))
             
             let adjustedRect = CGRect(
-                x: rect.minX,
+                x: rect.minX + textView.textContainerInset.left,
                 y: rect.minY + textView.textContainerInset.top,
-                width: rect.width,
+                // Important: subtract the right inset to get actual text width
+                width: textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
                 height: rect.height
             )
             

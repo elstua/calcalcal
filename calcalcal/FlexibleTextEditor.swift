@@ -17,6 +17,9 @@ struct FlexibleTextEditor: View {
                         lineManager.onDataUpdated = { paragraphs in
                             calculateCalories(for: paragraphs)
                         }
+                        
+                        // No need to call updateAvailableWidth if you're not storing width
+                        // Just let the TextViewRepresentable handle the insets
                     }
                 
                 // Layer for slot views
