@@ -4,6 +4,7 @@ import UIKit
 class TextLineManager: ObservableObject {
     @Published private(set) var lineData: [LineData] = []
     @Published private(set) var paragraphs: [ParagraphData] = []
+    @Published private(set) var caretParagraphIndex: Int = 0 // New property
     var onDataUpdated: (([ParagraphData]) -> Void)? = nil
     
     // Add this structure to represent paragraphs
@@ -26,6 +27,7 @@ class TextLineManager: ObservableObject {
                    lhs.text == rhs.text
         }
     }
+
     
     func updateLineData(from textView: UITextView) {
         let layoutManager = textView.layoutManager
@@ -96,6 +98,8 @@ class TextLineManager: ObservableObject {
         }
     }
     
+    
+    
     // Group lines into logical paragraphs based on newlines
     private func groupLinesIntoParagraphs(_ lines: [LineData], text: String) -> [ParagraphData] {
         let textComponents = text.components(separatedBy: "\n")
@@ -160,4 +164,5 @@ class TextLineManager: ObservableObject {
         
         paragraphs = updatedParagraphs
     }
+    
 }

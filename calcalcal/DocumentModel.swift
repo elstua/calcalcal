@@ -23,6 +23,7 @@ class DocumentViewModel: ObservableObject {
     @Published var text: String = ""
     @Published private(set) var entries: [TextEntry] = []
     @Published private(set) var totalCalories: Int = 0
+    @Published var isEditorFocused: Bool = false // New property
     
     func processTextChange(_ newText: String) {
         self.text = newText
@@ -30,5 +31,9 @@ class DocumentViewModel: ObservableObject {
     
     func updateTotalCalories(_ total: Int) {
         self.totalCalories = total
+    }
+    
+    func setFocusState(_ focused: Bool) {
+        self.isEditorFocused = focused
     }
 }

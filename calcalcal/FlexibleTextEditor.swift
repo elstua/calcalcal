@@ -3,6 +3,7 @@ import SwiftUI
 struct FlexibleTextEditor: View {
     @StateObject private var lineManager = TextLineManager()
     @Binding var text: String
+    @Binding var isFocused: Bool
     var slotProviders: [SlotViewProvider]
     var onCaloriesCalculated: (Int) -> Void
     
@@ -10,22 +11,26 @@ struct FlexibleTextEditor: View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 // Main text editor
-                TextViewRepresentable(text: $text, lineManager: lineManager)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear {
-                        // Set up callback for updates
-                        lineManager.onDataUpdated = { paragraphs in
-                            calculateCalories(for: paragraphs)
-                        }
-                        
-                        // No need to call updateAvailableWidth if you're not storing width
-                        // Just let the TextViewRepresentable handle the insets
+                TextViewRepresentable(
+                    text: $text,
+                    lineManager: lineManager,
+                    onFocusChange: { focused in
+                        isFocused = focused
                     }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear {
+                    lineManager.onDataUpdated = { paragraphs in
+                        calculateCalories(for: paragraphs)
+                    }
+                }
                 
-                // Layer for slot views
+                // Layer for slot views with state
                 SlotViewsLayer(
                     lineManager: lineManager,
-                    slotProviders: slotProviders
+                    slotProviders: slotProviders,
+                    isFocused: isFocused,
+                    text: text
                 )
             }
         }

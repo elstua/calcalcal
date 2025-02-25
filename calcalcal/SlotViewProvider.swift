@@ -3,16 +3,27 @@ import SwiftUI
 protocol SlotViewProvider {
     var slotId: String { get }
     var requiredWidth: CGFloat { get }
-    func createView(for paragraph: TextLineManager.ParagraphData) -> AnyView
+    func createView(for paragraph: TextLineManager.ParagraphData, isFocused: Bool, fullText: String) -> AnyView
 }
 
 struct CalorieSlotProvider: SlotViewProvider {
     let slotId = "calories"
-    // Use centralized constant
     var requiredWidth: CGFloat { LayoutConstants.calorieSlotWidth }
     
-    func createView(for paragraph: TextLineManager.ParagraphData) -> AnyView {
-        // Get calories from metadata or return empty view for empty paragraphs
+    func createView(for paragraph: TextLineManager.ParagraphData, isFocused: Bool = true, fullText: String = "") -> AnyView {
+        // If text is empty and not focused, show the + button
+        if !isFocused && fullText.isEmpty {
+            return AnyView(
+                AddButton(action: {
+                    // This will be used for image selection in the future
+                    print("Add button tapped")
+                })
+                .frame(width: requiredWidth, alignment: .trailing)
+                .padding(LayoutConstants.calorieTextPadding)
+            )
+        }
+        
+        // Otherwise show calories for non-empty paragraphs
         guard !paragraph.isEmpty else {
             return AnyView(EmptyView())
         }

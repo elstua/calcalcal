@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = DocumentViewModel()
+    @State private var isTextFieldFocused = false
     
     var body: some View {
         VStack {
@@ -10,6 +11,7 @@ struct ContentView: View {
                     get: { viewModel.text },
                     set: { viewModel.processTextChange($0) }
                 ),
+                isFocused: $isTextFieldFocused,
                 slotProviders: [
                     CalorieSlotProvider()
                 ],
