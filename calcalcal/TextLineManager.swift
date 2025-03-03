@@ -4,10 +4,9 @@ import UIKit
 class TextLineManager: ObservableObject {
     @Published private(set) var lineData: [LineData] = []
     @Published private(set) var paragraphs: [ParagraphData] = []
-    @Published private(set) var caretParagraphIndex: Int = 0 // New property
     var onDataUpdated: (([ParagraphData]) -> Void)? = nil
     
-    // Add this structure to represent paragraphs
+    // Structure to represent paragraphs
     struct ParagraphData: Identifiable, Equatable {
         let id: UUID
         let lines: [LineData]
@@ -50,10 +49,12 @@ class TextLineManager: ObservableObject {
                 length: lineRange.length
             ))
             
+            // Create a rect that spans the full width of the text view
+            // This ensures buttons and calorie text always appear on the right side
             let adjustedRect = CGRect(
                 x: rect.minX + textView.textContainerInset.left,
                 y: rect.minY + textView.textContainerInset.top,
-                // Important: subtract the right inset to get actual text width
+                // Use the full width of the text view minus insets
                 width: textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
                 height: rect.height
             )
@@ -76,12 +77,19 @@ class TextLineManager: ObservableObject {
             lineIndex += 1
         }
         
-        // Handle empty text case
+        // Handle empty text case or ensure there's always at least one line
         if textView.text.isEmpty || newLineData.isEmpty {
+            // Create a default line that spans the full width
             newLineData = [LineData(
                 id: UUID(),
                 text: "",
-                lineRect: CGRect(x: 0, y: 0, width: textView.bounds.width - 100, height: 22),
+                // Use the full width of the text view for positioning
+                lineRect: CGRect(
+                    x: textView.textContainerInset.left,
+                    y: textView.textContainerInset.top,
+                    width: textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
+                    height: 22
+                ),
                 lineIndex: 0,
                 metadata: [:]
             )]
@@ -98,10 +106,21 @@ class TextLineManager: ObservableObject {
         }
     }
     
-    
-    
-    // Group lines into logical paragraphs based on newlines
+    // Enhanced group lines into logical paragraphs
     private func groupLinesIntoParagraphs(_ lines: [LineData], text: String) -> [ParagraphData] {
+        // If text is empty, return a single empty paragraph
+        if text.isEmpty {
+            return [ParagraphData(
+                id: UUID(),
+                lines: lines,
+                text: "",
+                startLineIndex: 0,
+                endLineIndex: lines.isEmpty ? 0 : lines.count - 1,
+                metadata: [:]
+            )]
+        }
+        
+        // Split text by newlines, preserving empty lines
         let textComponents = text.components(separatedBy: "\n")
         var paragraphs: [ParagraphData] = []
         
@@ -117,8 +136,8 @@ class TextLineManager: ObservableObject {
             currentParagraphLines.append(line)
             
             if isEndOfParagraph {
-                let paragraphText = currentTextIndex < textComponents.count 
-                    ? textComponents[currentTextIndex] 
+                let paragraphText = currentTextIndex < textComponents.count
+                    ? textComponents[currentTextIndex]
                     : ""
                 
                 let paragraph = ParagraphData(
@@ -146,13 +165,14 @@ class TextLineManager: ObservableObject {
                 lines: lines,
                 text: text,
                 startLineIndex: 0,
-                endLineIndex: lines.count - 1,
+                endLineIndex: lines.isEmpty ? 0 : lines.count - 1,
                 metadata: [:]
             )]
         }
         
         return paragraphs
     }
+
     
     func addParagraphMetadata(for index: Int, key: String, value: AnyHashable) {
         guard index < paragraphs.count else { return }
@@ -164,5 +184,4 @@ class TextLineManager: ObservableObject {
         
         paragraphs = updatedParagraphs
     }
-    
 }
