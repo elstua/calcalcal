@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct FlexibleTextEditor: View {
     @StateObject private var lineManager = TextLineManager()
@@ -6,6 +7,9 @@ struct FlexibleTextEditor: View {
     @Binding var isFocused: Bool
     var slotProviders: [SlotViewProvider]
     var onCaloriesCalculated: (Int) -> Void
+    
+    // Add a callback for the add button
+    var onAddButtonTapped: (() -> Void)? = nil
     
     var body: some View {
         GeometryReader { geometry in
@@ -16,7 +20,9 @@ struct FlexibleTextEditor: View {
                     lineManager: lineManager,
                     onFocusChange: { focused in
                         isFocused = focused
-                    }
+                    },
+                    // Use the built-in placeholder
+                    showPlaceholder: true
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onAppear {
@@ -25,13 +31,43 @@ struct FlexibleTextEditor: View {
                     }
                 }
                 
-                // Layer for slot views with state
-                SlotViewsLayer(
-                    lineManager: lineManager,
-                    slotProviders: slotProviders,
-                    isFocused: isFocused,
-                    text: text
-                )
+                // Handle empty text field case separately with fixed positioning
+                if text.isEmpty && lineManager.lineData.count > 0 {
+                    HStack {
+                        Spacer()
+                        AddButton(action: {
+                            onAddButtonTapped?() ?? print("Add button tapped")
+                        })
+                    }
+                    .padding(.trailing, 12)
+                    .frame(width: geometry.size.width)
+                    .offset(y: 4) // Fixed position near the top
+                }
+                else {
+                    // Show calorie slots for non-empty paragraphs
+                    ForEach(lineManager.paragraphs.indices, id: \.self) { index in
+                        let paragraph = lineManager.paragraphs[index]
+                        
+                        if !paragraph.isEmpty && index < lineManager.lineData.count {
+                            let line = lineManager.lineData[paragraph.endLineIndex]
+                            
+                            // Show calorie information
+                            HStack {
+                                Spacer()
+                                
+                                if let calories = paragraph.metadata["calories"] as? Int {
+                                    Text("\(calories) kcal")
+                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 18))
+                                        .frame(width: LayoutConstants.calorieSlotWidth, alignment: .trailing)
+                                        .padding(LayoutConstants.calorieTextPadding)
+                                }
+                            }
+                            .frame(width: geometry.size.width)
+                            .offset(x: 0, y: line.lineRect.minY)
+                        }
+                    }
+                }
             }
         }
     }

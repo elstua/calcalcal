@@ -17,6 +17,16 @@ struct ContentView: View {
                 ],
                 onCaloriesCalculated: { total in
                     viewModel.updateTotalCalories(total)
+                },
+                // Add action handler for the add button
+                onAddButtonTapped: {
+                    // Here you would handle what happens when the add button is tapped
+                    // For example, prompt for image selection or manually enter food
+                    print("Add button tapped from ContentView")
+                    // Future implementation:
+                    // - Open image picker
+                    // - Call food recognition API
+                    // - Insert food item with calories
                 }
             )
             

@@ -7,7 +7,7 @@ struct LayoutConstants {
     
     // Slot positioning
     static let slotSpacing: CGFloat = 0
-    static let calorieTextPadding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 4)
+    static let calorieTextPadding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16)
     
     // Calculate the correct insets for the text view
     // The key insight: we need to add calorieSlotWidth to the trailing inset
