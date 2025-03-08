@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 
+
 struct TextViewRepresentable: UIViewRepresentable {
     @Binding var text: String
     var lineManager: TextLineManager
     var onFocusChange: (Bool) -> Void
-    var onSelectionChange: ((UITextView) -> Void)? = nil // New callback for selection changes
+    var onScrollChange: ((CGFloat) -> Void)? = nil  // New callback for scroll position
     var showPlaceholder: Bool = true
     
     // Placeholder text
@@ -30,8 +31,8 @@ struct TextViewRepresentable: UIViewRepresentable {
             textView.textColor = UIColor.placeholderText
         }
         
-        // Initialize line data
-        lineManager.updateLineData(from: textView)
+        // Add scroll view delegate to track scrolling
+        textView.delegate = context.coordinator
         
         return textView
     }
@@ -63,7 +64,7 @@ struct TextViewRepresentable: UIViewRepresentable {
             text: $text,
             lineManager: lineManager,
             onFocusChange: onFocusChange,
-            onSelectionChange: onSelectionChange,
+            onScrollChange: onScrollChange,
             placeholderText: placeholderText
         )
     }
@@ -72,19 +73,20 @@ struct TextViewRepresentable: UIViewRepresentable {
         @Binding var text: String
         let lineManager: TextLineManager
         let onFocusChange: (Bool) -> Void
-        let onSelectionChange: ((UITextView) -> Void)?
+        let onScrollChange: ((CGFloat) -> Void)?
         let placeholderText: String
         var isHandlingPlaceholder = false
         
         init(text: Binding<String>,
              lineManager: TextLineManager,
              onFocusChange: @escaping (Bool) -> Void,
-             onSelectionChange: ((UITextView) -> Void)? = nil,
+             onScrollChange: ((CGFloat) -> Void)? = nil,
              placeholderText: String) {
+            
             self._text = text
             self.lineManager = lineManager
             self.onFocusChange = onFocusChange
-            self.onSelectionChange = onSelectionChange
+            self.onScrollChange = onScrollChange
             self.placeholderText = placeholderText
         }
         
@@ -98,9 +100,6 @@ struct TextViewRepresentable: UIViewRepresentable {
                 textView.textColor = UIColor.label
                 isHandlingPlaceholder = false
             }
-            
-            // Notify about cursor position when editing begins
-            onSelectionChange?(textView)
         }
         
         func textViewDidEndEditing(_ textView: UITextView) {
@@ -128,9 +127,6 @@ struct TextViewRepresentable: UIViewRepresentable {
             
             // Update line data
             lineManager.updateLineData(from: textView)
-            
-            // Track selection changes when text changes
-            onSelectionChange?(textView)
         }
         
         // Track selection changes
@@ -140,9 +136,11 @@ struct TextViewRepresentable: UIViewRepresentable {
             if textView.textColor == UIColor.placeholderText {
                 textView.selectedRange = NSRange(location: 0, length: 0)
             }
-            
-            // Notify about selection change
-            onSelectionChange?(textView)
+        }
+        
+        // Track scroll position changes
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            onScrollChange?(scrollView.contentOffset.y)
         }
     }
 }

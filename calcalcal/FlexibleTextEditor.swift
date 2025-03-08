@@ -8,8 +8,8 @@ struct FlexibleTextEditor: View {
     var slotProviders: [SlotViewProvider]
     var onCaloriesCalculated: (Int) -> Void
     
-    // Add a callback for the add button
-    var onAddButtonTapped: (() -> Void)? = nil
+    // Track scroll position
+    @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
         GeometryReader { geometry in
@@ -21,7 +21,10 @@ struct FlexibleTextEditor: View {
                     onFocusChange: { focused in
                         isFocused = focused
                     },
-                    // Use the built-in placeholder
+                    // Track scroll position
+                    onScrollChange: { offset in
+                        scrollOffset = offset
+                    },
                     showPlaceholder: true
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,43 +34,49 @@ struct FlexibleTextEditor: View {
                     }
                 }
                 
-                // Handle empty text field case separately with fixed positioning
-                if text.isEmpty && lineManager.lineData.count > 0 {
-                    HStack {
+                // Add button for empty state with fixed position
+                if text.isEmpty {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            AddButton(action: {
+                                print("Add button tapped for image selection")
+                            })
+                            .padding(.trailing, 20)
+                        }
+                        .padding(.top, 12)
                         Spacer()
-                        AddButton(action: {
-                            onAddButtonTapped?() ?? print("Add button tapped")
-                        })
                     }
-                    .padding(.trailing, 12)
-                    .frame(width: geometry.size.width)
-                    .offset(y: 4) // Fixed position near the top
                 }
-                else {
-                    // Show calorie slots for non-empty paragraphs
+                
+                // Show all calorie slots without conditional rendering
+                // Just rely on clipping to prevent overlap
+                ZStack {
                     ForEach(lineManager.paragraphs.indices, id: \.self) { index in
                         let paragraph = lineManager.paragraphs[index]
                         
                         if !paragraph.isEmpty && index < lineManager.lineData.count {
                             let line = lineManager.lineData[paragraph.endLineIndex]
                             
-                            // Show calorie information
-                            HStack {
-                                Spacer()
+                            // Show calorie information adjusted by scroll offset
+                            if let calories = paragraph.metadata["calories"] as? Int {
+                                let yPosition = line.lineRect.minY + line.lineRect.height/2 - scrollOffset
                                 
-                                if let calories = paragraph.metadata["calories"] as? Int {
-                                    Text("\(calories) kcal")
-                                        .foregroundColor(.secondary)
-                                        .font(.system(size: 18))
-                                        .frame(width: LayoutConstants.calorieSlotWidth, alignment: .trailing)
-                                        .padding(LayoutConstants.calorieTextPadding)
-                                }
+                                // Render all calories without visibility check
+                                Text("\(calories) kcal")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 18))
+                                    .frame(width: LayoutConstants.calorieSlotWidth, alignment: .trailing)
+                                    .position(
+                                        x: geometry.size.width - (LayoutConstants.calorieSlotWidth/2),
+                                        y: yPosition
+                                    )
                             }
-                            .frame(width: geometry.size.width)
-                            .offset(x: 0, y: line.lineRect.minY)
                         }
                     }
                 }
+                // Apply clipping to the entire calorie display container
+                .clipShape(Rectangle())
             }
         }
     }
