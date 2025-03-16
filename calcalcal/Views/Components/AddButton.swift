@@ -1,11 +1,3 @@
-//
-//  AddButton.swift
-//  calcalcal
-//
-//  Created by Artem Savelev on 16/03/2025.
-//
-
-
 import SwiftUI
 
 struct AddButton: View {
@@ -23,5 +15,13 @@ struct AddButton: View {
                     .foregroundColor(.white)
             }
         }
+    }
+}
+
+struct AddButton_Previews: PreviewProvider {
+    static var previews: some View {
+        AddButton(action: {})
+            .previewLayout(.sizeThatFits)
+            .padding()
     }
 }

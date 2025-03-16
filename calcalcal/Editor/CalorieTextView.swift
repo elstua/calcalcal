@@ -1,11 +1,3 @@
-//
-//  CalorieTextView.swift
-//  calcalcal
-//
-//  Created by Artem Savelev on 16/03/2025.
-//
-
-
 import UIKit
 
 class CalorieTextView: UITextView {
@@ -53,9 +45,9 @@ class CalorieTextView: UITextView {
         
         // Listen for text changes
         NotificationCenter.default.addObserver(
-            self, 
-            selector: #selector(textDidChange), 
-            name: UITextView.textDidChangeNotification, 
+            self,
+            selector: #selector(textDidChange),
+            name: UITextView.textDidChangeNotification,
             object: self
         )
     }
@@ -74,7 +66,7 @@ class CalorieTextView: UITextView {
     // Parse text into paragraphs and update their info
     private func updateParagraphs() {
         // Get all paragraph ranges
-        let text = self.text
+        let text = self.text ?? ""
         let paragraphRanges = getParagraphRanges(for: text)
         
         // Build new paragraph info objects
@@ -82,11 +74,11 @@ class CalorieTextView: UITextView {
         
         for range in paragraphRanges {
             let paragraphText = (text as NSString).substring(with: range)
-            let trimmedText = paragraphText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedText = paragraphText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             
             // Try to find existing paragraph with matching text to preserve calories
-            if let existingIndex = paragraphs.firstIndex(where: { 
-                $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedText 
+            if let existingIndex = paragraphs.firstIndex(where: {
+                $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedText
             }) {
                 // Reuse existing calorie info but with updated range
                 newParagraphs.append(ParagraphInfo(
@@ -129,7 +121,8 @@ class CalorieTextView: UITextView {
         let fullRange = NSRange(location: 0, length: nsText.length)
         
         nsText.enumerateSubstrings(in: fullRange, options: .byParagraphs) { (substring, substringRange, _, _) in
-            if let _ = substring {
+            // Since substring is optional, safely unwrap it
+            if substring != nil {
                 paragraphRanges.append(substringRange)
             }
         }
@@ -145,7 +138,7 @@ class CalorieTextView: UITextView {
     // Calculate calories for a paragraph
     private func calculateCalories(for paragraphIndex: Int, text: String) {
         // Skip calculation for empty text
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return }
+        if text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty { return }
         
         // Call the callback to calculate calories
         onNeedCalorieCalculation?(text) { [weak self] calories in
@@ -167,7 +160,7 @@ class CalorieTextView: UITextView {
     // Force recalculation of all paragraphs
     func recalculateAllParagraphs() {
         for (index, paragraph) in paragraphs.enumerated() {
-            let trimmedText = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedText = paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             if !trimmedText.isEmpty {
                 calculateCalories(for: index, text: trimmedText)
             }
@@ -190,7 +183,8 @@ class CalorieTextView: UITextView {
         
         // Create new labels for each paragraph with calories
         for paragraph in paragraphs {
-            if let calories = paragraph.calories, !paragraph.isEmpty {
+            if let calories = paragraph.calories,
+               !paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
                 // Get position for calorie label
                 let textRect = caloriePosition(for: paragraph)
                 
@@ -201,10 +195,10 @@ class CalorieTextView: UITextView {
                 label.textColor = .secondaryLabel
                 label.sizeToFit()
                 
-                // Position label
+                // Position label - align with the baseline of the last line
                 label.frame = CGRect(
                     x: bounds.width - label.bounds.width - 16,
-                    y: textRect.minY,
+                    y: textRect.midY - (label.bounds.height / 2), // Center vertically with the last line
                     width: label.bounds.width,
                     height: label.bounds.height
                 )
@@ -217,14 +211,42 @@ class CalorieTextView: UITextView {
     }
     
     // Calculate position for calorie label based on paragraph position
+    // Aligns the calorie with the last line of the paragraph
     private func caloriePosition(for paragraph: ParagraphInfo) -> CGRect {
         // For empty text
-        if text.isEmpty || paragraph.range.length == 0 {
+        if (text ?? "").isEmpty || paragraph.range.length == 0 {
             return CGRect(x: 0, y: 0, width: 0, height: 0)
         }
         
-        // Get bounding rect for paragraph
+        // Get the glyphs that correspond to this paragraph's character range
         let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraph.range, actualCharacterRange: nil)
+        
+        // Find the last line fragment in this paragraph
+        var lastLineRect = CGRect.zero
+        var lastLineY: CGFloat = 0
+        
+        // Iterate through each line fragment in the paragraph to find the last one
+        layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { (rect, usedRect, textContainer, lineRange, _) in
+            // Keep track of the last line's Y position
+            if usedRect.maxY > lastLineY {
+                lastLineRect = usedRect
+                lastLineY = usedRect.maxY
+            }
+        }
+        
+        // If we found a valid last line fragment
+        if !lastLineRect.isEmpty {
+            // Create the rect for positioning the calorie label
+            var rect = lastLineRect
+            
+            // Adjust for text container insets
+            rect.origin.x += textContainerInset.left
+            rect.origin.y += textContainerInset.top
+            
+            return rect
+        }
+        
+        // Fallback to the entire paragraph bounding rect if we couldn't find line fragments
         var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
         
         // Adjust for text container insets

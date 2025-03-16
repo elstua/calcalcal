@@ -29,9 +29,22 @@
 		ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calcalcalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AC8D1E182D85015B00EDDE01 /* Exceptions for "calcalcal" folder in "calcalcal" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = ACB9E5D52D594D7D00C37803 /* calcalcal */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ACB9E5D82D594D7D00C37803 /* calcalcal */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AC8D1E182D85015B00EDDE01 /* Exceptions for "calcalcal" folder in "calcalcal" target */,
+			);
 			path = calcalcal;
 			sourceTree = "<group>";
 		};

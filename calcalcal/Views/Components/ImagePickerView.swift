@@ -48,7 +48,7 @@ struct ImagePickerView: View {
         item.loadTransferable(type: Data.self) { result in
             switch result {
             case .success(let data):
-                if let image = UIImage(data: data) {
+                if let imageData = data, let image = UIImage(data: imageData) {
                     onImageSelected(image)
                     DispatchQueue.main.async {
                         isPresented = false
