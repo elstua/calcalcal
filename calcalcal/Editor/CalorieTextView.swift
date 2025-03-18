@@ -15,6 +15,9 @@ class CalorieTextView: UITextView {
     // Callback when text changes
     var onTextChanged: ((String) -> Void)?
     
+    // Callback for paragraph action button
+    var onParagraphActionButtonTapped: ((Int) -> Void)?
+    
     // Store calculated total
     private var totalCalories: Int = 0 {
         didSet {
@@ -25,16 +28,31 @@ class CalorieTextView: UITextView {
     // For handling calorie display
     private var calorieLabels: [UILabel] = []
     
+    // Track which paragraph has the cursor
+    private var activeParagraphIndex: Int? = nil
+    
+    // Action button that appears next to the active paragraph
+    private var actionButton: UIButton?
+    
+    // Track if there's an "implicit" empty line at the end
+    private var hasImplicitEmptyLine: Bool = false
+    
+    // Managers for improved functionality
+    private let cursorManager = CursorPositionManager()
+    private let uiElementsLayoutManager = TextEditorLayoutManager()
+
     // MARK: - Initialization
     
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         setupTextView()
+        setupManagers()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupTextView()
+        setupManagers()
     }
     
     private func setupTextView() {
@@ -50,6 +68,49 @@ class CalorieTextView: UITextView {
             name: UITextView.textDidChangeNotification,
             object: self
         )
+        
+        // Set delegate to track selection changes
+        self.delegate = self
+        
+        // Create action button
+        setupActionButton()
+    }
+    
+    private func setupManagers() {
+        // Configure cursor position manager
+        cursorManager.onCursorPositionChanged = { [weak self] position, activeIndex, hasImplicitLine in
+            guard let self = self else { return }
+            
+            // Update state
+            self.activeParagraphIndex = activeIndex
+            self.hasImplicitEmptyLine = hasImplicitLine
+            
+            // Update UI
+            self.updateActionButtonPosition()
+        }
+    }
+    
+    private func setupActionButton() {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
+        button.tintColor = .systemOrange
+        button.isHidden = false // Always show the button
+        button.addTarget(self, action: #selector(actionButtonTapped), for: .touchUpInside)
+        
+        // Size the button
+        button.frame = CGRect(x: 0, y: 0, width: 26, height: 26)
+        
+        addSubview(button)
+        self.actionButton = button
+    }
+    
+    @objc private func actionButtonTapped() {
+        if let activeParagraphIndex = activeParagraphIndex {
+            onParagraphActionButtonTapped?(activeParagraphIndex)
+        } else if hasImplicitEmptyLine {
+            // For the implicit empty line at the end (or empty document)
+            onParagraphActionButtonTapped?(paragraphs.count > 0 ? paragraphs.count - 1 : 0)
+        }
     }
     
     // MARK: - Text Processing
@@ -63,6 +124,16 @@ class CalorieTextView: UITextView {
         updateParagraphs()
     }
     
+    // Update which paragraph is active based on cursor position
+    private func updateActiveParagraph() {
+        // Use the cursor manager to determine active paragraph
+        cursorManager.updateCursorPosition(
+            position: selectedRange.location,
+            inText: text ?? "",
+            withParagraphs: paragraphs
+        )
+    }
+    
     // Parse text into paragraphs and update their info
     private func updateParagraphs() {
         // Get all paragraph ranges
@@ -72,24 +143,31 @@ class CalorieTextView: UITextView {
         // Build new paragraph info objects
         var newParagraphs: [ParagraphInfo] = []
         
-        for range in paragraphRanges {
+        for (index, range) in paragraphRanges.enumerated() {
             let paragraphText = (text as NSString).substring(with: range)
             let trimmedText = paragraphText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             
             // Try to find existing paragraph with matching text to preserve calories
             if let existingIndex = paragraphs.firstIndex(where: {
-                $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedText
+                $0.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) == trimmedText
             }) {
                 // Reuse existing calorie info but with updated range
                 newParagraphs.append(ParagraphInfo(
                     id: paragraphs[existingIndex].id,
                     range: range,
                     text: paragraphText,
-                    calories: paragraphs[existingIndex].calories
+                    calories: paragraphs[existingIndex].calories,
+                    isActive: index == activeParagraphIndex,
+                    isLastParagraph: index == paragraphRanges.count - 1
                 ))
             } else {
                 // Create new paragraph info
-                let newParagraph = ParagraphInfo(range: range, text: paragraphText)
+                let newParagraph = ParagraphInfo(
+                    range: range,
+                    text: paragraphText,
+                    isActive: index == activeParagraphIndex,
+                    isLastParagraph: index == paragraphRanges.count - 1
+                )
                 newParagraphs.append(newParagraph)
                 
                 // Calculate calories for non-empty paragraphs
@@ -102,6 +180,7 @@ class CalorieTextView: UITextView {
         paragraphs = newParagraphs
         updateTotalCalories()
         updateCalorieDisplay()
+        updateActiveParagraph() // Update which paragraph has the cursor
     }
     
     // Get NSRanges for each paragraph in text
@@ -120,11 +199,28 @@ class CalorieTextView: UITextView {
         // Find paragraph ranges using NSString enumeration
         let fullRange = NSRange(location: 0, length: nsText.length)
         
+        // Track the last ending position to detect empty lines
+        var lastEndPosition = 0
+        
         nsText.enumerateSubstrings(in: fullRange, options: .byParagraphs) { (substring, substringRange, _, _) in
-            // Since substring is optional, safely unwrap it
+            // Check for empty lines before this paragraph
+            if substringRange.location > lastEndPosition {
+                let emptyLineRange = NSRange(location: lastEndPosition, length: substringRange.location - lastEndPosition)
+                paragraphRanges.append(emptyLineRange)
+            }
+            
+            // Add the current paragraph
             if substring != nil {
                 paragraphRanges.append(substringRange)
             }
+            
+            lastEndPosition = substringRange.location + substringRange.length
+        }
+        
+        // Check for trailing empty line
+        if lastEndPosition < nsText.length {
+            let trailingEmptyLineRange = NSRange(location: lastEndPosition, length: nsText.length - lastEndPosition)
+            paragraphRanges.append(trailingEmptyLineRange)
         }
         
         // If no paragraphs were found (shouldn't happen), return the full range
@@ -175,95 +271,61 @@ class CalorieTextView: UITextView {
         totalCalories = total
     }
     
-    // Update the visual display of calories
+    // Update the visual display of calories using the layout manager
     private func updateCalorieDisplay() {
-        // Clear existing labels
-        calorieLabels.forEach { $0.removeFromSuperview() }
-        calorieLabels.removeAll()
-        
-        // Create new labels for each paragraph with calories
-        for paragraph in paragraphs {
-            if let calories = paragraph.calories,
-               !paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
-                // Get position for calorie label
-                let textRect = caloriePosition(for: paragraph)
-                
-                // Create label
-                let label = UILabel()
-                label.text = "\(calories) kcal"
-                label.font = .systemFont(ofSize: 16)
-                label.textColor = .secondaryLabel
-                label.sizeToFit()
-                
-                // Position label - align with the baseline of the last line
-                label.frame = CGRect(
-                    x: bounds.width - label.bounds.width - 16,
-                    y: textRect.midY - (label.bounds.height / 2), // Center vertically with the last line
-                    width: label.bounds.width,
-                    height: label.bounds.height
-                )
-                
-                // Add to view
-                addSubview(label)
-                calorieLabels.append(label)
-            }
-        }
+        // Use layout manager to position calorie labels
+        calorieLabels = uiElementsLayoutManager.layoutCalorieLabels(
+            labels: calorieLabels,
+            forParagraphs: paragraphs,
+            inTextView: self,
+            withActiveParagraph: activeParagraphIndex
+        )
     }
     
-    // Calculate position for calorie label based on paragraph position
-    // Aligns the calorie with the last line of the paragraph
-    private func caloriePosition(for paragraph: ParagraphInfo) -> CGRect {
-        // For empty text
-        if (text ?? "").isEmpty || paragraph.range.length == 0 {
-            return CGRect(x: 0, y: 0, width: 0, height: 0)
+    // Update the position of the action button using the layout manager
+    private func updateActionButtonPosition() {
+        guard let button = actionButton else { return }
+        
+        // Get the active paragraph if any
+        let activeParagraph = activeParagraphIndex.flatMap { index in
+            paragraphs.indices.contains(index) ? paragraphs[index] : nil
         }
         
-        // Get the glyphs that correspond to this paragraph's character range
-        let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraph.range, actualCharacterRange: nil)
+        // Use layout manager to position button
+        uiElementsLayoutManager.layoutButton(
+            buttonView: button,
+            forParagraph: activeParagraph,
+            inTextView: self,
+            withCursorPosition: selectedRange.location,
+            hasImplicitEmptyLine: hasImplicitEmptyLine
+        )
         
-        // Find the last line fragment in this paragraph
-        var lastLineRect = CGRect.zero
-        var lastLineY: CGFloat = 0
-        
-        // Iterate through each line fragment in the paragraph to find the last one
-        layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { (rect, usedRect, textContainer, lineRange, _) in
-            // Keep track of the last line's Y position
-            if usedRect.maxY > lastLineY {
-                lastLineRect = usedRect
-                lastLineY = usedRect.maxY
-            }
-        }
-        
-        // If we found a valid last line fragment
-        if !lastLineRect.isEmpty {
-            // Create the rect for positioning the calorie label
-            var rect = lastLineRect
-            
-            // Adjust for text container insets
-            rect.origin.x += textContainerInset.left
-            rect.origin.y += textContainerInset.top
-            
-            return rect
-        }
-        
-        // Fallback to the entire paragraph bounding rect if we couldn't find line fragments
-        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-        
-        // Adjust for text container insets
-        rect.origin.x += textContainerInset.left
-        rect.origin.y += textContainerInset.top
-        
-        return rect
+        // Ensure button is visible
+        bringSubviewToFront(button)
     }
     
-    // Override layout to update calorie displays
+    // Override layout to update calorie displays and action button
     override func layoutSubviews() {
         super.layoutSubviews()
         updateCalorieDisplay()
+        updateActionButtonPosition()
     }
     
     // Clean up
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+}
+
+// MARK: - UITextViewDelegate Extension
+extension CalorieTextView: UITextViewDelegate {
+    // Track selection changes through the delegate
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        updateActiveParagraph()
+    }
+    
+    // Handle text view becoming first responder
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        updateActiveParagraph()
     }
 }

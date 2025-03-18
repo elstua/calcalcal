@@ -2,6 +2,14 @@
 //  CursorPositionManager.swift
 //  calcalcal
 //
+//  Created by Artem Savelev on 18/03/2025.
+//
+
+
+//
+//  CursorPositionManager.swift
+//  calcalcal
+//
 //  Created for improved cursor tracking
 //
 

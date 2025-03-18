@@ -2,6 +2,14 @@
 //  TextEditorLayoutManager.swift
 //  calcalcal
 //
+//  Created by Artem Savelev on 18/03/2025.
+//
+
+
+//
+//  TextEditorLayoutManager.swift
+//  calcalcal
+//
 //  Created for improved layout management
 //
 
