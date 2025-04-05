@@ -15,15 +15,6 @@ struct ContentView: View {
                     .fontWeight(.bold)
                 
                 Spacer()
-                
-                Button(action: {
-                    // Save journal action
-                    print("Save journal")
-                }) {
-                    Image(systemName: "square.and.arrow.down")
-                        .foregroundColor(.primary)
-                }
-                .padding(.horizontal)
             }
             .padding()
             .background(Color(UIColor.systemBackground))
@@ -57,34 +48,28 @@ struct ContentView: View {
                         }
                     }
                 )
-                
-                // Add button (shown only when text is empty)
-                if text.isEmpty {
-                    AddButton {
-                        showingImagePicker = true
-                    }
-                    .padding([.top, .trailing], 16)
-                }
             }
             
-            // Footer with total calories
+            // Footer with total calories and add button
             HStack {
-                Text("Total: \(totalCalories) kcal")
-                    .font(.headline)
-                    .padding()
+                // Add button
+                Button(action: {
+                    showingImagePicker = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.orange)
+                }
+                .padding(.leading)
                 
                 Spacer()
                 
-                // Info button
-                Button(action: {
-                    // Show info/help
-                    print("Show info")
-                }) {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.primary)
-                }
-                .padding(.horizontal)
+                // Total calories
+                Text("Total: \(totalCalories) kcal")
+                    .font(.headline)
+                    .padding(.trailing)
             }
+            .padding(.vertical, 8)
             .background(Color(UIColor.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
         }
