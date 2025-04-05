@@ -16,71 +16,61 @@ struct ContentView: View {
                     .fontWeight(.bold)
                 
                 Spacer()
-                
-                Button(action: {
-                    // Save journal action
-                    print("Save journal")
-                }) {
-                    Image(systemName: "square.and.arrow.down")
-                        .foregroundColor(.primary)
-                }
-                .padding(.horizontal)
             }
             .padding()
             .background(Color(UIColor.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
             
             // Main unified text editor
-            CalorieTextEditor(
-                text: $text,
-                totalCalories: $totalCalories,
-                isEditing: $isEditing,
-                calculateCalories: { text, completion in
-                    // Use our service for calorie calculation
-                    CalorieCalculationService.shared.calculateCaloriesFor(
-                        text: text,
-                        completion: completion
-                    )
-                },
-                onParagraphAction: { paragraphIndex in
-                    // Store the active paragraph index and show image picker
-                    activeParagraphIndex = paragraphIndex
-                    showingImagePicker = true
-                }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(UIColor.systemBackground))
-            .overlay(
-                // Placeholder overlay when text is empty and not editing
-                Group {
-                    if text.isEmpty && !isEditing {
-                        Text("Start to write what you eat...")
-                            .foregroundColor(.gray)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            ZStack(alignment: .topTrailing) {
+                CalorieTextEditor(
+                    text: $text,
+                    totalCalories: $totalCalories,
+                    isEditing: $isEditing,
+                    calculateCalories: { text, completion in
+                        // Use our service for calorie calculation
+                        CalorieCalculationService.shared.calculateCaloriesFor(
+                            text: text,
+                            completion: completion
+                        )
                     }
-                }
-            )
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(UIColor.systemBackground))
+                .overlay(
+                    // Placeholder overlay when text is empty
+                    Group {
+                        if text.isEmpty && !isEditing {
+                            Text("Start to write what you eat...")
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
+                    }
+                )
+            }
             
-            // Footer with total calories
+            // Footer with total calories and add button
             HStack {
-                Text("Total: \(totalCalories) kcal")
-                    .font(.headline)
-                    .padding()
+                // Add button
+                Button(action: {
+                    showingImagePicker = true
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.orange)
+                }
+                .padding(.leading)
                 
                 Spacer()
                 
-                // Info button
-                Button(action: {
-                    // Show info/help
-                    print("Show info")
-                }) {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.primary)
-                }
-                .padding(.horizontal)
+                // Total calories
+                Text("Total: \(totalCalories) kcal")
+                    .font(.headline)
+                    .padding(.trailing)
             }
+            .padding(.vertical, 8)
             .background(Color(UIColor.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
         }
