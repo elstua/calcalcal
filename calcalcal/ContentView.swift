@@ -5,7 +5,6 @@ struct ContentView: View {
     @State private var totalCalories = 0
     @State private var isEditing = false
     @State private var showingImagePicker = false
-    @State private var activeParagraphIndex: Int = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -83,76 +82,15 @@ struct ContentView: View {
     
     // Handle selected image
     private func handleSelectedImage(_ image: UIImage) {
-        // Get the current text
-        let currentText = text
-        
-        // Get the active paragraph from our stored index
-        if activeParagraphIndex < 0 || currentText.isEmpty {
-            // If no active paragraph or empty text, just append at the end
-            insertImageAtEnd(image)
-            return
-        }
-        
-        // In a real app, you would:
-        // 1. Upload the image or process it
-        // 2. Get calorie information
-        // 3. Insert it at the specified paragraph
-        
-        // For demonstration, we'll insert at the active paragraph
-        let imageMarker = "[Food Image: Calculating calories...]\n"
-        
-        // Split the text into paragraphs
-        let nsText = currentText as NSString
-        var paragraphRanges: [NSRange] = []
-        
-        let fullRange = NSRange(location: 0, length: nsText.length)
-        nsText.enumerateSubstrings(in: fullRange, options: .byParagraphs) { (substring, substringRange, _, _) in
-            if substring != nil {
-                paragraphRanges.append(substringRange)
-            }
-        }
-        
-        // Check if the active paragraph index is valid
-        if activeParagraphIndex < paragraphRanges.count {
-            let paragraphRange = paragraphRanges[activeParagraphIndex]
-            
-            // Create new text with the image marker inserted at the end of the active paragraph
-            var newText = currentText
-            let insertionPoint = paragraphRange.location + paragraphRange.length
-            
-            // Convert to Swift String index
-            let swiftString = currentText as String
-            if insertionPoint <= swiftString.count {
-                let insertIndex = swiftString.index(swiftString.startIndex, offsetBy: insertionPoint)
-                newText.insert(contentsOf: imageMarker, at: insertIndex)
-                
-                // Update text
-                text = newText
-                
-                // Simulate a calculation and update
-                simulateImageCalculation(imageMarker: imageMarker)
-            } else {
-                // Fallback: append at end
-                insertImageAtEnd(image)
-            }
-        } else {
-            // If the active paragraph is invalid, just append at the end
-            insertImageAtEnd(image)
-        }
-    }
-    
-    // Helper to insert image at the end of the text
-    private func insertImageAtEnd(_ image: UIImage) {
-        let existingText = text
         let imageMarker = "[Food Image: Calculating calories...]\n"
         
         // Append text at the beginning if document is empty, otherwise at the end
-        if existingText.isEmpty {
+        if text.isEmpty {
             text = imageMarker
-        } else if existingText.hasSuffix("\n") {
-            text = existingText + imageMarker
+        } else if text.hasSuffix("\n") {
+            text = text + imageMarker
         } else {
-            text = existingText + "\n" + imageMarker
+            text = text + "\n" + imageMarker
         }
         
         // Simulate a calculation

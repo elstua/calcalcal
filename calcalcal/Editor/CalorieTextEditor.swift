@@ -7,7 +7,6 @@ struct CalorieTextEditor: UIViewRepresentable {
     @Binding var isEditing: Bool
     
     var calculateCalories: (String, @escaping (Int) -> Void) -> Void
-    var onParagraphAction: (Int) -> Void
     
     func makeUIView(context: Context) -> CalorieTextView {
         let textView = CalorieTextView(frame: .zero, textContainer: nil)
@@ -31,13 +30,6 @@ struct CalorieTextEditor: UIViewRepresentable {
         textView.onTotalCaloriesChanged = { calories in
             DispatchQueue.main.async {
                 self.totalCalories = calories
-            }
-        }
-        
-        // Handle paragraph action button taps
-        textView.onParagraphActionButtonTapped = { paragraphIndex in
-            DispatchQueue.main.async {
-                self.onParagraphAction(paragraphIndex)
             }
         }
         
@@ -83,15 +75,6 @@ struct CalorieTextEditor: UIViewRepresentable {
         
         func textViewDidEndEditing(_ textView: UITextView) {
             parent.isEditing = false
-        }
-        
-        // Forward selection change events to the text view
-        func textViewDidChangeSelection(_ textView: UITextView) {
-            if let calorieTextView = textView as? CalorieTextView {
-                // Let the text view know selection changed
-                // Note: CalorieTextView already implements this method,
-                // but we need to ensure it's called through the coordinator
-            }
         }
     }
 }

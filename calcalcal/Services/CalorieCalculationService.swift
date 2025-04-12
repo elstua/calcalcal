@@ -19,6 +19,12 @@ class CalorieCalculationService {
     
     // Calculate calories for text
     func calculateCaloriesFor(text: String, completion: @escaping (Int) -> Void) {
+        // Skip empty text
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            completion(0)
+            return
+        }
+        
         // Check cache first
         if let cachedValue = calculationCache[text] {
             completion(cachedValue)
