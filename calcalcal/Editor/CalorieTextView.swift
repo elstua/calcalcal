@@ -61,7 +61,11 @@ class CalorieTextView: UITextView {
     // MARK: - Block Insertion (New)
 
     func insertBlockPlaceholder(with mockText: String) {
-        guard let placeholderImage = createPlaceholderImage() else { return }
+        guard let placeholderImage = createPlaceholderImage(),
+              let defaultFont = self.font else { // Get the default font
+            print("Warning: Default font not available for text view.")
+            return
+        }
 
         // Create attachment
         let attachment = NSTextAttachment()
@@ -69,32 +73,42 @@ class CalorieTextView: UITextView {
 
         // Calculate size (30% of width, 1:1 ratio)
         let width = self.bounds.width * 0.30
-        attachment.bounds = CGRect(x: 0, y: -4, width: width, height: width) // Small y offset for better alignment
+        // Set y=0 for top alignment
+        attachment.bounds = CGRect(x: 10, y: 0, width: width, height: width)
 
         // Create attributed strings
         let attachmentString = NSAttributedString(attachment: attachment)
-        let mockTextString = NSAttributedString(string: " " + mockText) // Add space before mock text
+        
+        // Create mock text string WITH the default font attribute
+        let mockTextAttributes: [NSAttributedString.Key: Any] = [.font: defaultFont]
+        let mockTextString = NSAttributedString(string: " " + mockText, attributes: mockTextAttributes)
 
         // Get current cursor position or end of text
         let insertionRange = selectedRange
 
-        // Insert into text storage
+        // Get current attributed text
         let mutableAttributedString = NSMutableAttributedString(attributedString: textStorage)
-        mutableAttributedString.insert(attachmentString, at: insertionRange.location)
-        mutableAttributedString.insert(mockTextString, at: insertionRange.location + attachmentString.length)
+        
+        // Insert attachment and text
+        // Insert mock text first to potentially simplify range calculations if needed later
+        mutableAttributedString.insert(mockTextString, at: insertionRange.location)
+        mutableAttributedString.insert(attachmentString, at: insertionRange.location) // Insert attachment before text
 
-        // Replace the entire text storage to ensure updates
-        // This is simpler than trying to manage partial updates and notifications
-        // but might have performance implications for very large text.
-        // We might need to refine this later if needed.
-        let oldSelectedRange = selectedRange // Preserve selection
+        // Ensure the entire string has the default font
+        // This might override other styles, but ensures baseline consistency
+        // A more nuanced approach might be needed if other styles must be preserved.
+        let fullRange = NSRange(location: 0, length: mutableAttributedString.length)
+        mutableAttributedString.addAttribute(.font, value: defaultFont, range: fullRange)
+
+        // Replace the entire text storage
+        let oldSelectedRange = selectedRange // Preserve selection before modification
         textStorage.setAttributedString(mutableAttributedString)
 
-        // Restore selection after the inserted content
+        // Restore selection after the inserted content (now attachment + mock text)
+        // Place cursor after the mock text
         selectedRange = NSRange(location: insertionRange.location + attachmentString.length + mockTextString.length, length: 0)
 
         // Manually trigger textDidChange to update paragraphs/calories
-        // Note: setAttributedString might trigger this, but explicit call ensures it.
         textDidChange()
     }
 
