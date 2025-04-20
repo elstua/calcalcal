@@ -92,10 +92,10 @@ class TextEditorLayoutManager {
                 // Calculate x position with appropriate margin
                 let xPosition = textView.bounds.width - label.bounds.width - calorieConfig.rightMargin
                 
-                // Position label
+                // Position label - Align to bottom
                 label.frame = CGRect(
                     x: xPosition,
-                    y: paragraphRect.midY - (label.bounds.height / 2),
+                    y: paragraphRect.maxY - label.bounds.height,
                     width: label.bounds.width,
                     height: label.bounds.height
                 )

@@ -34,6 +34,10 @@ class CalorieTextView: UITextView {
     private var imagePlaceholderViews: [UIView] = [] // Holds the actual UIViews for placeholders
     private let imageMarkerCharacter = "\u{FFFC}" // Object Replacement Character
     
+    // Debouncer for UI updates
+    private var calorieUpdateWorkItem: DispatchWorkItem? = nil
+    private let debounceDelay: TimeInterval = 0.1 // 100ms delay
+    
     // MARK: - Initialization
     
     override init(frame: CGRect, textContainer: NSTextContainer?) {
@@ -149,11 +153,14 @@ class CalorieTextView: UITextView {
         // --- DEBUG LOG ---
         print("[DEBUG] updateParagraphs: Starting.")
         
+        // Clear the main paragraphs array before processing
+        // Note: This assumes calculateCalories callbacks handle out-of-bounds indices correctly
+        self.paragraphs.removeAll() 
+        
         let fullText = textStorage.string
         let nsText = fullText as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
 
-        var newParagraphs: [ParagraphInfo] = []
         // --- DEBUG LOG ---
         // Keep track of the actual index during enumeration
         var enumerationIndex = 0 
@@ -173,18 +180,20 @@ class CalorieTextView: UITextView {
             print("[DEBUG] updateParagraphs: Index \(currentEnumIndex), Text: \(paragraphText.prefix(30))..., Trimmed (for calories): \(trimmedText.prefix(30))...")
 
             if !trimmedText.isEmpty {
-                // Create new paragraph info (adjust range logic if needed)
+                // Create new paragraph info
                 let newParagraph = ParagraphInfo(
                     range: substringRange,
                     text: paragraphText, // Store original text including marker
                     isLastParagraph: enclosingRange.upperBound == fullRange.upperBound
                 )
-                newParagraphs.append(newParagraph)
+                // Append directly to the main paragraphs array
+                self.paragraphs.append(newParagraph)
+                let newIndex = self.paragraphs.count - 1 // Get the index in the main array
+                
                 // --- DEBUG LOG ---
-                let newIndex = newParagraphs.count - 1
-                print("[DEBUG] updateParagraphs: Appended paragraph. newParagraphs count: \(newParagraphs.count). New index: \(newIndex)")
+                print("[DEBUG] updateParagraphs: Appended paragraph directly. self.paragraphs count: \(self.paragraphs.count). New index: \(newIndex)")
 
-                // Calculate calories based on text *without* the marker
+                // Calculate calories based on text *without* the marker, using the correct index
                 print("[DEBUG] updateParagraphs: Calling calculateCalories for index \(newIndex) with text: \(trimmedText.prefix(30))...")
                 self.calculateCalories(for: newIndex, text: trimmedText)
             } else {
@@ -194,23 +203,17 @@ class CalorieTextView: UITextView {
         }
         
         // --- DEBUG LOG ---
-        print("[DEBUG] updateParagraphs: Finished enumeration. Found \(newParagraphs.count) non-empty paragraphs.")
+        print("[DEBUG] updateParagraphs: Finished enumeration. Final self.paragraphs count: \(paragraphs.count)")
+        // No need to assign self.paragraphs = newParagraphs anymore
         
-        // Update paragraphs state variable
-        paragraphs = newParagraphs
-        // --- DEBUG LOG ---
-        print("[DEBUG] updateParagraphs: Assigned newParagraphs to self.paragraphs. Count: \(paragraphs.count)")
-        if !paragraphs.isEmpty {
-            print("[DEBUG] updateParagraphs: First paragraph text in self.paragraphs: \(paragraphs[0].text.prefix(30))...")
-        }
-
         // Update total calories and active paragraph (synchronous data)
-        updateTotalCalories()
+        // Note: Total calories will be incomplete until async calculations finish
+        updateTotalCalories() // Update based on currently available calories (likely 0 initially)
         updateActiveParagraph()
         
-        // DO NOT call updateCalorieDisplay here. It will be called asynchronously
-        // when each calorie calculation completes.
-        // updateCalorieDisplay() 
+        // Trigger an initial display update (might show no labels yet)
+        // The debounced update will catch the async results later.
+        updateCalorieDisplay() 
     }
     
     // Calculate calories for a paragraph
@@ -244,11 +247,8 @@ class CalorieTextView: UITextView {
             // --- DEBUG LOG ---
             print("[DEBUG] calculateCalories CB: Updated paragraph at index \(paragraphIndex) with \(calories) kcal.")
             
-            // Update UI on main thread
-            DispatchQueue.main.async {
-                self.updateTotalCalories()
-                self.updateCalorieDisplay()
-            }
+            // Schedule a debounced UI update instead of immediate async
+            self.scheduleCalorieDisplayUpdate()
         }
     }
     
@@ -326,6 +326,27 @@ class CalorieTextView: UITextView {
         }
         print("[DEBUG] updateCalorieDisplay: Finished. Added \(calorieLabels.count) labels.")
         */
+    }
+    
+    // MARK: - Debounced Update Logic
+    
+    private func scheduleCalorieDisplayUpdate() {
+        // Invalidate any existing work item
+        calorieUpdateWorkItem?.cancel()
+        
+        // Create a new work item
+        let workItem = DispatchWorkItem { [weak self] in
+            print("[DEBUG] Debouncer: Executing updateCalorieDisplay.")
+            self?.updateTotalCalories() // Update total first
+            self?.updateCalorieDisplay() // Then update labels
+        }
+        
+        // Store the new work item
+        calorieUpdateWorkItem = workItem
+        
+        // Schedule it to run after the delay on the main thread
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounceDelay, execute: workItem)
+        print("[DEBUG] Debouncer: Scheduled updateCalorieDisplay.")
     }
     
     // Override layoutSubviews to handle image placement and exclusion paths
