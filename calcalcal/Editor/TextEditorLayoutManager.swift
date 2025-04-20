@@ -53,14 +53,23 @@ class TextEditorLayoutManager {
         // Remove existing labels
         labels.forEach { $0.removeFromSuperview() }
         
+        // --- DEBUG LOG ---
+        print("[DEBUG] LayoutMgr: layoutCalorieLabels called for \(paragraphs.count) paragraphs.")
+        
         // Create new array for updated labels
         var updatedLabels: [UILabel] = []
         
         // Process each paragraph
         for (index, paragraph) in paragraphs.enumerated() {
+            // --- DEBUG LOG ---
+            // print("[DEBUG] LayoutMgr: Processing paragraph \(index), Range: \(paragraph.range)")
+            
             // Skip paragraphs without calories or empty paragraphs
             if let calories = paragraph.calories,
                !paragraph.isEmpty {
+                
+                // --- DEBUG LOG ---
+                print("[DEBUG] LayoutMgr: Paragraph \(index) HAS calories (\(calories)). Text: \(paragraph.text.prefix(30))...")
                 
                 // Create and configure label
                 let label = UILabel()
@@ -71,6 +80,14 @@ class TextEditorLayoutManager {
                 
                 // Get paragraph position
                 let paragraphRect = self.paragraphRect(for: paragraph, in: textView)
+                // --- DEBUG LOG (moved from paragraphRect) ---
+                print("[DEBUG] LayoutMgr: Calculated paragraphRect for index \(index): \(paragraphRect)")
+                
+                // Check for invalid rects
+                if paragraphRect.isNull || paragraphRect.isInfinite || paragraphRect.isEmpty {
+                    print("[DEBUG] LayoutMgr: Invalid paragraphRect for index \(index). Skipping label.")
+                    continue
+                }
                 
                 // Calculate x position with appropriate margin
                 let xPosition = textView.bounds.width - label.bounds.width - calorieConfig.rightMargin
@@ -101,22 +118,26 @@ class TextEditorLayoutManager {
     /// - Returns: Rectangle for the paragraph
     private func paragraphRect(for paragraph: ParagraphInfo, in textView: UITextView) -> CGRect {
         // Handle empty text or empty paragraph
-        if (textView.text ?? "").isEmpty || paragraph.range.length == 0 {
-            return CGRect(
-                x: 0,
-                y: textView.textContainerInset.top,
-                width: textView.bounds.width,
-                height: textView.font?.lineHeight ?? 20
-            )
+        guard let text = textView.text, !text.isEmpty, paragraph.range.length > 0, 
+              (paragraph.range.location + paragraph.range.length) <= textView.textStorage.length else {
+            // --- DEBUG LOG ---
+            // print("[DEBUG] LayoutMgr - paragraphRect: Bailing early due to empty text or invalid range \(paragraph.range)")
+            return .null // Return null rect for invalid input
         }
         
         // Get layout manager from text view
         let layoutManager = textView.layoutManager
         let textContainer = textView.textContainer
         
+        // Ensure layout is up-to-date before calculating
+        // layoutManager.ensureLayout(for: textContainer) // Can sometimes help, but use cautiously
+        
         // Convert character range to glyph range
         let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraph.range, 
                                                 actualCharacterRange: nil)
+                                                
+        // --- DEBUG LOG ---
+        // print("[DEBUG] LayoutMgr - paragraphRect: Index \(index), GlyphRange: \(glyphRange)") // Need index here if logging
         
         // Find the bounding rect for the glyphs
         var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
@@ -124,6 +145,9 @@ class TextEditorLayoutManager {
         // Adjust for text container insets
         rect.origin.x += textView.textContainerInset.left
         rect.origin.y += textView.textContainerInset.top
+        
+        // --- DEBUG LOG ---
+        // print("[DEBUG] LayoutMgr - paragraphRect: Index \(index), Final Rect: \(rect)") // Need index here if logging
         
         return rect
     }

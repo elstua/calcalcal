@@ -60,13 +60,15 @@ struct CalorieTextEditor: UIViewRepresentable {
         
         // Check if the insert trigger has changed
         if context.coordinator.lastInsertTrigger != insertTrigger {
-            textView.insertBlockPlaceholder(with: "bla-bla pregenerated text for image")
+            // Call the new insertion method
+            textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image")
             context.coordinator.lastInsertTrigger = insertTrigger
             
             // Update the text binding after insertion
-            // Use DispatchQueue to avoid modifying state during view update
             DispatchQueue.main.async {
-                self.text = textView.text
+                // Fetch the text from the textView's textStorage
+                // as textView.text might not immediately reflect attributed string changes
+                self.text = textView.textStorage.string
             }
         }
     }
@@ -91,5 +93,15 @@ struct CalorieTextEditor: UIViewRepresentable {
         func textViewDidEndEditing(_ textView: UITextView) {
             parent.isEditing = false
         }
+        
+        // Optional: Implement textViewDidChange delegate method if more complex sync is needed
+        // func textViewDidChange(_ textView: UITextView) {
+        //     // Update binding cautiously
+        //     DispatchQueue.main.async {
+        //         if self.parent.text != textView.textStorage.string {
+        //            self.parent.text = textView.textStorage.string
+        //         }
+        //     }
+        // }
     }
 }

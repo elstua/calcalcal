@@ -1,3 +1,4 @@
+import SwiftUI // Import needed for BlockPlaceholderView embedding
 import UIKit
 
 class CalorieTextView: UITextView {
@@ -22,11 +23,16 @@ class CalorieTextView: UITextView {
         }
     }
     
-    // For handling calorie display
-    private var calorieLabels: [UILabel] = []
+    // Calorie labels are now managed by TextEditorLayoutManager
+    private var calorieLabels: [UILabel] = [] 
+    private let layoutHelper = TextEditorLayoutManager() // Add instance of the layout manager
     
     // Track which paragraph has the cursor
     private var activeParagraphIndex: Int? = nil
+    
+    // New properties for exclusion path approach
+    private var imagePlaceholderViews: [UIView] = [] // Holds the actual UIViews for placeholders
+    private let imageMarkerCharacter = "\u{FFFC}" // Object Replacement Character
     
     // MARK: - Initialization
     
@@ -46,10 +52,13 @@ class CalorieTextView: UITextView {
         font = .systemFont(ofSize: 18)
         textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 90) // Extra right inset for calories
         
+        // Ensure layout manager is used for exclusion paths
+        layoutManager.allowsNonContiguousLayout = false // Often needed for complex layouts
+
         // Listen for text changes
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(textDidChange),
+            selector: #selector(textDidChange), // textDidChange will trigger layout update
             name: UITextView.textDidChangeNotification,
             object: self
         )
@@ -58,30 +67,22 @@ class CalorieTextView: UITextView {
         self.delegate = self
     }
     
-    // MARK: - Block Insertion (New)
+    // MARK: - Image Marker Insertion (Replaces Block Insertion)
 
-    func insertBlockPlaceholder(with mockText: String) {
-        guard let placeholderImage = createPlaceholderImage(),
-              let defaultFont = self.font else { // Get the default font
+    func insertImageMarkerAndText(with mockText: String) {
+        guard let defaultFont = self.font else {
             print("Warning: Default font not available for text view.")
             return
         }
 
-        // Create attachment
-        let attachment = NSTextAttachment()
-        attachment.image = placeholderImage
-
-        // Calculate size (30% of width, 1:1 ratio)
-        let width = self.bounds.width * 0.30
-        // Set y=0 for top alignment
-        attachment.bounds = CGRect(x: 10, y: 0, width: width, height: width)
-
-        // Create attributed strings
-        let attachmentString = NSAttributedString(attachment: attachment)
+        // Define attributes for marker and text
+        let commonAttributes: [NSAttributedString.Key: Any] = [.font: defaultFont]
         
-        // Create mock text string WITH the default font attribute
-        let mockTextAttributes: [NSAttributedString.Key: Any] = [.font: defaultFont]
-        let mockTextString = NSAttributedString(string: " " + mockText, attributes: mockTextAttributes)
+        // Create attributed strings
+        // Marker character - no text, just the special character
+        let markerString = NSAttributedString(string: imageMarkerCharacter, attributes: commonAttributes)
+        // Mock text WITH the default font attribute
+        let mockTextString = NSAttributedString(string: " " + mockText, attributes: commonAttributes)
 
         // Get current cursor position or end of text
         let insertionRange = selectedRange
@@ -89,56 +90,48 @@ class CalorieTextView: UITextView {
         // Get current attributed text
         let mutableAttributedString = NSMutableAttributedString(attributedString: textStorage)
         
-        // Insert attachment and text
-        // Insert mock text first to potentially simplify range calculations if needed later
-        mutableAttributedString.insert(mockTextString, at: insertionRange.location)
-        mutableAttributedString.insert(attachmentString, at: insertionRange.location) // Insert attachment before text
+        // Insert marker and text
+        // Insert marker first, then text
+        mutableAttributedString.insert(markerString, at: insertionRange.location)
+        mutableAttributedString.insert(mockTextString, at: insertionRange.location + markerString.length)
 
-        // Ensure the entire string has the default font
-        // This might override other styles, but ensures baseline consistency
-        // A more nuanced approach might be needed if other styles must be preserved.
-        let fullRange = NSRange(location: 0, length: mutableAttributedString.length)
-        mutableAttributedString.addAttribute(.font, value: defaultFont, range: fullRange)
+        // Optional: Re-apply default font to whole range if needed, but might be less critical now
+        // let fullRange = NSRange(location: 0, length: mutableAttributedString.length)
+        // mutableAttributedString.addAttribute(.font, value: defaultFont, range: fullRange)
 
         // Replace the entire text storage
-        let oldSelectedRange = selectedRange // Preserve selection before modification
         textStorage.setAttributedString(mutableAttributedString)
 
-        // Restore selection after the inserted content (now attachment + mock text)
-        // Place cursor after the mock text
-        selectedRange = NSRange(location: insertionRange.location + attachmentString.length + mockTextString.length, length: 0)
+        // --- DEBUG LOG --- 
+        print("[DEBUG] Inserted marker. New textStorage string length: \(textStorage.length)")
+        print("[DEBUG] TextStorage content:\n---START---\n\(textStorage.string)\n---END---")
 
-        // Manually trigger textDidChange to update paragraphs/calories
+        // Restore selection after the inserted content
+        selectedRange = NSRange(location: insertionRange.location + markerString.length + mockTextString.length, length: 0)
+
+        // Manually trigger textDidChange to update layout, paragraphs, calories
         textDidChange()
-    }
-
-    private func createPlaceholderImage() -> UIImage? {
-        let size = CGSize(width: 50, height: 50) // Actual size doesn't matter much here, bounds control it
-        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-        guard let context = UIGraphicsGetCurrentContext() else { return nil }
-
-        UIColor.lightGray.setFill()
-        context.fill(CGRect(origin: .zero, size: size))
-
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return image
     }
     
     // MARK: - Text Processing
     
     // Handle text changes
     @objc private func textDidChange() {
+        // --- DEBUG LOG --- 
+        print("[DEBUG] textDidChange called.")
+
         // Notify about text changes
-        onTextChanged?(text)
+        onTextChanged?(text) // Existing callback
         
-        // Clear existing paragraphs and labels
+        // Existing paragraph/calorie update
         paragraphs.removeAll()
         calorieLabels.forEach { $0.removeFromSuperview() }
         calorieLabels.removeAll()
+        updateParagraphs() // This needs to be aware of the image marker
         
-        // Process and update paragraphs
-        updateParagraphs()
+        // Trigger layout update to reposition images/exclusion paths
+        setNeedsLayout()
+        layoutIfNeeded() // Force layout calculation immediately if needed
     }
     
     // Update which paragraph is active based on cursor position
@@ -153,70 +146,71 @@ class CalorieTextView: UITextView {
     
     // Parse text into paragraphs and update their info
     private func updateParagraphs() {
-        // Get all paragraph ranges
-        let text = self.text ?? ""
-        let paragraphRanges = getParagraphRanges(for: text)
+        // --- DEBUG LOG ---
+        print("[DEBUG] updateParagraphs: Starting.")
         
-        // Build new paragraph info objects
-        var newParagraphs: [ParagraphInfo] = []
-        
-        for (index, range) in paragraphRanges.enumerated() {
-            let paragraphText = (text as NSString).substring(with: range)
-            let trimmedText = paragraphText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            
-            // Skip empty paragraphs
-            if trimmedText.isEmpty {
-                continue
-            }
-            
-            // Create new paragraph info
-            let newParagraph = ParagraphInfo(
-                range: range,
-                text: paragraphText,
-                isLastParagraph: index == paragraphRanges.count - 1
-            )
-            newParagraphs.append(newParagraph)
-        }
-        
-        // Update paragraphs first
-        paragraphs = newParagraphs
-        
-        // Then calculate calories for each paragraph
-        for (index, paragraph) in paragraphs.enumerated() {
-            let trimmedText = paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            if !trimmedText.isEmpty {
-                calculateCalories(for: index, text: trimmedText)
-            }
-        }
-        
-        updateTotalCalories()
-        updateCalorieDisplay()
-        updateActiveParagraph() // Update which paragraph has the cursor
-    }
-    
-    // Get NSRanges for each paragraph in text
-    private func getParagraphRanges(for text: String) -> [NSRange] {
-        var paragraphRanges: [NSRange] = []
-        
-        // Empty text case - return empty array
-        if text.isEmpty {
-            return paragraphRanges
-        }
-        
-        // Use NSString for easier range handling
-        let nsText = text as NSString
-        
-        // Find paragraph ranges using NSString enumeration
+        let fullText = textStorage.string
+        let nsText = fullText as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
+
+        var newParagraphs: [ParagraphInfo] = []
+        // --- DEBUG LOG ---
+        // Keep track of the actual index during enumeration
+        var enumerationIndex = 0 
         
-        nsText.enumerateSubstrings(in: fullRange, options: .byParagraphs) { (substring, substringRange, _, _) in
-            // Only add non-empty paragraphs
-            if let substring = substring, !substring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                paragraphRanges.append(substringRange)
+        nsText.enumerateSubstrings(in: fullRange, options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, stop in
+            // --- DEBUG LOG ---
+            let currentEnumIndex = enumerationIndex
+            enumerationIndex += 1
+            print("[DEBUG] updateParagraphs: Enumeration index \(currentEnumIndex), Range: \(substringRange)")
+            
+            let paragraphText = nsText.substring(with: substringRange)
+            // Exclude the marker character from calorie calculation text
+            let textForCalories = paragraphText.replacingOccurrences(of: self.imageMarkerCharacter, with: "")
+            let trimmedText = textForCalories.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // --- DEBUG LOG ---
+            print("[DEBUG] updateParagraphs: Index \(currentEnumIndex), Text: \(paragraphText.prefix(30))..., Trimmed (for calories): \(trimmedText.prefix(30))...")
+
+            if !trimmedText.isEmpty {
+                // Create new paragraph info (adjust range logic if needed)
+                let newParagraph = ParagraphInfo(
+                    range: substringRange,
+                    text: paragraphText, // Store original text including marker
+                    isLastParagraph: enclosingRange.upperBound == fullRange.upperBound
+                )
+                newParagraphs.append(newParagraph)
+                // --- DEBUG LOG ---
+                let newIndex = newParagraphs.count - 1
+                print("[DEBUG] updateParagraphs: Appended paragraph. newParagraphs count: \(newParagraphs.count). New index: \(newIndex)")
+
+                // Calculate calories based on text *without* the marker
+                print("[DEBUG] updateParagraphs: Calling calculateCalories for index \(newIndex) with text: \(trimmedText.prefix(30))...")
+                self.calculateCalories(for: newIndex, text: trimmedText)
+            } else {
+                // --- DEBUG LOG ---
+                print("[DEBUG] updateParagraphs: Index \(currentEnumIndex) - Skipping empty/trimmed paragraph.")
             }
         }
         
-        return paragraphRanges
+        // --- DEBUG LOG ---
+        print("[DEBUG] updateParagraphs: Finished enumeration. Found \(newParagraphs.count) non-empty paragraphs.")
+        
+        // Update paragraphs state variable
+        paragraphs = newParagraphs
+        // --- DEBUG LOG ---
+        print("[DEBUG] updateParagraphs: Assigned newParagraphs to self.paragraphs. Count: \(paragraphs.count)")
+        if !paragraphs.isEmpty {
+            print("[DEBUG] updateParagraphs: First paragraph text in self.paragraphs: \(paragraphs[0].text.prefix(30))...")
+        }
+
+        // Update total calories and active paragraph (synchronous data)
+        updateTotalCalories()
+        updateActiveParagraph()
+        
+        // DO NOT call updateCalorieDisplay here. It will be called asynchronously
+        // when each calorie calculation completes.
+        // updateCalorieDisplay() 
     }
     
     // Calculate calories for a paragraph
@@ -224,14 +218,31 @@ class CalorieTextView: UITextView {
         // Skip calculation for empty text
         if text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty { return }
         
+        // --- DEBUG LOG ---
+        print("[DEBUG] calculateCalories: Requesting calculation for index \(paragraphIndex), text: \(text.prefix(30))...")
+
         // Call the callback to calculate calories
         onNeedCalorieCalculation?(text) { [weak self] calories in
-            guard let self = self, paragraphIndex < self.paragraphs.count else { return }
+            // --- DEBUG LOG ---
+            print("[DEBUG] calculateCalories CB: Received \(calories) kcal for original index \(paragraphIndex)")
+            guard let self = self else {
+                 print("[DEBUG] calculateCalories CB: Self is nil. Bailing.")
+                 return
+            }
+            guard paragraphIndex < self.paragraphs.count else {
+                // --- DEBUG LOG ---
+                print("[DEBUG] calculateCalories CB: Index \(paragraphIndex) is out of bounds for current paragraphs count \(self.paragraphs.count). Bailing.")
+                return 
+            }
             
             // Update paragraph with calculated calories
             var updatedParagraph = self.paragraphs[paragraphIndex]
+            // --- DEBUG LOG ---
+            print("[DEBUG] calculateCalories CB: Updating paragraph at index \(paragraphIndex). Current text: \(updatedParagraph.text.prefix(30))... Current calories: \(updatedParagraph.calories ?? -1)")
             updatedParagraph.calories = calories
             self.paragraphs[paragraphIndex] = updatedParagraph
+            // --- DEBUG LOG ---
+            print("[DEBUG] calculateCalories CB: Updated paragraph at index \(paragraphIndex) with \(calories) kcal.")
             
             // Update UI on main thread
             DispatchQueue.main.async {
@@ -244,7 +255,8 @@ class CalorieTextView: UITextView {
     // Force recalculation of all paragraphs
     func recalculateAllParagraphs() {
         for (index, paragraph) in paragraphs.enumerated() {
-            let trimmedText = paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let textForCalories = paragraph.text.replacingOccurrences(of: self.imageMarkerCharacter, with: "")
+            let trimmedText = textForCalories.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             if !trimmedText.isEmpty {
                 calculateCalories(for: index, text: trimmedText)
             }
@@ -259,68 +271,162 @@ class CalorieTextView: UITextView {
         totalCalories = total
     }
     
-    // Update the visual display of calories
+    // Update the visual display of calories - Use TextEditorLayoutManager
     private func updateCalorieDisplay() {
-        // Remove existing labels
+        // --- DEBUG LOG ---
+        print("[DEBUG] updateCalorieDisplay: Delegating to TextEditorLayoutManager.")
+        
+        // Call the layout manager to handle label creation and placement
+        self.calorieLabels = layoutHelper.layoutCalorieLabels(
+            labels: self.calorieLabels, 
+            forParagraphs: self.paragraphs,
+            inTextView: self,
+            withActiveParagraph: self.activeParagraphIndex
+        )
+        
+        // --- DEBUG LOG ---
+        print("[DEBUG] updateCalorieDisplay: Layout manager returned \(self.calorieLabels.count) labels.")
+        
+        /* --- Remove old implementation ---
         calorieLabels.forEach { $0.removeFromSuperview() }
         calorieLabels.removeAll()
         
-        // Create new labels for each paragraph with calories
-        for paragraph in paragraphs {
-            guard let calories = paragraph.calories else { continue }
+        print("[DEBUG] updateCalorieDisplay: Processing \(paragraphs.count) paragraphs.")
+        
+        for (index, paragraph) in paragraphs.enumerated() {
+            guard let calories = paragraph.calories else { 
+                // print("[DEBUG] updateCalorieDisplay: Paragraph \(index) has no calories. Text: \(paragraph.text.prefix(20))...")
+                continue 
+            }
             
-            // Create and configure label
+            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) HAS calories (\(calories)). Text: \(paragraph.text.prefix(30))...")
+
             let label = UILabel()
             label.text = "\(calories) kcal"
             label.font = .systemFont(ofSize: 16)
             label.textColor = .secondaryLabel
             label.sizeToFit()
             
-            // Get paragraph position
             let paragraphRect = self.paragraphRect(for: paragraph)
+            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) rect: \(paragraphRect)")
             
-            // Position label
+            let labelX = bounds.width - label.bounds.width - 16
+            let labelY = paragraphRect.maxY - label.bounds.height
+            
             label.frame = CGRect(
-                x: bounds.width - label.bounds.width - 16,
-                y: paragraphRect.maxY - label.bounds.height,
+                x: labelX,
+                y: labelY, 
                 width: label.bounds.width,
                 height: label.bounds.height
             )
+            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) label frame: \(label.frame)")
             
-            // Add to text view and track
             addSubview(label)
             calorieLabels.append(label)
         }
+        print("[DEBUG] updateCalorieDisplay: Finished. Added \(calorieLabels.count) labels.")
+        */
     }
     
-    // Get rectangle for a paragraph
-    private func paragraphRect(for paragraph: ParagraphInfo) -> CGRect {
-        let layoutManager = self.layoutManager
-        let textContainer = self.textContainer
-        
-        // Convert character range to glyph range
-        let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraph.range, 
-                                                actualCharacterRange: nil)
-        
-        // Find the bounding rect for the glyphs
-        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-        
-        // Adjust for text container insets
-        rect.origin.x += textContainerInset.left
-        rect.origin.y += textContainerInset.top
-        
-        return rect
-    }
-    
-    // Override layout to update calorie displays
+    // Override layoutSubviews to handle image placement and exclusion paths
     override func layoutSubviews() {
         super.layoutSubviews()
-        updateCalorieDisplay()
+        // --- DEBUG LOG ---
+        print("[DEBUG] layoutSubviews called.")
+        updateImagePlaceholderViews()
+        updateCalorieDisplay() // Call this after image layout
+    }
+    
+    private func updateImagePlaceholderViews() {
+        // Clear existing views and paths
+        imagePlaceholderViews.forEach { $0.removeFromSuperview() }
+        imagePlaceholderViews.removeAll()
+        var newExclusionPaths: [UIBezierPath] = []
+        
+        // Constants for layout
+        let placeholderWidth = self.bounds.width * 0.30
+        let placeholderSize = CGSize(width: placeholderWidth, height: placeholderWidth)
+        let horizontalPadding: CGFloat = 10 // Padding from left edge
+        let verticalPadding: CGFloat = 5 // Padding above/below
+
+        // Find marker characters by searching the string directly
+        let fullText = textStorage.string
+        let markerRanges = fullText.ranges(of: imageMarkerCharacter).map { NSRange($0, in: fullText) }
+        
+        // --- DEBUG LOG ---
+        print("[DEBUG] Found \(markerRanges.count) marker character ranges: \(markerRanges)")
+
+        for range in markerRanges {
+            // --- DEBUG LOG --- 
+            print("[DEBUG] Processing marker at range \(range)")
+            
+            // Found a marker, get its bounding rect
+            // Use layoutManager correctly
+            let layoutManager = self.layoutManager
+            let textContainer = self.textContainer
+            
+            // Get glyph index for the start of the marker range
+            let glyphIndex = layoutManager.glyphIndexForCharacter(at: range.location)
+            
+            // Get the line fragment rect containing the glyph
+            var effectiveRange = NSRange()
+            let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &effectiveRange)
+            // --- DEBUG LOG ---
+            print("[DEBUG] Line fragment rect: \(lineRect), Effective range: \(effectiveRange)")
+            
+            // Check if lineRect is valid
+            if lineRect.isEmpty || lineRect.isInfinite {
+                 print("[DEBUG] Warning: Line fragment rect is invalid. Skipping. Rect: \(lineRect)")
+                 continue
+            }
+
+            // Calculate frame for the placeholder view using lineRect
+            let viewOrigin = CGPoint(x: textContainerInset.left + horizontalPadding,
+                                     y: textContainerInset.top + lineRect.minY + verticalPadding) // Use lineRect.minY
+            let viewFrame = CGRect(origin: viewOrigin, size: placeholderSize)
+            // --- DEBUG LOG --- 
+            print("[DEBUG] Calculated placeholder view frame: \(viewFrame)")
+            
+            // Create and add the placeholder view (using SwiftUI view via UIHostingController)
+            // Consider reusing views later for performance
+            let placeholderContentView = BlockPlaceholderView()
+            let hostingController = UIHostingController(rootView: placeholderContentView)
+            hostingController.view.frame = viewFrame
+            hostingController.view.backgroundColor = .clear // Important for transparency
+            // --- DEBUG LOG ---
+            print("[DEBUG] Hosting controller view frame after setting: \(hostingController.view.frame)")
+            
+            addSubview(hostingController.view)
+            imagePlaceholderViews.append(hostingController.view) // Store the container view
+            // --- DEBUG LOG ---
+            print("[DEBUG] Added placeholder subview. Current count: \(imagePlaceholderViews.count)")
+            print("[DEBUG] Hosting controller view bounds after adding: \(hostingController.view.bounds)")
+            
+            // Create exclusion path (relative to text container origin) using lineRect
+            let exclusionRect = CGRect(x: horizontalPadding,
+                                       y: lineRect.minY + verticalPadding, // Use lineRect.minY
+                                       width: max(1, placeholderSize.width + horizontalPadding), // Ensure > 0
+                                       height: max(1, placeholderSize.height + (verticalPadding * 2))) // Ensure > 0
+            let exclusionPath = UIBezierPath(rect: exclusionRect)
+            newExclusionPaths.append(exclusionPath)
+            // --- DEBUG LOG ---
+            print("[DEBUG] Calculated exclusion rect: \(exclusionRect)")
+        }
+        
+        // Apply exclusion paths
+        textContainer.exclusionPaths = newExclusionPaths
+        // --- DEBUG LOG ---
+        print("[DEBUG] Applied \(newExclusionPaths.count) exclusion paths.")
+        if !newExclusionPaths.isEmpty {
+            print("[DEBUG] First exclusion path bounds: \(newExclusionPaths.first?.bounds)")
+        }
     }
     
     // Clean up
     deinit {
         NotificationCenter.default.removeObserver(self)
+        // Clean up hosting controllers if necessary
+        imagePlaceholderViews.forEach { $0.removeFromSuperview() }
     }
 }
 
