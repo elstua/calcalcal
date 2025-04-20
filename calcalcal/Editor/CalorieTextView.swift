@@ -28,21 +28,16 @@ class CalorieTextView: UITextView {
     // Track which paragraph has the cursor
     private var activeParagraphIndex: Int? = nil
     
-    // Managers for improved functionality
-    private let cursorManager = CursorPositionManager()
-
     // MARK: - Initialization
     
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         setupTextView()
-        setupManagers()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupTextView()
-        setupManagers()
     }
     
     private func setupTextView() {
@@ -63,14 +58,57 @@ class CalorieTextView: UITextView {
         self.delegate = self
     }
     
-    private func setupManagers() {
-        // Configure cursor position manager
-        cursorManager.onCursorPositionChanged = { [weak self] position, activeIndex, _ in
-            guard let self = self else { return }
-            
-            // Update state
-            self.activeParagraphIndex = activeIndex
-        }
+    // MARK: - Block Insertion (New)
+
+    func insertBlockPlaceholder(with mockText: String) {
+        guard let placeholderImage = createPlaceholderImage() else { return }
+
+        // Create attachment
+        let attachment = NSTextAttachment()
+        attachment.image = placeholderImage
+
+        // Calculate size (30% of width, 1:1 ratio)
+        let width = self.bounds.width * 0.30
+        attachment.bounds = CGRect(x: 0, y: -4, width: width, height: width) // Small y offset for better alignment
+
+        // Create attributed strings
+        let attachmentString = NSAttributedString(attachment: attachment)
+        let mockTextString = NSAttributedString(string: " " + mockText) // Add space before mock text
+
+        // Get current cursor position or end of text
+        let insertionRange = selectedRange
+
+        // Insert into text storage
+        let mutableAttributedString = NSMutableAttributedString(attributedString: textStorage)
+        mutableAttributedString.insert(attachmentString, at: insertionRange.location)
+        mutableAttributedString.insert(mockTextString, at: insertionRange.location + attachmentString.length)
+
+        // Replace the entire text storage to ensure updates
+        // This is simpler than trying to manage partial updates and notifications
+        // but might have performance implications for very large text.
+        // We might need to refine this later if needed.
+        let oldSelectedRange = selectedRange // Preserve selection
+        textStorage.setAttributedString(mutableAttributedString)
+
+        // Restore selection after the inserted content
+        selectedRange = NSRange(location: insertionRange.location + attachmentString.length + mockTextString.length, length: 0)
+
+        // Manually trigger textDidChange to update paragraphs/calories
+        // Note: setAttributedString might trigger this, but explicit call ensures it.
+        textDidChange()
+    }
+
+    private func createPlaceholderImage() -> UIImage? {
+        let size = CGSize(width: 50, height: 50) // Actual size doesn't matter much here, bounds control it
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        guard let context = UIGraphicsGetCurrentContext() else { return nil }
+
+        UIColor.lightGray.setFill()
+        context.fill(CGRect(origin: .zero, size: size))
+
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image
     }
     
     // MARK: - Text Processing
@@ -91,12 +129,12 @@ class CalorieTextView: UITextView {
     
     // Update which paragraph is active based on cursor position
     private func updateActiveParagraph() {
-        // Use the cursor manager to determine active paragraph
-        cursorManager.updateCursorPosition(
-            position: selectedRange.location,
-            inText: text ?? "",
-            withParagraphs: paragraphs
-        )
+        // Determine active paragraph based on cursor position
+        let cursorPosition = selectedRange.location
+        activeParagraphIndex = paragraphs.firstIndex { paragraph in
+            let range = paragraph.range
+            return cursorPosition >= range.location && cursorPosition <= range.location + range.length
+        }
     }
     
     // Parse text into paragraphs and update their info

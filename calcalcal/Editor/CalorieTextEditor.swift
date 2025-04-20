@@ -5,6 +5,7 @@ struct CalorieTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var totalCalories: Int
     @Binding var isEditing: Bool
+    @Binding var insertTrigger: Int
     
     var calculateCalories: (String, @escaping (Int) -> Void) -> Void
     
@@ -56,6 +57,18 @@ struct CalorieTextEditor: UIViewRepresentable {
             // If text was set externally, recalculate paragraphs
             textView.recalculateAllParagraphs()
         }
+        
+        // Check if the insert trigger has changed
+        if context.coordinator.lastInsertTrigger != insertTrigger {
+            textView.insertBlockPlaceholder(with: "bla-bla pregenerated text for image")
+            context.coordinator.lastInsertTrigger = insertTrigger
+            
+            // Update the text binding after insertion
+            // Use DispatchQueue to avoid modifying state during view update
+            DispatchQueue.main.async {
+                self.text = textView.text
+            }
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -64,9 +77,11 @@ struct CalorieTextEditor: UIViewRepresentable {
     
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: CalorieTextEditor
+        var lastInsertTrigger: Int
         
         init(_ parent: CalorieTextEditor) {
             self.parent = parent
+            self.lastInsertTrigger = parent.insertTrigger
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {

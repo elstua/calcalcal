@@ -7,7 +7,6 @@
 
 
 import Foundation
-import UIKit
 
 class CalorieCalculationService {
     static let shared = CalorieCalculationService()
@@ -36,31 +35,6 @@ class CalorieCalculationService {
         mockCalculateCalories(for: text) { [weak self] calories in
             // Cache the result
             self?.calculationCache[text] = calories
-            completion(calories)
-        }
-    }
-    
-    // Calculate calories for an image
-    func calculateCaloriesFor(image: UIImage, completion: @escaping (Int) -> Void) {
-        // In a real app, this would send the image to your backend
-        // For now, we'll use a mock implementation
-        
-        // Convert image to a hash for caching
-        let imageHash = String(image.hashValue)
-        
-        // Check cache first
-        if let cachedValue = calculationCache[imageHash] {
-            completion(cachedValue)
-            return
-        }
-        
-        // Mock calculation with delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            // Generate a realistic calorie count for an image
-            let calories = Int.random(in: 200...800)
-            
-            // Cache the result
-            self?.calculationCache[imageHash] = calories
             completion(calories)
         }
     }
