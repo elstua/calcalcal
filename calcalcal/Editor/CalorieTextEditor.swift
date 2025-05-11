@@ -5,7 +5,7 @@ struct CalorieTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var totalCalories: Int
     @Binding var isEditing: Bool
-    @Binding var insertTrigger: Int
+    @Binding var insertTrigger: Int // For image insertion (currently placeholder)
     
     var calculateCalories: (String, @escaping (Int) -> Void) -> Void
     
@@ -58,16 +58,13 @@ struct CalorieTextEditor: UIViewRepresentable {
             textView.recalculateAllParagraphs()
         }
         
-        // Check if the insert trigger has changed
+        // Check if the image insert trigger has changed (currently commented out in CalorieTextView)
         if context.coordinator.lastInsertTrigger != insertTrigger {
-            // Call the new insertion method
-//            textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image")
+            // textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image") // Logic is commented out
             context.coordinator.lastInsertTrigger = insertTrigger
             
-            // Update the text binding after insertion
+            // Update the text binding after insertion (if it were active)
             DispatchQueue.main.async {
-                // Fetch the text from the textView's textStorage
-                // as textView.text might not immediately reflect attributed string changes
                 self.text = textView.textStorage.string
             }
         }

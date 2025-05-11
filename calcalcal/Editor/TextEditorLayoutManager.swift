@@ -61,13 +61,8 @@ class TextEditorLayoutManager {
         
         // Process each paragraph
         for (index, paragraph) in paragraphs.enumerated() {
-            // --- DEBUG LOG ---
-            // print("[DEBUG] LayoutMgr: Processing paragraph \(index), Range: \(paragraph.range)")
-            
-            // Skip paragraphs without calories or empty paragraphs
-            if let calories = paragraph.calories,
-               !paragraph.isEmpty {
-                
+            // Display label if calories are present and paragraph is not empty
+            if let calories = paragraph.calories, !paragraph.isEmpty { 
                 // --- DEBUG LOG ---
                 print("[DEBUG] LayoutMgr: Paragraph \(index) HAS calories (\(calories)). Text: \(paragraph.text.prefix(30))...")
                 

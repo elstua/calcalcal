@@ -1,10 +1,3 @@
-//
-//  ParagraphInfo.swift
-//  calcalcal
-//
-//  Created by Artem Savelev on 18/03/2025.
-//
-
 import Foundation
 
 struct ParagraphInfo: Identifiable, Equatable {
@@ -12,6 +5,7 @@ struct ParagraphInfo: Identifiable, Equatable {
     let range: NSRange
     var text: String
     var calories: Int?
+    var blockType: BlockType = .textBlock
     
     var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -20,11 +14,12 @@ struct ParagraphInfo: Identifiable, Equatable {
     // Check if this paragraph is at the end of text
     var isLastParagraph: Bool = false
     
-    init(id: UUID = UUID(), range: NSRange, text: String, calories: Int? = nil, isLastParagraph: Bool = false) {
+    init(id: UUID = UUID(), range: NSRange, text: String, calories: Int? = nil, blockType: BlockType = .textBlock, isLastParagraph: Bool = false) {
         self.id = id
         self.range = range
         self.text = text
         self.calories = calories
+        self.blockType = blockType
         self.isLastParagraph = isLastParagraph
     }
     
@@ -33,6 +28,7 @@ struct ParagraphInfo: Identifiable, Equatable {
         lhs.range == rhs.range &&
         lhs.text == rhs.text &&
         lhs.calories == rhs.calories &&
+        lhs.blockType == rhs.blockType &&
         lhs.isLastParagraph == rhs.isLastParagraph
     }
 }

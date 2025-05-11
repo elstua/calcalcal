@@ -5,7 +5,14 @@ struct ContentView: View {
     @State private var text = ""
     @State private var totalCalories = 0
     @State private var isEditing = false
-    @State private var insertTrigger = 0 // State for triggering insertion
+    // @State private var showingImagePicker = false
+    @State private var actualInsertImageTrigger: Int = 0
+    
+    // Store editor controls
+    // @State private var editorControls: BlockEditorControls?
+    
+    // Configuration for block layout
+    // private let blockConfig = BlockLayoutConfig(...)
     
     var body: some View {
         VStack(spacing: 0) {
@@ -16,71 +23,116 @@ struct ContentView: View {
                     .fontWeight(.bold)
                 
                 Spacer()
+                
+                // Button to insert a calorie marker
+                // Button(action: {
+                //     actualInsertCalorieMarkerTrigger += 1
+                // }) {
+                //     Image(systemName: "flame.circle")
+                //         .font(.system(size: 20))
+                //         .foregroundColor(.orange)
+                // }
+                // .padding(.trailing, 8)
+                
+                // Optional: Add a button to insert a text block manually
             }
             .padding()
             .background(Color(UIColor.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
             
-            // Main unified text editor
-            ZStack(alignment: .topTrailing) {
-                CalorieTextEditor(
-                    text: $text,
-                    totalCalories: $totalCalories,
-                    isEditing: $isEditing,
-                    insertTrigger: $insertTrigger,
-                    calculateCalories: { text, completion in
-                        // Use our service for calorie calculation
-                        CalorieCalculationService.shared.calculateCaloriesFor(
-                            text: text,
-                            completion: completion
-                        )
-                    }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(UIColor.systemBackground))
-                .overlay(
-                    // Placeholder overlay when text is empty
-                    Group {
-                        if text.isEmpty && !isEditing {
-                            Text("Start to write what you eat...")
-                                .foregroundColor(.gray)
-                                .padding(.horizontal, 16)
-                                .padding(.top, 16)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        }
-                    }
-                )
-            }
-            
-            // Footer with total calories and add button
-            HStack {
-                // Add button
-                Button(action: {
-                    // Increment the trigger to insert the block
-                    insertTrigger += 1
-                    
-                    // Focus on the text editor (optional, might already be focused)
-                    // isEditing = true // Consider if this is needed or handled by tap
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.orange)
+            // Main editor area
+            CalorieTextEditor(
+                text: $text,
+                totalCalories: $totalCalories,
+                isEditing: $isEditing,
+                insertTrigger: $actualInsertImageTrigger,
+                calculateCalories: { text, completion in
+                    CalorieCalculationService.shared.calculateCaloriesFor(
+                        text: text,
+                        completion: completion
+                    )
                 }
-                .padding(.leading)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(
+                Group {
+                    if text.isEmpty && !isEditing {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Start writing what you eat...")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 18))
+                            
+                            Text("Each line becomes a tracked item with calories")
+                                .foregroundColor(.gray.opacity(0.7))
+                                .font(.system(size: 14))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .allowsHitTesting(false)
+                    }
+                }
+            )
+            // .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+            //     if text.isEmpty && editorControls != nil {
+            //         editorControls?.addTextBlock()
+            //     }
+            // }
+            
+            // Footer with total calories
+            HStack {
+                // Add button for images
+                // Button(action: {
+                //     showingImagePicker = true
+                // }) {
+                //     HStack(spacing: 6) {
+                //         Image(systemName: "plus.circle.fill")
+                //             .font(.system(size: 24))
+                //             .foregroundColor(.orange)
+                //         
+                //         Text("Add Photo")
+                //             .font(.caption)
+                //             .foregroundColor(.orange)
+                //     }
+                // }
+                // .padding(.leading)
                 
                 Spacer()
                 
                 // Total calories
-                Text("Total: \(totalCalories) kcal")
-                    .font(.headline)
-                    .padding(.trailing)
+                HStack(spacing: 8) {
+                    if totalCalories > 0 {
+                        Text("Total:")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Text("\(totalCalories) kcal")
+                        .font(.headline)
+                        .foregroundColor(totalCalories > 0 ? Color(UIColor.label) : .gray)
+                }
+                .padding(.trailing)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
             .background(Color(UIColor.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
         }
+        // .sheet(isPresented: $showingImagePicker) {
+        //     ImagePickerView(isPresented: $showingImagePicker) { image in
+        //         handleSelectedImage(image)
+        //     }
+        // }
     }
+    
+    // MARK: - Private Methods
+    
+    // private func handleSelectedImage(_ image: UIImage) {
+    //     // Add image block with no caption initially
+    //     // editorControls?.addImageBlock(image, nil)
+    // }
 }
+
+// MARK: - Preview
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {

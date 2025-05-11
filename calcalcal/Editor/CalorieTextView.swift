@@ -1,6 +1,8 @@
 import SwiftUI // Import needed for BlockPlaceholderView embedding
 import UIKit
 
+// Removed ParagraphInfo struct from here, it's now in TextBlockTypes.swift
+
 class CalorieTextView: UITextView {
     // MARK: - Properties
     
@@ -30,9 +32,11 @@ class CalorieTextView: UITextView {
     // Track which paragraph has the cursor
     private var activeParagraphIndex: Int? = nil
     
-    // New properties for exclusion path approach
-    private var imagePlaceholderViews: [UIView] = [] // Holds the actual UIViews for placeholders
-    private let imageMarkerCharacter = "\u{FFFC}" // Object Replacement Character
+    // Character used to mark where a calorie count should be displayed for a block
+    // let calorieMarkerCharacter = "\u{FFFC}" // Removed - No longer using explicit marker character
+    
+    // New properties for exclusion path approach (COMMENTED OUT FOR NOW)
+    // private var imagePlaceholderViews: [UIView] = [] // Holds the actual UIViews for placeholders
     
     // Debouncer for UI updates
     private var calorieUpdateWorkItem: DispatchWorkItem? = nil
@@ -40,14 +44,86 @@ class CalorieTextView: UITextView {
     
     // MARK: - Initialization
     
-    override init(frame: CGRect, textContainer: NSTextContainer?) {
+    // Custom initializer to use BlockBasedTextStorage
+    init(frame: CGRect, customTextStorage: BlockBasedTextStorage) {
+        let layoutManager = NSLayoutManager()
+        customTextStorage.addLayoutManager(layoutManager)
+
+        let textContainer = NSTextContainer(size: .zero) // Or appropriate size
+        layoutManager.addTextContainer(textContainer)
+        
+        // Important: Set textContainer.width and heightTracksTextView if using .zero size
+        textContainer.widthTracksTextView = true
+        textContainer.heightTracksTextView = true
+
         super.init(frame: frame, textContainer: textContainer)
+        setupTextView()
+    }
+
+    // Override standard initializer to ensure custom storage is used
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        let newTextStorage = BlockBasedTextStorage()
+        let layoutManager = NSLayoutManager()
+        newTextStorage.addLayoutManager(layoutManager)
+
+        let newTextContainer = textContainer ?? NSTextContainer(size: .zero)
+        if textContainer == nil { // If a container wasn't provided, configure our new one
+            newTextContainer.widthTracksTextView = true
+            newTextContainer.heightTracksTextView = true
+        }
+        layoutManager.addTextContainer(newTextContainer)
+        
+        super.init(frame: frame, textContainer: newTextContainer)
+        // We call setupTextView AFTER super.init has initialized the textStorage with our container.
         setupTextView()
     }
     
     required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupTextView()
+        // When initializing from a storyboard/nib, a default TextStorage is created.
+        // We need to replace it.
+        let customTextStorage = BlockBasedTextStorage()
+        let layoutManager = NSLayoutManager()
+        customTextStorage.addLayoutManager(layoutManager)
+        let textContainer = NSTextContainer(size: .zero)
+        textContainer.widthTracksTextView = true
+        textContainer.heightTracksTextView = true
+        layoutManager.addTextContainer(textContainer)
+
+        // Unfortunately, UITextView's textStorage is get-only publicly after init.
+        // The proper way is to ensure the TextContainer passed to super.init(coder:)
+        // is already configured with our storage via its layoutManager.
+        // This is tricky with NSCoder.
+        // A common workaround is to replace the layout manager and its connections.
+        
+        // For now, let's stick to the programmatic init path and assume this might need more work
+        // if storyboard/nib instantiation is critical.
+        // Fallback to a basic setup, which might not use BlockBasedTextStorage correctly from Storyboard.
+        // Ideally, the app avoids initializing this view from a Storyboard if BlockBasedTextStorage is essential.
+        super.init(coder: coder) // This will use a default textStorage
+        setupTextView() // Then try to replace (less ideal)
+
+        // Attempt to replace the layout manager and connect new storage
+        // This is a more robust approach for NSCoder
+        let existingTextContainer = self.textContainer
+        
+        // Remove existing layout manager from default text storage
+        // Ensure layoutManager is not nil before trying to remove it from textStorage.
+        // Though, a textContainer on a UITextView should always have a layoutManager.
+        if let currentLayoutManager = existingTextContainer.layoutManager {
+            self.textStorage.removeLayoutManager(currentLayoutManager)
+        }
+        
+        // Create and connect our custom stack
+        let newLayoutManager = NSLayoutManager()
+        customTextStorage.addLayoutManager(newLayoutManager)
+        newLayoutManager.addTextContainer(existingTextContainer) // Re-use existing container
+        
+        // The 'else' block has been removed as it was for a nil textContainer, which shouldn't occur.
+
+         // The key is that self.textStorage needs to be our BlockBasedTextStorage.
+         // The above attempts to rewire. If the textStorage property could be set, it would be easier.
+         // The most reliable way is usually programmatic creation using the init(frame:textContainer:)
+         // where the textContainer is already linked to BlockBasedTextStorage.
     }
     
     private func setupTextView() {
@@ -56,8 +132,8 @@ class CalorieTextView: UITextView {
         font = .systemFont(ofSize: 18)
         textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 90) // Extra right inset for calories
         
-        // Ensure layout manager is used for exclusion paths
-        layoutManager.allowsNonContiguousLayout = false // Often needed for complex layouts
+        // Ensure layout manager is used for exclusion paths (COMMENTED OUT FOR NOW)
+        // layoutManager.allowsNonContiguousLayout = false // Often needed for complex layouts
 
         // Listen for text changes
         NotificationCenter.default.addObserver(
@@ -71,9 +147,14 @@ class CalorieTextView: UITextView {
         self.delegate = self
     }
     
+    // MARK: - Calorie Marker Insertion - Method Removed
+    // func insertCalorieMarker() { ... } // Removed
+    
     // MARK: - Image Marker Insertion (Replaces Block Insertion)
 
     func insertImageMarkerAndText(with mockText: String) {
+        // --- LOGIC COMMENTED OUT FOR NOW ---
+        /*
         guard let defaultFont = self.font else {
             print("Warning: Default font not available for text view.")
             return
@@ -115,6 +196,8 @@ class CalorieTextView: UITextView {
 
         // Manually trigger textDidChange to update layout, paragraphs, calories
         textDidChange()
+        */
+        print("[DEBUG] insertImageMarkerAndText called, but logic is currently commented out.")
     }
     
     // MARK: - Text Processing
@@ -125,17 +208,17 @@ class CalorieTextView: UITextView {
         print("[DEBUG] textDidChange called.")
 
         // Notify about text changes
-        onTextChanged?(text) // Existing callback
+        onTextChanged?(textStorage.string) // Existing callback, ensure it uses textStorage.string
         
         // Existing paragraph/calorie update
         paragraphs.removeAll()
         calorieLabels.forEach { $0.removeFromSuperview() }
         calorieLabels.removeAll()
-        updateParagraphs() // This needs to be aware of the image marker
+        updateParagraphs() // This needs to be aware of the image marker (logic to be adapted)
         
-        // Trigger layout update to reposition images/exclusion paths
-        setNeedsLayout()
-        layoutIfNeeded() // Force layout calculation immediately if needed
+        // Trigger layout update to reposition images/exclusion paths (COMMENTED OUT FOR NOW)
+        // setNeedsLayout()
+        // layoutIfNeeded() // Force layout calculation immediately if needed
     }
     
     // Update which paragraph is active based on cursor position
@@ -153,66 +236,76 @@ class CalorieTextView: UITextView {
         // --- DEBUG LOG ---
         print("[DEBUG] updateParagraphs: Starting.")
         
-        // Clear the main paragraphs array before processing
-        // Note: This assumes calculateCalories callbacks handle out-of-bounds indices correctly
         self.paragraphs.removeAll() 
         
-        let fullText = textStorage.string
+        // Ensure we are using the textStorage from our BlockBasedTextStorage
+        guard let currentTextStorage = self.textStorage as? BlockBasedTextStorage else {
+            print("[DEBUG] updateParagraphs: TextStorage is not BlockBasedTextStorage. Aborting.")
+            // Potentially handle this more gracefully, e.g., by falling back to default behavior
+            // or ensuring this never happens through correct initialization.
+            return
+        }
+
+        let fullText = currentTextStorage.string
         let nsText = fullText as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
 
-        // --- DEBUG LOG ---
-        // Keep track of the actual index during enumeration
         var enumerationIndex = 0 
         
-        nsText.enumerateSubstrings(in: fullRange, options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, stop in
-            // --- DEBUG LOG ---
+        nsText.enumerateSubstrings(in: fullRange, options: [.byParagraphs, .substringNotRequired]) { _, substringRange, _, _ in
             let currentEnumIndex = enumerationIndex
             enumerationIndex += 1
-            print("[DEBUG] updateParagraphs: Enumeration index \(currentEnumIndex), Range: \(substringRange)")
             
             let paragraphText = nsText.substring(with: substringRange)
-            // Exclude the marker character from calorie calculation text
-            let textForCalories = paragraphText.replacingOccurrences(of: self.imageMarkerCharacter, with: "")
-            let trimmedText = textForCalories.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // --- DEBUG LOG ---
-            print("[DEBUG] updateParagraphs: Index \(currentEnumIndex), Text: \(paragraphText.prefix(30))..., Trimmed (for calories): \(trimmedText.prefix(30))...")
+            // No longer need to check for calorieMarkerCharacter here for calorie calculation purposes
+            // let containsCalorieMarker = paragraphText.contains(self.calorieMarkerCharacter)
+            // let textForCalories = paragraphText.replacingOccurrences(of: self.calorieMarkerCharacter, with: "") // Original text is used
+            let trimmedTextForCalculation = paragraphText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if !trimmedText.isEmpty {
-                // Create new paragraph info
+            // Determine the block type from textStorage attributes
+            var currentBlockType: BlockType = .textBlock // Default
+            if substringRange.length > 0 {
+                // Get attributes at the start of the paragraph. 
+                // Assuming blockType attribute covers the whole paragraph or is consistent at its start.
+                let attributes = currentTextStorage.attributes(at: substringRange.location, effectiveRange: nil)
+                if let blockTypeRawValue = attributes[.blockType] as? String,
+                   let resolvedBlockType = BlockType(rawValue: blockTypeRawValue) {
+                    currentBlockType = resolvedBlockType
+                }
+            }
+            
+            // Simplified condition: Calculate calories for any non-empty text block.
+            // Image placeholders would have their own logic if re-enabled.
+            if currentBlockType == .textBlock && !trimmedTextForCalculation.isEmpty {
                 let newParagraph = ParagraphInfo(
                     range: substringRange,
-                    text: paragraphText, // Store original text including marker
-                    isLastParagraph: enclosingRange.upperBound == fullRange.upperBound
+                    text: paragraphText, // Store original paragraph text
+                    blockType: currentBlockType 
+                    // hasCalorieMarker: false (removed from ParagraphInfo)
                 )
-                // Append directly to the main paragraphs array
                 self.paragraphs.append(newParagraph)
-                let newIndex = self.paragraphs.count - 1 // Get the index in the main array
+                let newIndex = self.paragraphs.count - 1
                 
-                // --- DEBUG LOG ---
-                print("[DEBUG] updateParagraphs: Appended paragraph directly. self.paragraphs count: \(self.paragraphs.count). New index: \(newIndex)")
+                print("[DEBUG] updateParagraphs: Created ParagraphInfo - Index: \(newIndex), Type: \(newParagraph.blockType.rawValue), Text: '\(newParagraph.text.debugDescription)'")
+                
+                // Calculate calories for this text block
+                self.calculateCalories(for: newIndex, text: trimmedTextForCalculation) 
 
-                // Calculate calories based on text *without* the marker, using the correct index
-                print("[DEBUG] updateParagraphs: Calling calculateCalories for index \(newIndex) with text: \(trimmedText.prefix(30))...")
-                self.calculateCalories(for: newIndex, text: trimmedText)
-            } else {
-                // --- DEBUG LOG ---
-                print("[DEBUG] updateParagraphs: Index \(currentEnumIndex) - Skipping empty/trimmed paragraph.")
+            } else if currentBlockType == .imagePlaceholder {
+                // Handle image placeholders (currently no calorie calc for them)
+                 let newParagraph = ParagraphInfo(
+                    range: substringRange,
+                    text: paragraphText, 
+                    blockType: currentBlockType
+                )
+                self.paragraphs.append(newParagraph)
+                print("[DEBUG] updateParagraphs: Created Image Placeholder ParagraphInfo - Text: '\(newParagraph.text.debugDescription)'")
             }
+            // else: Skip empty paragraphs or other block types not handled for calorie display
         }
         
-        // --- DEBUG LOG ---
-        print("[DEBUG] updateParagraphs: Finished enumeration. Final self.paragraphs count: \(paragraphs.count)")
-        // No need to assign self.paragraphs = newParagraphs anymore
-        
-        // Update total calories and active paragraph (synchronous data)
-        // Note: Total calories will be incomplete until async calculations finish
-        updateTotalCalories() // Update based on currently available calories (likely 0 initially)
+        updateTotalCalories()
         updateActiveParagraph()
-        
-        // Trigger an initial display update (might show no labels yet)
-        // The debounced update will catch the async results later.
         updateCalorieDisplay() 
     }
     
@@ -221,33 +314,25 @@ class CalorieTextView: UITextView {
         // Skip calculation for empty text
         if text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty { return }
         
-        // --- DEBUG LOG ---
-        print("[DEBUG] calculateCalories: Requesting calculation for index \(paragraphIndex), text: \(text.prefix(30))...")
+        // print("[DEBUG] calculateCalories: Requesting calculation for index \(paragraphIndex), text: \(text.prefix(30))...")
 
-        // Call the callback to calculate calories
         onNeedCalorieCalculation?(text) { [weak self] calories in
-            // --- DEBUG LOG ---
-            print("[DEBUG] calculateCalories CB: Received \(calories) kcal for original index \(paragraphIndex)")
+            // print("[DEBUG] calculateCalories CB: Received \(calories) kcal for original index \(paragraphIndex)")
             guard let self = self else {
-                 print("[DEBUG] calculateCalories CB: Self is nil. Bailing.")
+                 // print("[DEBUG] calculateCalories CB: Self is nil. Bailing.")
                  return
             }
             guard paragraphIndex < self.paragraphs.count else {
-                // --- DEBUG LOG ---
-                print("[DEBUG] calculateCalories CB: Index \(paragraphIndex) is out of bounds for current paragraphs count \(self.paragraphs.count). Bailing.")
+                // print("[DEBUG] calculateCalories CB: Index \(paragraphIndex) is out of bounds for current paragraphs count \(self.paragraphs.count). Bailing.")
                 return 
             }
             
-            // Update paragraph with calculated calories
             var updatedParagraph = self.paragraphs[paragraphIndex]
-            // --- DEBUG LOG ---
-            print("[DEBUG] calculateCalories CB: Updating paragraph at index \(paragraphIndex). Current text: \(updatedParagraph.text.prefix(30))... Current calories: \(updatedParagraph.calories ?? -1)")
+            // print("[DEBUG] calculateCalories CB: Updating paragraph at index \(paragraphIndex). Current text: \(updatedParagraph.text.prefix(30))... Current calories: \(updatedParagraph.calories ?? -1)")
             updatedParagraph.calories = calories
             self.paragraphs[paragraphIndex] = updatedParagraph
-            // --- DEBUG LOG ---
-            print("[DEBUG] calculateCalories CB: Updated paragraph at index \(paragraphIndex) with \(calories) kcal.")
+            // print("[DEBUG] calculateCalories CB: Updated paragraph at index \(paragraphIndex) with \(calories) kcal.")
             
-            // Schedule a debounced UI update instead of immediate async
             self.scheduleCalorieDisplayUpdate()
         }
     }
@@ -255,10 +340,11 @@ class CalorieTextView: UITextView {
     // Force recalculation of all paragraphs
     func recalculateAllParagraphs() {
         for (index, paragraph) in paragraphs.enumerated() {
-            let textForCalories = paragraph.text.replacingOccurrences(of: self.imageMarkerCharacter, with: "")
-            let trimmedText = textForCalories.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            if !trimmedText.isEmpty {
-                calculateCalories(for: index, text: trimmedText)
+            if paragraph.blockType == .textBlock {
+                 let trimmedText = paragraph.text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                 if !trimmedText.isEmpty {
+                    calculateCalories(for: index, text: trimmedText)
+                }
             }
         }
     }
@@ -273,10 +359,8 @@ class CalorieTextView: UITextView {
     
     // Update the visual display of calories - Use TextEditorLayoutManager
     private func updateCalorieDisplay() {
-        // --- DEBUG LOG ---
-        print("[DEBUG] updateCalorieDisplay: Delegating to TextEditorLayoutManager.")
+        // print("[DEBUG] updateCalorieDisplay: Delegating to TextEditorLayoutManager.")
         
-        // Call the layout manager to handle label creation and placement
         self.calorieLabels = layoutHelper.layoutCalorieLabels(
             labels: self.calorieLabels, 
             forParagraphs: self.paragraphs,
@@ -284,48 +368,7 @@ class CalorieTextView: UITextView {
             withActiveParagraph: self.activeParagraphIndex
         )
         
-        // --- DEBUG LOG ---
-        print("[DEBUG] updateCalorieDisplay: Layout manager returned \(self.calorieLabels.count) labels.")
-        
-        /* --- Remove old implementation ---
-        calorieLabels.forEach { $0.removeFromSuperview() }
-        calorieLabels.removeAll()
-        
-        print("[DEBUG] updateCalorieDisplay: Processing \(paragraphs.count) paragraphs.")
-        
-        for (index, paragraph) in paragraphs.enumerated() {
-            guard let calories = paragraph.calories else { 
-                // print("[DEBUG] updateCalorieDisplay: Paragraph \(index) has no calories. Text: \(paragraph.text.prefix(20))...")
-                continue 
-            }
-            
-            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) HAS calories (\(calories)). Text: \(paragraph.text.prefix(30))...")
-
-            let label = UILabel()
-            label.text = "\(calories) kcal"
-            label.font = .systemFont(ofSize: 16)
-            label.textColor = .secondaryLabel
-            label.sizeToFit()
-            
-            let paragraphRect = self.paragraphRect(for: paragraph)
-            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) rect: \(paragraphRect)")
-            
-            let labelX = bounds.width - label.bounds.width - 16
-            let labelY = paragraphRect.maxY - label.bounds.height
-            
-            label.frame = CGRect(
-                x: labelX,
-                y: labelY, 
-                width: label.bounds.width,
-                height: label.bounds.height
-            )
-            print("[DEBUG] updateCalorieDisplay: Paragraph \(index) label frame: \(label.frame)")
-            
-            addSubview(label)
-            calorieLabels.append(label)
-        }
-        print("[DEBUG] updateCalorieDisplay: Finished. Added \(calorieLabels.count) labels.")
-        */
+        // print("[DEBUG] updateCalorieDisplay: Layout manager returned \(self.calorieLabels.count) labels.")
     }
     
     // MARK: - Debounced Update Logic
@@ -352,13 +395,14 @@ class CalorieTextView: UITextView {
     // Override layoutSubviews to handle image placement and exclusion paths
     override func layoutSubviews() {
         super.layoutSubviews()
-        // --- DEBUG LOG ---
-        print("[DEBUG] layoutSubviews called.")
-        updateImagePlaceholderViews()
-        updateCalorieDisplay() // Call this after image layout
+        // print("[DEBUG] layoutSubviews called.")
+        // updateImagePlaceholderViews() // COMMENTED OUT FOR NOW
+        updateCalorieDisplay() // Call this after image layout (or general layout)
     }
     
     private func updateImagePlaceholderViews() {
+        // --- LOGIC COMMENTED OUT FOR NOW ---
+        /*
         // Clear existing views and paths
         imagePlaceholderViews.forEach { $0.removeFromSuperview() }
         imagePlaceholderViews.removeAll()
@@ -374,80 +418,64 @@ class CalorieTextView: UITextView {
         let fullText = textStorage.string
         let markerRanges = fullText.ranges(of: imageMarkerCharacter).map { NSRange($0, in: fullText) }
         
-        // --- DEBUG LOG ---
         print("[DEBUG] Found \(markerRanges.count) marker character ranges: \(markerRanges)")
 
         for range in markerRanges {
-            // --- DEBUG LOG --- 
             print("[DEBUG] Processing marker at range \(range)")
             
-            // Found a marker, get its bounding rect
-            // Use layoutManager correctly
             let layoutManager = self.layoutManager
             let textContainer = self.textContainer
             
-            // Get glyph index for the start of the marker range
             let glyphIndex = layoutManager.glyphIndexForCharacter(at: range.location)
             
-            // Get the line fragment rect containing the glyph
             var effectiveRange = NSRange()
             let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &effectiveRange)
-            // --- DEBUG LOG ---
             print("[DEBUG] Line fragment rect: \(lineRect), Effective range: \(effectiveRange)")
             
-            // Check if lineRect is valid
             if lineRect.isEmpty || lineRect.isInfinite {
                  print("[DEBUG] Warning: Line fragment rect is invalid. Skipping. Rect: \(lineRect)")
                  continue
             }
 
-            // Calculate frame for the placeholder view using lineRect
             let viewOrigin = CGPoint(x: textContainerInset.left + horizontalPadding,
-                                     y: textContainerInset.top + lineRect.minY + verticalPadding) // Use lineRect.minY
+                                     y: textContainerInset.top + lineRect.minY + verticalPadding)
             let viewFrame = CGRect(origin: viewOrigin, size: placeholderSize)
-            // --- DEBUG LOG --- 
             print("[DEBUG] Calculated placeholder view frame: \(viewFrame)")
             
-            // Create and add the placeholder view (using SwiftUI view via UIHostingController)
-            // Consider reusing views later for performance
             let placeholderContentView = BlockPlaceholderView()
             let hostingController = UIHostingController(rootView: placeholderContentView)
             hostingController.view.frame = viewFrame
-            hostingController.view.backgroundColor = .clear // Important for transparency
-            // --- DEBUG LOG ---
+            hostingController.view.backgroundColor = .clear
             print("[DEBUG] Hosting controller view frame after setting: \(hostingController.view.frame)")
             
             addSubview(hostingController.view)
-            imagePlaceholderViews.append(hostingController.view) // Store the container view
-            // --- DEBUG LOG ---
+            imagePlaceholderViews.append(hostingController.view)
             print("[DEBUG] Added placeholder subview. Current count: \(imagePlaceholderViews.count)")
             print("[DEBUG] Hosting controller view bounds after adding: \(hostingController.view.bounds)")
             
-            // Create exclusion path (relative to text container origin) using lineRect
             let exclusionRect = CGRect(x: horizontalPadding,
-                                       y: lineRect.minY + verticalPadding, // Use lineRect.minY
-                                       width: max(1, placeholderSize.width + horizontalPadding), // Ensure > 0
-                                       height: max(1, placeholderSize.height + (verticalPadding * 2))) // Ensure > 0
+                                       y: lineRect.minY + verticalPadding,
+                                       width: max(1, placeholderSize.width + horizontalPadding),
+                                       height: max(1, placeholderSize.height + (verticalPadding * 2)))
             let exclusionPath = UIBezierPath(rect: exclusionRect)
             newExclusionPaths.append(exclusionPath)
-            // --- DEBUG LOG ---
             print("[DEBUG] Calculated exclusion rect: \(exclusionRect)")
         }
         
-        // Apply exclusion paths
         textContainer.exclusionPaths = newExclusionPaths
-        // --- DEBUG LOG ---
         print("[DEBUG] Applied \(newExclusionPaths.count) exclusion paths.")
         if !newExclusionPaths.isEmpty {
             print("[DEBUG] First exclusion path bounds: \(newExclusionPaths.first?.bounds)")
         }
+        */
+        print("[DEBUG] updateImagePlaceholderViews called, but logic is currently commented out.")
     }
     
     // Clean up
     deinit {
         NotificationCenter.default.removeObserver(self)
         // Clean up hosting controllers if necessary
-        imagePlaceholderViews.forEach { $0.removeFromSuperview() }
+        // imagePlaceholderViews.forEach { $0.removeFromSuperview() }
     }
 }
 
