@@ -61,7 +61,7 @@ struct CalorieTextEditor: UIViewRepresentable {
         // Check if the insert trigger has changed
         if context.coordinator.lastInsertTrigger != insertTrigger {
             // Call the new insertion method
-            textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image")
+//            textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image")
             context.coordinator.lastInsertTrigger = insertTrigger
             
             // Update the text binding after insertion
