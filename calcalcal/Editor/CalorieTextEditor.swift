@@ -58,12 +58,12 @@ struct CalorieTextEditor: UIViewRepresentable {
             textView.recalculateAllParagraphs()
         }
         
-        // Check if the image insert trigger has changed (currently commented out in CalorieTextView)
+        // Check if the image insert trigger has changed
         if context.coordinator.lastInsertTrigger != insertTrigger {
-            // textView.insertImageMarkerAndText(with: "bla-bla pregenerated text for image") // Logic is commented out
+            textView.insertImageMarkerAndText(with: "On this photo we have pasta")
             context.coordinator.lastInsertTrigger = insertTrigger
             
-            // Update the text binding after insertion (if it were active)
+            // Update the text binding after insertion
             DispatchQueue.main.async {
                 self.text = textView.textStorage.string
             }

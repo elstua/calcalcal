@@ -82,20 +82,21 @@ struct ContentView: View {
             // Footer with total calories
             HStack {
                 // Add button for images
-                // Button(action: {
-                //     showingImagePicker = true
-                // }) {
-                //     HStack(spacing: 6) {
-                //         Image(systemName: "plus.circle.fill")
-                //             .font(.system(size: 24))
-                //             .foregroundColor(.orange)
-                //         
-                //         Text("Add Photo")
-                //             .font(.caption)
-                //             .foregroundColor(.orange)
-                //     }
-                // }
-                // .padding(.leading)
+                Button(action: {
+                    // For now, directly trigger image insertion without picker
+                    actualInsertImageTrigger += 1
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.orange)
+                        
+                        Text("Add Photo")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.leading)
                 
                 Spacer()
                 
