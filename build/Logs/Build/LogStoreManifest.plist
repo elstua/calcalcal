@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>11</integer>
+	<key>logs</key>
+	<dict>
+		<key>109B9D63-34A6-4E59-9344-8F63FD69EEFF</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>109B9D63-34A6-4E59-9344-8F63FD69EEFF.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>calcalcal project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>calcalcal</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Cleaning project calcalcal with scheme calcalcal</string>
+			<key>timeStartedRecording</key>
+			<real>770216383.327474</real>
+			<key>timeStoppedRecording</key>
+			<real>770216383.48572397</real>
+			<key>title</key>
+			<string>Cleaning project calcalcal with scheme calcalcal</string>
+			<key>uniqueIdentifier</key>
+			<string>109B9D63-34A6-4E59-9344-8F63FD69EEFF</string>
+		</dict>
+		<key>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>1</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>calcalcal project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>calcalcal</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project calcalcal with scheme calcalcal</string>
+			<key>timeStartedRecording</key>
+			<real>770219522.42800105</real>
+			<key>timeStoppedRecording</key>
+			<real>770219527.94243705</real>
+			<key>title</key>
+			<string>Building project calcalcal with scheme calcalcal</string>
+			<key>uniqueIdentifier</key>
+			<string>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

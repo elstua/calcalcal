@@ -1,0 +1,88 @@
+{
+  "" : {
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcal-master.dia",
+    "emit-module-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcal-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcal-master-emit-module.dia",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcal-master.swiftdeps"
+  },
+  "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Editor/UnifiedTextContentStorage.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextContentStorage~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Editor/UnifiedTextEditor.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextEditor~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Editor/UnifiedTextLayoutManager.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextLayoutManager~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Editor/UnifiedTextView.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedTextView~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Views/ContentView.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/Views/UnifiedEditorDemoView.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/UnifiedEditorDemoView~partial.swiftmodule"
+  },
+  "/Users/artemsavelev/calcalcal/calcalcal/calcalcalApp.swift" : {
+    "const-values" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.swiftconstvalues",
+    "dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.d",
+    "diagnostics" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.dia",
+    "index-unit-output-path" : "/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.o",
+    "llvm-bc" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.bc",
+    "object" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.o",
+    "swift-dependencies" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp.swiftdeps",
+    "swiftmodule" : "/Users/artemsavelev/calcalcal/build/Build/Intermediates.noindex/calcalcal.build/Debug-iphonesimulator/calcalcal.build/Objects-normal/arm64/calcalcalApp~partial.swiftmodule"
+  }
+}

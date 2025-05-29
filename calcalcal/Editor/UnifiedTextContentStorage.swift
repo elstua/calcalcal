@@ -53,6 +53,10 @@ class UnifiedTextContentStorage: NSObject {
         return nil
     }
     
+    func blockMetadata(for range: NSRange) -> BlockMetadata? {
+        return blockMetadata[range]
+    }
+    
     // MARK: - Paragraph Management
     
     func enumerateParagraphs(in range: NSRange? = nil, using block: (NSRange, BlockMetadata?) -> Void) {
@@ -73,9 +77,20 @@ class UnifiedTextContentStorage: NSObject {
                                    for: NSRange(location: paragraphStart, length: 0))
             
             let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
-            let metadata = blockMetadata[paragraphRange]
             
-            block(paragraphRange, metadata)
+            // Find metadata for this paragraph range
+            var foundMetadata: BlockMetadata?
+            for (storedRange, metadata) in blockMetadata {
+                // Check if the stored range matches or overlaps with the paragraph range
+                if storedRange.location == paragraphRange.location ||
+                   NSLocationInRange(paragraphRange.location, storedRange) ||
+                   NSLocationInRange(storedRange.location, paragraphRange) {
+                    foundMetadata = metadata
+                    break
+                }
+            }
+            
+            block(paragraphRange, foundMetadata)
             
             paragraphStart = paragraphEnd
         }

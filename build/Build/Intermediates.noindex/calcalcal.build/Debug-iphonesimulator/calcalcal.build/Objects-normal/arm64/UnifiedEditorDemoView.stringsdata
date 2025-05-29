@@ -1,0 +1,48 @@
+{
+  "source": "/Users/artemsavelev/calcalcal/calcalcal/Views/UnifiedEditorDemoView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Unified Editor Demo",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 81
+        }
+      },
+      {
+        "comment": "",
+        "key": "Block-Based Editor",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add Block",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 30
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add Image",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 34
+        }
+      },
+      {
+        "comment": "",
+        "key": "Blocks: %lld",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 62
+        }
+      }
+    ]
+  },
+  "version": 1
+}

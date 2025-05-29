@@ -14,6 +14,7 @@ struct UnifiedEditorDemoView: View {
     
     @State private var showingCalorieInput = false
     @State private var selectedBlockLocation = 0
+    @StateObject private var editorProxy = UnifiedTextEditorProxy()
     
     var body: some View {
         NavigationView {
@@ -28,6 +29,10 @@ struct UnifiedEditorDemoView: View {
                     Button(action: { addSampleBlock() }) {
                         Label("Add Block", systemImage: "plus.circle")
                     }
+                    
+                    Button(action: { addImageBlock() }) {
+                        Label("Add Image", systemImage: "photo")
+                    }
                 }
                 .padding()
                 .background(Color(UIColor.systemBackground))
@@ -41,6 +46,7 @@ struct UnifiedEditorDemoView: View {
                 // Unified Text Editor
                 UnifiedTextEditor(text: $editorText)
                     .blockSpacing(20)
+                    .proxy(editorProxy)
                     .onTextChange { text in
                         print("Text changed: \(text.count) characters")
                     }
@@ -94,6 +100,19 @@ struct UnifiedEditorDemoView: View {
         
         let randomText = sampleTexts.randomElement() ?? ""
         editorText += "\n\n" + randomText
+    }
+    
+    private func addImageBlock() {
+        // Add the image block through the proxy
+        editorProxy.addImageBlock()
+        
+        // Update the binding text to reflect the change
+        // This is a workaround - in a production app, we'd have better sync
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let textView = editorProxy.textView {
+                editorText = textView.text
+            }
+        }
     }
     
     private func showBlockInfo() {

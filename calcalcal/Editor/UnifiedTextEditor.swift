@@ -1,12 +1,26 @@
 import SwiftUI
 import UIKit
 
+/// Proxy class to expose UnifiedTextView methods to SwiftUI
+class UnifiedTextEditorProxy: ObservableObject {
+    weak var textView: UnifiedTextView?
+    
+    func addTextBlock(_ text: String, calorieData: String? = nil) {
+        textView?.addTextBlock(text, calorieData: calorieData)
+    }
+    
+    func addImageBlock(_ text: String = "This is an image block with text flowing alongside. The image takes up 30% of the width while the text uses the remaining 70%.", imageReference: UUID? = nil, calorieData: String? = nil) {
+        textView?.addImageBlock(text, imageReference: imageReference, calorieData: calorieData)
+    }
+}
+
 /// SwiftUI wrapper for the unified text editor
 struct UnifiedTextEditor: UIViewRepresentable {
     
     @Binding var text: String
     var onTextChange: ((String) -> Void)?
     var defaultBlockSpacing: CGFloat = 16.0
+    var proxy: UnifiedTextEditorProxy?
     
     func makeUIView(context: Context) -> UnifiedTextView {
         let textView = UnifiedTextView()
@@ -15,6 +29,9 @@ struct UnifiedTextEditor: UIViewRepresentable {
         
         // Set up the coordinator as delegate
         textView.delegate = context.coordinator
+        
+        // Connect proxy if provided
+        proxy?.textView = textView
         
         return textView
     }
@@ -59,6 +76,12 @@ extension UnifiedTextEditor {
     func onTextChange(_ action: @escaping (String) -> Void) -> UnifiedTextEditor {
         var editor = self
         editor.onTextChange = action
+        return editor
+    }
+    
+    func proxy(_ proxy: UnifiedTextEditorProxy) -> UnifiedTextEditor {
+        var editor = self
+        editor.proxy = proxy
         return editor
     }
 } 
