@@ -4,11 +4,8 @@ import UIKit
 struct UnifiedEditorDemoView: View {
     @State private var editorText = """
     Welcome to the Unified Text Editor!
-    
     This is a paragraph that acts as a block. Each paragraph is automatically treated as a separate block with spacing.
-    
     You can type naturally and press Enter to create new blocks. The editor maintains a continuous text flow while preserving block structure.
-    
     Try editing this text and see how the blocks update automatically!
     """
     
@@ -32,6 +29,10 @@ struct UnifiedEditorDemoView: View {
                     
                     Button(action: { addImageBlock() }) {
                         Label("Add Image", systemImage: "photo")
+                    }
+                    
+                    Button(action: { debugBlocks() }) {
+                        Label("Debug", systemImage: "ladybug")
                     }
                 }
                 .padding()
@@ -86,6 +87,13 @@ struct UnifiedEditorDemoView: View {
     // MARK: - Helper Functions
     
     private func countBlocks() -> Int {
+        // Use the actual text view's block analysis if available
+        if let textView = editorProxy.textView {
+            let analysis = textView.getBlockAnalysis()
+            return analysis.totalBlocks
+        }
+        
+        // Fallback to simple paragraph counting
         let paragraphs = editorText.components(separatedBy: "\n\n")
         return paragraphs.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
     }
@@ -128,6 +136,32 @@ struct UnifiedEditorDemoView: View {
     
     private func clearAllText() {
         editorText = ""
+    }
+    
+    private func debugBlocks() {
+        print("\n🐞 DEBUG BLOCKS REQUESTED")
+        
+        // Print analysis from the actual text view
+        if let textView = editorProxy.textView {
+            textView.printBlockAnalysis()
+        } else {
+            print("❌ No text view available in proxy")
+        }
+        
+        // Also show the SwiftUI binding text analysis
+        print("SwiftUI Binding Text Analysis:")
+        print("  Full text length: \(editorText.count)")
+        print("  Number of \\n\\n separators: \(editorText.components(separatedBy: "\n\n").count - 1)")
+        
+        let paragraphs = editorText.components(separatedBy: "\n\n")
+        for (index, paragraph) in paragraphs.enumerated() {
+            let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                print("  SwiftUI Paragraph \(index + 1): '\(trimmed.prefix(50))...'")
+            } else {
+                print("  SwiftUI Paragraph \(index + 1): [EMPTY]")
+            }
+        }
     }
 }
 

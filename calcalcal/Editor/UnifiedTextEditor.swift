@@ -19,7 +19,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
     
     @Binding var text: String
     var onTextChange: ((String) -> Void)?
-    var defaultBlockSpacing: CGFloat = 16.0
+    var defaultBlockSpacing: CGFloat = 32
     var proxy: UnifiedTextEditorProxy?
     
     func makeUIView(context: Context) -> UnifiedTextView {
@@ -40,6 +40,15 @@ struct UnifiedTextEditor: UIViewRepresentable {
         // Update text if it changed externally
         if textView.text != text {
             textView.text = text
+            
+            // If text was cleared externally, force cleanup of all visual elements
+            if text.isEmpty {
+                // Force update to clean up image views and metadata
+                DispatchQueue.main.async {
+                    textView.setNeedsLayout()
+                    textView.layoutIfNeeded()
+                }
+            }
         }
     }
     

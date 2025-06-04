@@ -6,7 +6,7 @@ class UnifiedTextLayoutManager: NSObject {
     // MARK: - Configuration
     
     /// Default spacing between blocks
-    var defaultBlockSpacing: CGFloat = 16.0
+    var defaultBlockSpacing: CGFloat = 100.0
     
     /// Padding for calorie labels
     var calorieLabelPadding: CGFloat = 8.0
@@ -21,7 +21,7 @@ class UnifiedTextLayoutManager: NSObject {
     /// Draw calorie label for a block
     func drawCalorieLabel(_ calories: String, in rect: CGRect, context: CGContext) {
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 12, weight: .medium),
+            .font: UIFont.systemFont(ofSize: 16, weight: .medium),
             .foregroundColor: UIColor.systemGray
         ]
         

@@ -6,7 +6,7 @@
 	<integer>11</integer>
 	<key>logs</key>
 	<dict>
-		<key>109B9D63-34A6-4E59-9344-8F63FD69EEFF</key>
+		<key>3BC20796-FC39-4D2F-8459-AE1C4389003A</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,7 +15,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>109B9D63-34A6-4E59-9344-8F63FD69EEFF.xcactivitylog</string>
+			<string>3BC20796-FC39-4D2F-8459-AE1C4389003A.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -38,17 +38,17 @@
 			<key>schemeIdentifier-sharedScheme</key>
 			<integer>1</integer>
 			<key>signature</key>
-			<string>Cleaning project calcalcal with scheme calcalcal</string>
+			<string>Building project calcalcal with scheme calcalcal</string>
 			<key>timeStartedRecording</key>
-			<real>770216383.327474</real>
+			<real>770228169.91171002</real>
 			<key>timeStoppedRecording</key>
-			<real>770216383.48572397</real>
+			<real>770228174.19398499</real>
 			<key>title</key>
-			<string>Cleaning project calcalcal with scheme calcalcal</string>
+			<string>Building project calcalcal with scheme calcalcal</string>
 			<key>uniqueIdentifier</key>
-			<string>109B9D63-34A6-4E59-9344-8F63FD69EEFF</string>
+			<string>3BC20796-FC39-4D2F-8459-AE1C4389003A</string>
 		</dict>
-		<key>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98</key>
+		<key>D6F92D09-8E04-4DEA-8638-37379CDAAE41</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -57,7 +57,7 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98.xcactivitylog</string>
+			<string>D6F92D09-8E04-4DEA-8638-37379CDAAE41.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -82,13 +82,13 @@
 			<key>signature</key>
 			<string>Building project calcalcal with scheme calcalcal</string>
 			<key>timeStartedRecording</key>
-			<real>770219522.42800105</real>
+			<real>770255281.38858497</real>
 			<key>timeStoppedRecording</key>
-			<real>770219527.94243705</real>
+			<real>770255287.09971595</real>
 			<key>title</key>
 			<string>Building project calcalcal with scheme calcalcal</string>
 			<key>uniqueIdentifier</key>
-			<string>C0A4EEC8-CF1E-47CA-92D8-48EF9DE2FC98</string>
+			<string>D6F92D09-8E04-4DEA-8638-37379CDAAE41</string>
 		</dict>
 	</dict>
 </dict>

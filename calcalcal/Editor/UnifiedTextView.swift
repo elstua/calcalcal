@@ -1,12 +1,42 @@
 import UIKit
 
+// MARK: - TextKit 2 Compatibility Extensions
+
+@available(iOS 16.0, *)
+extension NSTextRange {
+    func range(offsetBy characterRange: NSRange) -> NSTextRange? {
+        // This is a simplified implementation - in a real app you'd want more robust range conversion
+        return self
+    }
+}
+
 /// Custom text view for unified block-based editing
-class UnifiedTextView: UITextView {
+class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     
     // MARK: - Components
     
     private(set) var unifiedContentStorage: UnifiedTextContentStorage!
     private(set) var unifiedLayoutManager: UnifiedTextLayoutManager!
+    
+    // MARK: - State tracking
+    
+    /// Track if exclusion paths need updating
+    internal var needsExclusionPathUpdate = true
+    
+    /// Track current block structure to avoid unnecessary updates
+    internal var currentBlockStructure: String = ""
+    
+    /// Dictionary to store image placeholder views by image reference UUID
+    internal var imageViews: [UUID: UIView] = [:]
+    
+    /// Dictionary to store block background views by paragraph range
+    internal var blockBackgroundViews: [String: UIView] = [:]
+    
+    /// Track last update time to throttle rapid updates
+    internal var lastUpdateTime: TimeInterval = 0
+    
+    /// Minimum time between updates (in seconds) to prevent excessive processing
+    internal let updateThrottleInterval: TimeInterval = 0.016 // ~60fps
     
     // MARK: - Configuration
     
@@ -32,6 +62,20 @@ class UnifiedTextView: UITextView {
         setupView()
     }
     
+    deinit {
+        // Clean up image views
+        for (_, imageView) in imageViews {
+            imageView.removeFromSuperview()
+        }
+        imageViews.removeAll()
+        
+        // Clean up block background views
+        for (_, backgroundView) in blockBackgroundViews {
+            backgroundView.removeFromSuperview()
+        }
+        blockBackgroundViews.removeAll()
+    }
+    
     private func setupComponents() {
         // Create our custom components
         unifiedContentStorage = UnifiedTextContentStorage()
@@ -39,6 +83,9 @@ class UnifiedTextView: UITextView {
         
         // Store reference to our text storage
         unifiedContentStorage.textStorage = self.textStorage
+        
+        // Set up text storage delegate to monitor changes
+        self.textStorage.delegate = self
     }
     
     private func setupView() {
@@ -67,147 +114,13 @@ class UnifiedTextView: UITextView {
     override func layoutSubviews() {
         super.layoutSubviews()
         
-        // Update exclusion paths when layout changes
-        updateExclusionPaths()
-    }
-    
-    // MARK: - Block Management
-    
-    /// Add a new text block with the given content
-    func addTextBlock(_ text: String, calorieData: String? = nil) {
-        let blockText = text.isEmpty ? "\n" : text + "\n"
-        
-        // Insert at the end
-        let insertionPoint = textStorage.length
-        textStorage.insert(NSAttributedString(string: blockText), at: insertionPoint)
-        
-        // Set block metadata
-        let blockRange = NSRange(location: insertionPoint, length: blockText.count)
-        let metadata = UnifiedTextContentStorage.BlockMetadata(
-            blockType: .text,
-            blockSpacing: defaultBlockSpacing,
-            imageReference: nil,
-            calorieData: calorieData
-        )
-        
-        unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
-    }
-    
-    /// Add a new image-text block with placeholder image and text
-    func addImageBlock(_ text: String = "This is an image block with text flowing alongside. The image takes up 30% of the width while the text uses the remaining 70%.", imageReference: UUID? = nil, calorieData: String? = nil) {
-        // Ensure we add double newline if there's existing content
-        let prefix = textStorage.length > 0 ? "\n\n" : ""
-        let blockText = prefix + (text.isEmpty ? "\n" : text + "\n")
-        
-        // Insert at the end
-        let insertionPoint = textStorage.length
-        textStorage.insert(NSAttributedString(string: blockText), at: insertionPoint)
-        
-        // Set block metadata as image-text type
-        // Skip the prefix newlines when setting metadata
-        let metadataStart = insertionPoint + prefix.count
-        let metadataLength = blockText.count - prefix.count
-        let blockRange = NSRange(location: metadataStart, length: metadataLength)
-        
-        let metadata = UnifiedTextContentStorage.BlockMetadata(
-            blockType: .imageText,
-            blockSpacing: defaultBlockSpacing,
-            imageReference: imageReference ?? UUID(),
-            calorieData: calorieData
-        )
-        
-        unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
-        
-        // Update paragraph detection
-        updateParagraphBlocks()
-        
-        // Update exclusion paths for the new block
-        updateExclusionPaths()
-    }
-    
-    /// Update exclusion paths for image-text blocks
-    private func updateExclusionPaths() {
-        var exclusionPaths: [UIBezierPath] = []
-        
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata,
-                  metadata.blockType == .imageText else { return }
-            
-            // Get the frame for this paragraph
-            let glyphRange = self.layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
-            let boundingRect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
-            
-            // Calculate image area (30% of text container width)
-            let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
-            let imageWidth = containerWidth * 0.3
-            let imageHeight = max(80, boundingRect.height) // Minimum 80pt height
-            
-            // Create exclusion path relative to text container coordinates
-            // Note: exclusion paths are relative to the text container, not the view
-            let imageFrame = CGRect(
-                x: 0, // Left edge of text container
-                y: boundingRect.origin.y,
-                width: imageWidth,
-                height: imageHeight
-            )
-            
-            let path = UIBezierPath(rect: imageFrame)
-            exclusionPaths.append(path)
+        // Only update exclusion paths if needed or on layout changes
+        if needsExclusionPathUpdate {
+            updateExclusionPaths()
+            updateImageViews()
+            updateBlockBackgroundViews()
+            needsExclusionPathUpdate = false
         }
-        
-        // Apply exclusion paths to text container
-        textContainer.exclusionPaths = exclusionPaths
-        
-        // Force layout update
-        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
-        setNeedsDisplay()
-    }
-    
-    /// Update paragraph detection after text changes
-    private func updateParagraphBlocks() {
-        // Clear existing metadata
-        let fullRange = NSRange(location: 0, length: textStorage.length)
-        
-        // Re-detect paragraphs and assign default metadata
-        unifiedContentStorage.enumerateParagraphs(in: fullRange) { paragraphRange, existingMetadata in
-            if existingMetadata == nil {
-                // Assign default metadata to new paragraphs
-                let metadata = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: .text,
-                    blockSpacing: self.defaultBlockSpacing,
-                    imageReference: nil,
-                    calorieData: nil
-                )
-                self.unifiedContentStorage.setBlockMetadata(metadata, for: paragraphRange)
-            }
-        }
-        
-        // Trigger layout update
-        setNeedsDisplay()
-    }
-    
-    // MARK: - Calorie Management
-    
-    /// Update calorie data for the block at the given location
-    func updateCalorieData(_ calories: String, at location: Int) {
-        guard let metadata = unifiedContentStorage.blockMetadata(at: location) else { return }
-        
-        // Find the paragraph range
-        var paragraphRange = NSRange(location: 0, length: 0)
-        unifiedContentStorage.enumerateParagraphs { range, blockMetadata in
-            if NSLocationInRange(location, range) {
-                paragraphRange = range
-                return
-            }
-        }
-        
-        // Update metadata
-        var updatedMetadata = metadata
-        updatedMetadata.calorieData = calories
-        unifiedContentStorage.setBlockMetadata(updatedMetadata, for: paragraphRange)
-        
-        // Trigger redraw
-        setNeedsDisplay()
     }
     
     // MARK: - Drawing
@@ -215,173 +128,76 @@ class UnifiedTextView: UITextView {
     override func draw(_ rect: CGRect) {
         super.draw(rect)
         
-        // Additional drawing for block backgrounds, borders, etc.
-        drawBlockBackgrounds(in: rect)
-        drawImagePlaceholders(in: rect)
+        // Additional drawing for calorie labels
         drawCalorieLabels(in: rect)
     }
     
-    private func drawBlockBackgrounds(in rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
+    // MARK: - Delete Handling
+    
+    override func deleteBackward() {
+        let currentRange = selectedRange
         
-        // Save context state
-        context.saveGState()
-        
-        // Draw backgrounds for each block
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata else { return }
+        // Check if we're at the beginning of an image block
+        if currentRange.length == 0 && currentRange.location > 0 {
+            let currentLocation = currentRange.location
             
-            // Get the frame for this paragraph using layoutManager
-            let glyphRange = self.layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
-            let boundingRect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
+            // Get the current paragraph range
+            var paragraphStart = 0
+            var paragraphEnd = 0
+            let string = textStorage.string as NSString
+            string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: nil,
+                                   for: NSRange(location: currentLocation, length: 0))
             
-            // Adjust frame for container insets
-            var blockFrame = boundingRect
-            blockFrame.origin.x += self.textContainerInset.left
-            blockFrame.origin.y += self.textContainerInset.top
-            blockFrame.size.width = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
+            let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
+            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // For image blocks, ensure minimum height
-            if metadata.blockType == .imageText {
-                blockFrame.size.height = max(80, blockFrame.height)
+            // Check if this is an empty image block
+            if let metadata = unifiedContentStorage.blockMetadata(at: currentLocation),
+               metadata.blockType == .imageText,
+               paragraphText.isEmpty {
+                
+                // Delete the entire image block paragraph
+                textStorage.deleteCharacters(in: paragraphRange)
+                
+                // Update cursor position
+                let newLocation = max(0, paragraphStart - 1)
+                selectedRange = NSRange(location: newLocation, length: 0)
+                
+                // Force update
+                updateParagraphBlocks()
+                return
             }
-            
-            // Add spacing below the block
-            let spacing = self.unifiedLayoutManager.spacingForBlock(with: metadata)
-            
-            // Draw debug background based on block type
-            switch metadata.blockType {
-            case .text:
-                // Green tint for text blocks
-                context.setFillColor(UIColor.systemGreen.withAlphaComponent(0.1).cgColor)
-            case .imageText:
-                // Blue tint for image blocks
-                context.setFillColor(UIColor.systemBlue.withAlphaComponent(0.1).cgColor)
-            }
-            
-            context.fill(blockFrame.insetBy(dx: 0, dy: 2))
-            
-            // Draw separator line after block
-            context.setStrokeColor(UIColor.separator.cgColor)
-            context.setLineWidth(0.5)
-            context.move(to: CGPoint(x: blockFrame.minX + 16, y: blockFrame.maxY + spacing/2))
-            context.addLine(to: CGPoint(x: blockFrame.maxX - 16, y: blockFrame.maxY + spacing/2))
-            context.strokePath()
         }
         
-        // Restore context state
-        context.restoreGState()
+        // Default deletion behavior
+        super.deleteBackward()
     }
     
-    private func drawImagePlaceholders(in rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
-        
-        // Save context state
-        context.saveGState()
-        
-        // Draw image placeholders for image-text blocks
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata,
-                  metadata.blockType == .imageText else { return }
-            
-            // Get the frame for this paragraph
-            let glyphRange = self.layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
-            let boundingRect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
-            
-            // Calculate image area (30% of text container width)
-            let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
-            let imageWidth = containerWidth * 0.3
-            let imageHeight = max(80, boundingRect.height) // Minimum 80pt height
-            
-            // Create image frame aligned with text container
-            let imageFrame = CGRect(
-                x: self.textContainerInset.left + self.textContainer.lineFragmentPadding,
-                y: boundingRect.origin.y + self.textContainerInset.top,
-                width: imageWidth - 8, // Add some padding
-                height: imageHeight
-            )
-            
-            // Draw grey placeholder rectangle
-            context.setFillColor(UIColor.systemGray4.cgColor)
-            context.fill(imageFrame)
-            
-            // Draw a subtle border
-            context.setStrokeColor(UIColor.systemGray3.cgColor)
-            context.setLineWidth(1.0)
-            context.stroke(imageFrame)
-            
-            // Draw an image icon in the center
-            let iconSize: CGFloat = 24
-            let iconRect = CGRect(
-                x: imageFrame.midX - iconSize/2,
-                y: imageFrame.midY - iconSize/2,
-                width: iconSize,
-                height: iconSize
-            )
-            
-            // Draw a simple image icon (square with mountain shape)
-            context.setStrokeColor(UIColor.systemGray2.cgColor)
-            context.setLineWidth(2.0)
-            
-            // Draw the icon frame
-            context.stroke(iconRect)
-            
-            // Draw mountain shape inside
-            context.move(to: CGPoint(x: iconRect.minX + 4, y: iconRect.maxY - 4))
-            context.addLine(to: CGPoint(x: iconRect.minX + iconRect.width * 0.3, y: iconRect.minY + iconRect.height * 0.4))
-            context.addLine(to: CGPoint(x: iconRect.minX + iconRect.width * 0.6, y: iconRect.minY + iconRect.height * 0.6))
-            context.addLine(to: CGPoint(x: iconRect.maxX - 4, y: iconRect.maxY - 4))
-            context.strokePath()
+    // MARK: - Caret Rect Customization
+    override func caretRect(for position: UITextPosition) -> CGRect {
+        var rect = super.caretRect(for: position)
+        if let font = self.font {
+            rect.size.height = font.lineHeight
         }
-        
-        // Restore context state
-        context.restoreGState()
+        return rect
     }
     
-    private func drawCalorieLabels(in rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
-        
-        // Draw calorie labels for blocks that have them
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata,
-                  let calories = metadata.calorieData else { return }
-            
-            // Get the frame for this paragraph
-            let glyphRange = self.layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
-            let boundingRect = self.layoutManager.boundingRect(forGlyphRange: glyphRange, in: self.textContainer)
-            
-            // Adjust frame for container insets
-            var blockFrame = boundingRect
-            blockFrame.origin.x += self.textContainerInset.left
-            blockFrame.origin.y += self.textContainerInset.top
-            blockFrame.size.width = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
-            
-            // Draw calorie label
-            self.unifiedLayoutManager.drawCalorieLabel(calories, in: blockFrame, context: context)
-        }
-    }
-}
-
-// MARK: - UITextViewDelegate
-
-extension UnifiedTextView: UITextViewDelegate {
+    // MARK: - UIResponder Standard Edit Actions
     
-    func textViewDidChange(_ textView: UITextView) {
-        // Update paragraph blocks after text changes
-        updateParagraphBlocks()
-        
-        // Update exclusion paths for image-text blocks
-        updateExclusionPaths()
-        
-        // Update block ranges after editing
-        if let selectedRange = textView.selectedTextRange {
-            let location = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
-            // We'll handle this more intelligently in the future
-        }
-    }
-    
-    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        // Allow all text changes for now
+    override var canBecomeFirstResponder: Bool {
         return true
+    }
+    
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        // Enable standard actions
+        if action == #selector(copy(_:)) ||
+            action == #selector(cut(_:)) ||
+            action == #selector(paste(_:)) ||
+            action == #selector(select(_:)) ||
+            action == #selector(selectAll(_:)) {
+            return true
+        }
+        // Fallback to super for other actions
+        return super.canPerformAction(action, withSender: sender)
     }
 } 

@@ -6,9 +6,9 @@ class UnifiedTextContentStorage: NSObject {
     // MARK: - Block Metadata
     
     struct BlockMetadata {
-        enum BlockType {
-            case text
-            case imageText
+        enum BlockType: Int {
+            case text = 0
+            case imageText = 1
         }
         
         let blockType: BlockType
@@ -16,9 +16,6 @@ class UnifiedTextContentStorage: NSObject {
         var imageReference: UUID?
         var calorieData: String?
     }
-    
-    /// Maps paragraph ranges to their metadata
-    private var blockMetadata: [NSRange: BlockMetadata] = [:]
     
     /// Reference to the text storage
     weak var textStorage: NSTextStorage?
@@ -33,28 +30,56 @@ class UnifiedTextContentStorage: NSObject {
     // MARK: - Block Management
     
     func setBlockMetadata(_ metadata: BlockMetadata, for range: NSRange) {
-        blockMetadata[range] = metadata
+        guard let textStorage = textStorage else { return }
         
-        // Apply attributes to the text storage
-        textStorage?.addAttributes([
-            Self.blockTypeAttributeName: metadata.blockType,
-            Self.blockSpacingAttributeName: metadata.blockSpacing,
-            Self.imageReferenceAttributeName: metadata.imageReference as Any,
-            Self.calorieDataAttributeName: metadata.calorieData as Any
-        ], range: range)
+        // Get existing attributes at the start of the range to preserve them
+        var existingAttributes: [NSAttributedString.Key: Any] = [:]
+        if range.location < textStorage.length {
+            existingAttributes = textStorage.attributes(at: range.location, effectiveRange: nil)
+        }
+        
+        // Add our block metadata to existing attributes
+        existingAttributes[Self.blockTypeAttributeName] = metadata.blockType.rawValue
+        existingAttributes[Self.blockSpacingAttributeName] = metadata.blockSpacing
+        existingAttributes[Self.imageReferenceAttributeName] = metadata.imageReference as Any
+        existingAttributes[Self.calorieDataAttributeName] = metadata.calorieData as Any
+        
+        // Apply all attributes together to preserve formatting
+        textStorage.addAttributes(existingAttributes, range: range)
     }
     
     func blockMetadata(at location: Int) -> BlockMetadata? {
-        for (range, metadata) in blockMetadata {
-            if NSLocationInRange(location, range) {
-                return metadata
-            }
-        }
-        return nil
+        guard let textStorage = textStorage,
+              location < textStorage.length else { return nil }
+        
+        let attributes = textStorage.attributes(at: location, effectiveRange: nil)
+        return metadata(from: attributes)
     }
     
     func blockMetadata(for range: NSRange) -> BlockMetadata? {
-        return blockMetadata[range]
+        guard let textStorage = textStorage,
+              range.location < textStorage.length else { return nil }
+        
+        let attributes = textStorage.attributes(at: range.location, effectiveRange: nil)
+        return metadata(from: attributes)
+    }
+    
+    private func metadata(from attributes: [NSAttributedString.Key: Any]) -> BlockMetadata? {
+        guard let blockTypeRaw = attributes[Self.blockTypeAttributeName] as? Int,
+              let blockType = BlockMetadata.BlockType(rawValue: blockTypeRaw) else {
+            return nil
+        }
+        
+        let blockSpacing = attributes[Self.blockSpacingAttributeName] as? CGFloat ?? 16.0
+        let imageReference = attributes[Self.imageReferenceAttributeName] as? UUID
+        let calorieData = attributes[Self.calorieDataAttributeName] as? String
+        
+        return BlockMetadata(
+            blockType: blockType,
+            blockSpacing: blockSpacing,
+            imageReference: imageReference,
+            calorieData: calorieData
+        )
     }
     
     // MARK: - Paragraph Management
@@ -78,43 +103,21 @@ class UnifiedTextContentStorage: NSObject {
             
             let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
             
-            // Find metadata for this paragraph range
-            var foundMetadata: BlockMetadata?
-            for (storedRange, metadata) in blockMetadata {
-                // Check if the stored range matches or overlaps with the paragraph range
-                if storedRange.location == paragraphRange.location ||
-                   NSLocationInRange(paragraphRange.location, storedRange) ||
-                   NSLocationInRange(storedRange.location, paragraphRange) {
-                    foundMetadata = metadata
-                    break
-                }
-            }
+            // Get metadata from attributes at the paragraph start
+            let metadata = blockMetadata(at: paragraphStart)
             
-            block(paragraphRange, foundMetadata)
+            block(paragraphRange, metadata)
             
             paragraphStart = paragraphEnd
         }
     }
     
-    // MARK: - Update Handling
+    // MARK: - Clear Metadata
     
-    func updateBlockRanges(afterEditingIn editedRange: NSRange, changeInLength delta: Int) {
-        var updatedMetadata: [NSRange: BlockMetadata] = [:]
-        
-        for (range, metadata) in blockMetadata {
-            if range.location >= NSMaxRange(editedRange) {
-                // Ranges after the edit need to be shifted
-                let newRange = NSRange(location: range.location + delta, length: range.length)
-                updatedMetadata[newRange] = metadata
-            } else if NSMaxRange(range) <= editedRange.location {
-                // Ranges before the edit remain unchanged
-                updatedMetadata[range] = metadata
-            } else {
-                // Ranges that intersect with the edit need recalculation
-                // This will be handled by re-parsing paragraphs
-            }
-        }
-        
-        blockMetadata = updatedMetadata
+    func clearMetadata(in range: NSRange) {
+        textStorage?.removeAttribute(Self.blockTypeAttributeName, range: range)
+        textStorage?.removeAttribute(Self.blockSpacingAttributeName, range: range)
+        textStorage?.removeAttribute(Self.imageReferenceAttributeName, range: range)
+        textStorage?.removeAttribute(Self.calorieDataAttributeName, range: range)
     }
 } 
