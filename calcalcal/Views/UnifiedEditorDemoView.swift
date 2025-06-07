@@ -107,15 +107,22 @@ struct UnifiedEditorDemoView: View {
         ]
         
         let randomText = sampleTexts.randomElement() ?? ""
-        editorText += "\n\n" + randomText
+        let randomCalories = Int.random(in: 50...600)
+        let calorieString = "\(randomCalories) kcal"
+        editorProxy.addTextBlock(randomText, calorieData: calorieString)
+        // Update the binding text to reflect the change
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let textView = editorProxy.textView {
+                editorText = textView.text
+            }
+        }
     }
     
     private func addImageBlock() {
-        // Add the image block through the proxy
-        editorProxy.addImageBlock()
-        
+        let randomCalories = Int.random(in: 50...600)
+        let calorieString = "\(randomCalories) kcal"
+        editorProxy.addImageBlock(calorieData: calorieString)
         // Update the binding text to reflect the change
-        // This is a workaround - in a production app, we'd have better sync
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let textView = editorProxy.textView {
                 editorText = textView.text

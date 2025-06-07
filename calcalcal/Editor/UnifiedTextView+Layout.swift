@@ -124,6 +124,17 @@ extension UnifiedTextView {
         }
         
         // Apply exclusion paths to text container
+        // Add a right-side exclusion path for the calorie label area (applies to all blocks)
+        let totalWidth = self.textContainer.size.width
+        let calorieAreaWidth = totalWidth * 0.15
+        let exclusionRect = CGRect(
+            x: totalWidth - calorieAreaWidth,
+            y: 0,
+            width: calorieAreaWidth,
+            height: self.bounds.height
+        )
+        let calorieExclusionPath = UIBezierPath(rect: exclusionRect)
+        exclusionPaths.append(calorieExclusionPath)
         textContainer.exclusionPaths = exclusionPaths
         print("✅ Applied \(exclusionPaths.count) exclusion paths to text container")
         
@@ -336,16 +347,16 @@ extension UnifiedTextView {
             blockFrame.origin.y += self.textContainerInset.top
             
             // Calculate block width based on type
+            let totalBlockWidth = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
+            let textAreaWidth = totalBlockWidth * 0.85
             if metadata.blockType == .imageText {
-                // For image blocks, background should cover the ENTIRE block area including image
+                // For image blocks, background should cover the left 85% (text area)
                 blockFrame.size.height = max(100, blockFrame.height)
-                // Background covers full width (both image and text areas)
-                blockFrame.size.width = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
-                // Position at the left edge to cover the image area too
+                blockFrame.size.width = textAreaWidth
                 blockFrame.origin.x = self.textContainerInset.left
             } else {
-                // Full width for text blocks
-                blockFrame.size.width = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
+                // For text blocks, background should also cover only the left 85%
+                blockFrame.size.width = textAreaWidth
             }
             
             // Inset the frame slightly for visual appeal

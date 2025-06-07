@@ -309,11 +309,12 @@ extension UnifiedTextView {
             }
             if existingMetadata == nil || forceTextBlock {
                 let isImageBlock = existingMetadata?.blockType == .imageText
+                let preservedCalories = existingMetadata?.calorieData
                 let metadata = UnifiedTextContentStorage.BlockMetadata(
                     blockType: (isImageBlock && !forceTextBlock) ? .imageText : .text,
                     blockSpacing: self.defaultBlockSpacing,
                     imageReference: (isImageBlock && !forceTextBlock) ? existingMetadata?.imageReference : nil,
-                    calorieData: nil
+                    calorieData: preservedCalories
                 )
                 self.unifiedContentStorage.setBlockMetadata(metadata, for: range)
                 let paragraphStyle = NSMutableParagraphStyle()
