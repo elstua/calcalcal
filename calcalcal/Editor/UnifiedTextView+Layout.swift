@@ -348,15 +348,13 @@ extension UnifiedTextView {
             
             // Calculate block width based on type
             let totalBlockWidth = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
-            let textAreaWidth = totalBlockWidth * 0.85
+            // The background view should cover the full width
             if metadata.blockType == .imageText {
-                // For image blocks, background should cover the left 85% (text area)
                 blockFrame.size.height = max(100, blockFrame.height)
-                blockFrame.size.width = textAreaWidth
+                blockFrame.size.width = totalBlockWidth
                 blockFrame.origin.x = self.textContainerInset.left
             } else {
-                // For text blocks, background should also cover only the left 85%
-                blockFrame.size.width = textAreaWidth
+                blockFrame.size.width = totalBlockWidth
             }
             
             // Inset the frame slightly for visual appeal
@@ -376,6 +374,24 @@ extension UnifiedTextView {
             // Update frame and appearance
             backgroundView.frame = blockFrame
             updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
+            
+            // --- Calorie label logic ---
+            // Remove any old calorie label if not needed
+            backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
+            if let calories = metadata.calorieData {
+                // Add or update calorie label view
+                let calorieLabel = CalorieLabelView()
+                calorieLabel.setCalories(calories)
+                let calorieAreaWidth = max(totalBlockWidth * 0.15, 40) // Ensure minimum width
+                let calorieLabelX = totalBlockWidth - calorieAreaWidth
+                let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieAreaWidth, height: blockFrame.height)
+                calorieLabel.frame = calorieLabelFrame
+                print("[CalorieLabel] Block at \(blockKey) | calorieData: \(calories) | frame: \(calorieLabelFrame)")
+                backgroundView.addSubview(calorieLabel)
+            } else {
+                print("[CalorieLabel] Block at \(blockKey) | NO calorieData")
+            }
+            // --- End calorie label logic ---
             
             // Create separator line view if needed
             let separatorKey = blockKey + "_separator"
@@ -419,5 +435,27 @@ extension UnifiedTextView {
             // Blue tint for image blocks
             view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.05)
         }
+    }
+}
+
+class CalorieLabelView: UIView {
+    private let label = UILabel()
+    init() {
+        super.init(frame: .zero)
+        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        label.textColor = .systemGray
+        label.textAlignment = .right
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.7
+        label.isUserInteractionEnabled = false
+        addSubview(label)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func setCalories(_ calories: String) {
+        label.text = calories
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        label.frame = bounds
     }
 } 

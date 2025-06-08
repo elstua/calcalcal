@@ -105,12 +105,10 @@ struct UnifiedEditorDemoView: View {
             "Blocks can contain multiple lines\nlike this one does!",
             "Each block maintains its own spacing and formatting."
         ]
-        
         let randomText = sampleTexts.randomElement() ?? ""
         let randomCalories = Int.random(in: 50...600)
         let calorieString = "\(randomCalories) kcal"
         editorProxy.addTextBlock(randomText, calorieData: calorieString)
-        // Update the binding text to reflect the change
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let textView = editorProxy.textView {
                 editorText = textView.text
@@ -122,7 +120,6 @@ struct UnifiedEditorDemoView: View {
         let randomCalories = Int.random(in: 50...600)
         let calorieString = "\(randomCalories) kcal"
         editorProxy.addImageBlock(calorieData: calorieString)
-        // Update the binding text to reflect the change
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let textView = editorProxy.textView {
                 editorText = textView.text

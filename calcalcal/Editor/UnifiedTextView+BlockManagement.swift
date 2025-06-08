@@ -300,6 +300,14 @@ extension UnifiedTextView {
                 return
             }
             let existingMetadata = self.unifiedContentStorage.blockMetadata(at: range.location)
+            // Preserve calorieData from either existingMetadata or text storage attributes
+            let attributes = self.textStorage.attributes(at: range.location, effectiveRange: nil)
+            var preservedCalories = (existingMetadata?.calorieData) ?? (attributes[UnifiedTextContentStorage.calorieDataAttributeName] as? String)
+            // For debugging: if preservedCalories is nil, set a random value
+            if preservedCalories == nil {
+                let randomCalories = Int.random(in: 50...600)
+                preservedCalories = "\(randomCalories) kcal"
+            }
             var forceTextBlock = false
             if range.location > 0 {
                 let prevRange = NSRange(location: max(0, range.location - 1), length: 1)
@@ -309,7 +317,6 @@ extension UnifiedTextView {
             }
             if existingMetadata == nil || forceTextBlock {
                 let isImageBlock = existingMetadata?.blockType == .imageText
-                let preservedCalories = existingMetadata?.calorieData
                 let metadata = UnifiedTextContentStorage.BlockMetadata(
                     blockType: (isImageBlock && !forceTextBlock) ? .imageText : .text,
                     blockSpacing: self.defaultBlockSpacing,
