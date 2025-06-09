@@ -379,19 +379,47 @@ extension UnifiedTextView {
             // Remove any old calorie label if not needed
             backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
             if let calories = metadata.calorieData {
-                // Add or update calorie label view
                 let calorieLabel = CalorieLabelView()
                 calorieLabel.setCalories(calories)
-                let calorieAreaWidth = max(totalBlockWidth * 0.15, 40) // Ensure minimum width
-                let calorieLabelX = totalBlockWidth - calorieAreaWidth
-                let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieAreaWidth, height: blockFrame.height)
-                calorieLabel.frame = calorieLabelFrame
-                print("[CalorieLabel] Block at \(blockKey) | calorieData: \(calories) | frame: \(calorieLabelFrame)")
+                let calorieAreaWidth = max(totalBlockWidth * 0.15, 40)
+                let rightPadding: CGFloat = 0
+                let calorieLabelWidth = calorieAreaWidth - rightPadding
+                if metadata.blockType == .text {
+                    // For text blocks, align to the right edge of the text area
+                    let textAreaLeft = self.textContainerInset.left + self.textContainer.lineFragmentPadding
+                    let textAreaRight = self.bounds.width - self.textContainerInset.right - self.textContainer.lineFragmentPadding
+                    let textAreaWidth = textAreaRight - textAreaLeft
+                    if let lastLineRect = self.lastLineRect(for: paragraphRange) {
+                        let calorieLabelX = textAreaRight - calorieLabelWidth - rightPadding - blockFrame.origin.x
+                        let calorieLabelY = lastLineRect.origin.y - blockFrame.origin.y
+                        let calorieLabelHeight = lastLineRect.height
+                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: calorieLabelY, width: calorieLabelWidth, height: calorieLabelHeight)
+                        calorieLabel.frame = calorieLabelFrame
+                    } else {
+                        let calorieLabelX = textAreaRight - calorieLabelWidth - rightPadding - blockFrame.origin.x
+                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieLabelWidth, height: 24)
+                        calorieLabel.frame = calorieLabelFrame
+                    }
+                } else {
+                    // For imageText blocks, keep previous logic
+                    if let lastLineRect = self.lastLineRect(for: paragraphRange) {
+                        let calorieLabelX = totalBlockWidth - calorieAreaWidth + (calorieAreaWidth - calorieLabelWidth)
+                        let calorieLabelY = lastLineRect.origin.y - blockFrame.origin.y
+                        let calorieLabelHeight = lastLineRect.height
+                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: calorieLabelY, width: calorieLabelWidth, height: calorieLabelHeight)
+                        calorieLabel.frame = calorieLabelFrame
+                    } else {
+                        let calorieLabelX = totalBlockWidth - calorieAreaWidth + (calorieAreaWidth - calorieLabelWidth)
+                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieLabelWidth, height: 24)
+                        calorieLabel.frame = calorieLabelFrame
+                    }
+                }
                 backgroundView.addSubview(calorieLabel)
             } else {
                 print("[CalorieLabel] Block at \(blockKey) | NO calorieData")
             }
             // --- End calorie label logic ---
+            
             
             // Create separator line view if needed
             let separatorKey = blockKey + "_separator"
@@ -445,8 +473,6 @@ class CalorieLabelView: UIView {
         label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         label.textColor = .systemGray
         label.textAlignment = .right
-        label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.7
         label.isUserInteractionEnabled = false
         addSubview(label)
     }
@@ -457,5 +483,23 @@ class CalorieLabelView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         label.frame = bounds
+    }
+}
+
+// --- Helper to get last line rect for a paragraph ---
+extension UnifiedTextView {
+    /// Returns the rect (in view coordinates) for the last line of a paragraph range
+    func lastLineRect(for paragraphRange: NSRange) -> CGRect? {
+        guard paragraphRange.length > 0 else { return nil }
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
+        guard glyphRange.length > 0 else { return nil }
+        let lastGlyphIndex = glyphRange.location + glyphRange.length - 1
+        var lineRange = NSRange(location: 0, length: 0)
+        let lineRect = layoutManager.lineFragmentRect(forGlyphAt: lastGlyphIndex, effectiveRange: &lineRange)
+        // Convert from text container to view coordinates
+        var rect = lineRect
+        rect.origin.x += textContainerInset.left
+        rect.origin.y += textContainerInset.top
+        return rect
     }
 } 
