@@ -119,7 +119,7 @@ extension UnifiedTextView {
         attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
         // Add paragraph style for spacing
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 16
+        paragraphStyle.paragraphSpacing = 0
         attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
         
         // Insert at the end
@@ -148,7 +148,7 @@ extension UnifiedTextView {
         attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
         attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 16
+        paragraphStyle.paragraphSpacing = 0
         attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
 
         // Determine insertion point: always insert as a new paragraph at the current cursor
@@ -325,7 +325,7 @@ extension UnifiedTextView {
                 )
                 self.unifiedContentStorage.setBlockMetadata(metadata, for: range)
                 let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.paragraphSpacing = 16
+                paragraphStyle.paragraphSpacing = 0
                 self.textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
                 metadataAssigned += 1
                 print("📝 Auto-assigned text block metadata to paragraph at \(range.location)-\(range.location + range.length): '\(substring.prefix(30))...'")
@@ -345,7 +345,7 @@ extension UnifiedTextView {
                 )
                 self.unifiedContentStorage.setBlockMetadata(metadata, for: range)
                 let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.paragraphSpacing = 16
+                paragraphStyle.paragraphSpacing = 0
                 self.textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
                 print("🔧 Force-assigned metadata to paragraph: '\(substring.prefix(30))...'")
             }

@@ -44,8 +44,8 @@ This implementation provides a unified text editor that maintains block structur
 - [x] Calorie label support
 
 ### Phase 3: Image Support 🔄
-- [ ] Image-text blocks (prepared for next phase)
-- [ ] 30/70 horizontal layout
+- [x] Image-text blocks (prepared for next phase)
+- [x] 30/70 horizontal layout
 - [ ] Image attachment handling
 
 ## Technical Implementation

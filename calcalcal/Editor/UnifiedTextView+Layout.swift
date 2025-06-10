@@ -1,5 +1,6 @@
 import UIKit
 
+
 // MARK: - Layout Management Extension
 
 extension UnifiedTextView {
@@ -79,74 +80,22 @@ extension UnifiedTextView {
     /// Update exclusion paths for image-text blocks
     internal func updateExclusionPaths() {
         var exclusionPaths: [UIBezierPath] = []
-        
-        // Only process paragraphs that have actual content
         let string = textStorage.string as NSString
         guard string.length > 0 else {
-            // Clear all exclusion paths if no content
             textContainer.exclusionPaths = []
             return
         }
-        
-        print("🎯 Updating exclusion paths for image blocks")
-        
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            let blockTypeDesc = metadata?.blockType == .imageText ? "imageText" : (metadata?.blockType == .text ? "text" : "none")
-            print("[ExclusionPath] Checking paragraph at range \(paragraphRange), blockType: \(blockTypeDesc)")
-            guard let metadata = metadata,
-                  metadata.blockType == .imageText,
-                  paragraphRange.location < string.length else {
-                print("[ExclusionPath] Skipping paragraph at range \(paragraphRange), blockType: \(blockTypeDesc)")
-                return
-            }
-            // Verify the paragraph actually contains text
+            guard let metadata = metadata, paragraphRange.location < string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else {
-                print("[ExclusionPath] Skipping empty imageText block at range \(paragraphRange)")
-                return
-            }
-            // Get the frame for this paragraph using compatibility method
-            let boundingRect = self.boundingRect(for: paragraphRange)
-            // Calculate image area (30% of text container width)
-            let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
-            let imageWidth = containerWidth * 0.3
-            let imageHeight = max(100, boundingRect.height) // Minimum 100pt height for better spacing
-            // Create exclusion path relative to text container coordinates
-            let imageFrame = CGRect(
-                x: 0, // Left edge of text container
-                y: boundingRect.origin.y,
-                width: imageWidth,
-                height: imageHeight
-            )
-            let path = UIBezierPath(rect: imageFrame)
-            exclusionPaths.append(path)
-            print("[ExclusionPath] Added exclusion path for imageText block at range \(paragraphRange): \(imageFrame)")
+            guard !paragraphText.isEmpty else { return }
+            let provider = layoutProvider(for: metadata.blockType)
+            exclusionPaths.append(contentsOf: provider.exclusionPaths(for: paragraphRange, in: self, metadata: metadata))
         }
-        
-        // Apply exclusion paths to text container
-        // Add a right-side exclusion path for the calorie label area (applies to all blocks)
-        let totalWidth = self.textContainer.size.width
-        let calorieAreaWidth = totalWidth * 0.15
-        let exclusionRect = CGRect(
-            x: totalWidth - calorieAreaWidth,
-            y: 0,
-            width: calorieAreaWidth,
-            height: self.bounds.height
-        )
-        let calorieExclusionPath = UIBezierPath(rect: exclusionRect)
-        exclusionPaths.append(calorieExclusionPath)
         textContainer.exclusionPaths = exclusionPaths
-        print("✅ Applied \(exclusionPaths.count) exclusion paths to text container")
-        
-        // Force IMMEDIATE and thorough layout invalidation
-        // This is crucial to ensure text reflows correctly after exclusion paths are set
         layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
         layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textStorage.length))
-        
-        // Force the text container to recalculate all line fragments
         layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length))
-        
-        // Force view updates
         setNeedsLayout()
         setNeedsDisplay()
     }
@@ -331,24 +280,16 @@ extension UnifiedTextView {
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard let metadata = metadata,
                   paragraphRange.location < string.length else { return }
-            
-            // Verify the paragraph actually contains text
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
-            
             let blockKey = "\(paragraphRange.location):\(paragraphRange.length)"
-            
-            // Get the frame for this paragraph using compatibility method
             let boundingRect = self.boundingRect(for: paragraphRange)
-            
-            // Convert from text container coordinates to view coordinates
             var blockFrame = boundingRect
             blockFrame.origin.x += self.textContainerInset.left
             blockFrame.origin.y += self.textContainerInset.top
-            
-            // Calculate block width based on type
             let totalBlockWidth = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
-            // The background view should cover the full width
+            // Use provider for block-specific sizing
+            let provider = layoutProvider(for: metadata.blockType)
             if metadata.blockType == .imageText {
                 blockFrame.size.height = max(100, blockFrame.height)
                 blockFrame.size.width = totalBlockWidth
@@ -356,91 +297,27 @@ extension UnifiedTextView {
             } else {
                 blockFrame.size.width = totalBlockWidth
             }
-            
-            // Inset the frame slightly for visual appeal
-            blockFrame = blockFrame.insetBy(dx: 0, dy: 2)
-            
-            // Get or create block background view
+            blockFrame = blockFrame.insetBy(dx: 0, dy: 3)
             let backgroundView: UIView
             if let existingView = blockBackgroundViews[blockKey] {
                 backgroundView = existingView
             } else {
                 backgroundView = createBlockBackgroundView(for: metadata.blockType)
                 blockBackgroundViews[blockKey] = backgroundView
-                // Insert at the back so it doesn't interfere with text selection
                 insertSubview(backgroundView, at: 0)
             }
-            
-            // Update frame and appearance
             backgroundView.frame = blockFrame
             updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
-            
-            // --- Calorie label logic ---
-            // Remove any old calorie label if not needed
             backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
             if let calories = metadata.calorieData {
                 let calorieLabel = CalorieLabelView()
                 calorieLabel.setCalories(calories)
-                let calorieAreaWidth = max(totalBlockWidth * 0.15, 40)
-                let rightPadding: CGFloat = 0
-                let calorieLabelWidth = calorieAreaWidth - rightPadding
-                if metadata.blockType == .text {
-                    // For text blocks, align to the right edge of the text area
-                    let textAreaLeft = self.textContainerInset.left + self.textContainer.lineFragmentPadding
-                    let textAreaRight = self.bounds.width - self.textContainerInset.right - self.textContainer.lineFragmentPadding
-                    let textAreaWidth = textAreaRight - textAreaLeft
-                    if let lastLineRect = self.lastLineRect(for: paragraphRange) {
-                        let calorieLabelX = textAreaRight - calorieLabelWidth - rightPadding - blockFrame.origin.x
-                        let calorieLabelY = lastLineRect.origin.y - blockFrame.origin.y
-                        let calorieLabelHeight = lastLineRect.height
-                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: calorieLabelY, width: calorieLabelWidth, height: calorieLabelHeight)
-                        calorieLabel.frame = calorieLabelFrame
-                    } else {
-                        let calorieLabelX = textAreaRight - calorieLabelWidth - rightPadding - blockFrame.origin.x
-                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieLabelWidth, height: 24)
-                        calorieLabel.frame = calorieLabelFrame
-                    }
-                } else {
-                    // For imageText blocks, keep previous logic
-                    if let lastLineRect = self.lastLineRect(for: paragraphRange) {
-                        let calorieLabelX = totalBlockWidth - calorieAreaWidth + (calorieAreaWidth - calorieLabelWidth)
-                        let calorieLabelY = lastLineRect.origin.y - blockFrame.origin.y
-                        let calorieLabelHeight = lastLineRect.height
-                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: calorieLabelY, width: calorieLabelWidth, height: calorieLabelHeight)
-                        calorieLabel.frame = calorieLabelFrame
-                    } else {
-                        let calorieLabelX = totalBlockWidth - calorieAreaWidth + (calorieAreaWidth - calorieLabelWidth)
-                        let calorieLabelFrame = CGRect(x: calorieLabelX, y: 0, width: calorieLabelWidth, height: 24)
-                        calorieLabel.frame = calorieLabelFrame
-                    }
+                if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata, blockFrame: blockFrame) {
+                    calorieLabel.frame = calorieLabelFrame
                 }
                 backgroundView.addSubview(calorieLabel)
             } else {
                 print("[CalorieLabel] Block at \(blockKey) | NO calorieData")
-            }
-            // --- End calorie label logic ---
-            
-            
-            // Create separator line view if needed
-            let separatorKey = blockKey + "_separator"
-            let spacing = metadata.blockSpacing
-            let separatorY = blockFrame.maxY + spacing/2
-            let separatorFrame = CGRect(
-                x: self.textContainerInset.left + 16,
-                y: separatorY,
-                width: self.bounds.width - self.textContainerInset.left - self.textContainerInset.right - 32,
-                height: 0.5
-            )
-            
-            // Handle separator view
-            if let separatorView = blockBackgroundViews[separatorKey] {
-                separatorView.frame = separatorFrame
-            } else {
-                let separatorView = UIView()
-                separatorView.backgroundColor = UIColor.separator
-                separatorView.frame = separatorFrame
-                blockBackgroundViews[separatorKey] = separatorView
-                insertSubview(separatorView, at: 0)
             }
         }
     }
@@ -470,10 +347,12 @@ class CalorieLabelView: UIView {
     private let label = UILabel()
     init() {
         super.init(frame: .zero)
-        label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         label.textColor = .systemGray
         label.textAlignment = .right
         label.isUserInteractionEnabled = false
+        label.numberOfLines = 1
+        label.lineBreakMode = .byClipping
         addSubview(label)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -501,5 +380,15 @@ extension UnifiedTextView {
         rect.origin.x += textContainerInset.left
         rect.origin.y += textContainerInset.top
         return rect
+    }
+}
+
+// Helper to get the correct layout provider
+private func layoutProvider(for blockType: UnifiedTextContentStorage.BlockMetadata.BlockType) -> BlockLayoutProviding {
+    switch blockType {
+    case .text:
+        return TextBlockLayout()
+    case .imageText:
+        return ImageTextBlockLayout()
     }
 } 
