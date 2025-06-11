@@ -143,6 +143,20 @@ extension UnifiedTextView {
                     }
                     return false // Prevent the default newline behavior
                 }
+            } else {
+                // Insert a spacer, then a new paragraph
+                addSpacerBlock()
+                let newline = NSAttributedString(string: "\n")
+                textStorage.insert(newline, at: selectedRange.location)
+                // Set font and paragraph style for the new paragraph
+                let font = self.font ?? UIFont.systemFont(ofSize: 16)
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.paragraphSpacing = 0
+                let newParagraphRange = NSRange(location: selectedRange.location, length: 1)
+                textStorage.addAttribute(.font, value: font, range: newParagraphRange)
+                textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: newParagraphRange)
+                selectedRange = NSRange(location: selectedRange.location + 1, length: 0)
+                return false // Prevent default behavior
             }
         }
         

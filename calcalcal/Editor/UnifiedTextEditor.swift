@@ -26,13 +26,10 @@ struct UnifiedTextEditor: UIViewRepresentable {
         let textView = UnifiedTextView()
         textView.defaultBlockSpacing = defaultBlockSpacing
         textView.text = text
-        
-        // Set up the coordinator as delegate
-        textView.delegate = context.coordinator
-        
+        // Do NOT override the delegate here; let UnifiedTextView handle its own delegate logic
+        // textView.delegate = context.coordinator
         // Connect proxy if provided
         proxy?.textView = textView
-        
         return textView
     }
     

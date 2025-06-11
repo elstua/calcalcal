@@ -51,6 +51,13 @@ flowchart TD
 - **Custom Drawing:** Visual separation and overlays (like calorie labels) are rendered via custom drawing in the text view.
 - **Configurable Spacing:** Visual spacing between blocks is managed independently of text layout.
 - **SwiftUI Integration:** The editor can be used as a SwiftUI view, supporting state binding and event callbacks.
+- **Spacer Blocks:**
+  - Special block type used to visually separate other blocks (e.g., between text and image blocks).
+  - Rendered as a full-width, 24pt-high block with a grey background (for debug/visual clarity).
+  - Managed as a first-class block (not an attachment), making them easy to insert, delete, and maintain.
+  - Automatically deleted when the previous block is deleted, ensuring clean block structure.
+  - When a spacer is inserted, the following block always inherits the correct text style and size.
+  - Used programmatically (e.g., always inserted before image blocks) and can be added by user action.
 
 ---
 

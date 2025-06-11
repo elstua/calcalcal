@@ -1,4 +1,6 @@
 import UIKit
+import Foundation
+
 
 // MARK: - TextKit 2 Compatibility Extensions
 
@@ -47,6 +49,9 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
             setNeedsDisplay()
         }
     }
+    
+    /// The default height for the invisible spacer
+    var defaultSpacerHeight: CGFloat = 24.0
     
     // MARK: - Initialization
     
@@ -136,40 +141,47 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     
     override func deleteBackward() {
         let currentRange = selectedRange
-        
+        if currentRange.length == 0 && currentRange.location > 0 {
+            let string = textStorage.string as NSString
+            var paragraphStart = 0
+            var paragraphEnd = 0
+            string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: nil, for: NSRange(location: currentRange.location, length: 0))
+            // Check if previous block is a spacer block
+            if currentRange.location == paragraphStart && paragraphStart > 0 {
+                // Get previous paragraph range
+                var prevParagraphStart = 0
+                var prevParagraphEnd = 0
+                string.getParagraphStart(&prevParagraphStart, end: &prevParagraphEnd, contentsEnd: nil, for: NSRange(location: max(0, paragraphStart - 1), length: 0))
+                let prevMetadata = unifiedContentStorage.blockMetadata(at: prevParagraphStart)
+                if let meta = prevMetadata, meta.blockType == .spacer {
+                    // Delete the spacer block
+                    textStorage.deleteCharacters(in: NSRange(location: prevParagraphStart, length: prevParagraphEnd - prevParagraphStart))
+                    selectedRange = NSRange(location: prevParagraphStart, length: 0)
+                    updateParagraphBlocks()
+                    return
+                }
+            }
+        }
         // Check if we're at the beginning of an image block
         if currentRange.length == 0 && currentRange.location > 0 {
             let currentLocation = currentRange.location
-            
-            // Get the current paragraph range
             var paragraphStart = 0
             var paragraphEnd = 0
             let string = textStorage.string as NSString
             string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: nil,
                                    for: NSRange(location: currentLocation, length: 0))
-            
             let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Check if this is an empty image block
             if let metadata = unifiedContentStorage.blockMetadata(at: currentLocation),
                metadata.blockType == .imageText,
                paragraphText.isEmpty {
-                
-                // Delete the entire image block paragraph
                 textStorage.deleteCharacters(in: paragraphRange)
-                
-                // Update cursor position
                 let newLocation = max(0, paragraphStart - 1)
                 selectedRange = NSRange(location: newLocation, length: 0)
-                
-                // Force update
                 updateParagraphBlocks()
                 return
             }
         }
-        
-        // Default deletion behavior
         super.deleteBackward()
     }
     
@@ -200,4 +212,8 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
         // Fallback to super for other actions
         return super.canPerformAction(action, withSender: sender)
     }
+    
+    // MARK: - Helper Methods
+    
+    // MARK: - UITextViewDelegate
 } 

@@ -9,6 +9,7 @@ class UnifiedTextContentStorage: NSObject {
         enum BlockType: Int {
             case text = 0
             case imageText = 1
+            case spacer = 2
         }
         
         let blockType: BlockType

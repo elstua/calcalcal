@@ -10,7 +10,7 @@ class ImageTextBlockLayout: BlockLayoutProviding {
             x: 0,
             y: view.boundingRect(for: paragraphRange).origin.y,
             width: imageWidth,
-            height: max(100, view.boundingRect(for: paragraphRange).height)
+            height: 100
         )
         let calorieExclusionRect = CGRect(
             x: imageWidth + (remainingWidth - calorieAreaWidth),

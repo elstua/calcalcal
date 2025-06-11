@@ -86,7 +86,7 @@ extension UnifiedTextView {
             return
         }
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata, paragraphRange.location < string.length else { return }
+            guard let metadata = metadata, paragraphRange.location < string.length, NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
             let provider = layoutProvider(for: metadata.blockType)
@@ -106,73 +106,51 @@ extension UnifiedTextView {
     internal func updateImageViews() {
         // Remove image views that no longer exist
         var currentImageRefs = Set<UUID>()
-        
-        // Only process paragraphs that have actual content
         let string = textStorage.string as NSString
         guard string.length > 0 else {
-            // Remove all image views if no content
             for (_, imageView) in imageViews {
                 imageView.removeFromSuperview()
             }
             imageViews.removeAll()
             return
         }
-        
-        // First, collect all current image references from valid paragraphs
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard let metadata = metadata,
                   metadata.blockType == .imageText,
                   let imageRef = metadata.imageReference,
-                  paragraphRange.location < string.length else { return }
-            
-            // Verify the paragraph actually contains text
+                  paragraphRange.location < string.length,
+                  NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
-            
             currentImageRefs.insert(imageRef)
         }
-        
-        // Remove views for images that no longer exist
         for (imageRef, imageView) in imageViews {
             if !currentImageRefs.contains(imageRef) {
                 imageView.removeFromSuperview()
                 imageViews.removeValue(forKey: imageRef)
             }
         }
-        
-        // Update positions for existing images and create new ones
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard let metadata = metadata,
                   metadata.blockType == .imageText,
                   let imageRef = metadata.imageReference,
-                  paragraphRange.location < string.length else { return }
-            
-            // Verify the paragraph actually contains text
+                  paragraphRange.location < string.length,
+                  NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
-            
-            // Get the frame for this paragraph using compatibility method
             let boundingRect = self.boundingRect(for: paragraphRange)
-            
-            // Calculate image area (30% of text container width)
             let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
             let imageWidth = containerWidth * 0.3
-            let imageHeight = max(100, boundingRect.height) // Minimum 100pt height matching exclusion path
-            
-            // Create image frame using text container coordinates
+            let imageHeight = max(100, boundingRect.height)
             var imageFrame = CGRect(
-                x: 0, // Left edge of text container (matches exclusion path)
+                x: 0,
                 y: boundingRect.origin.y,
                 width: imageWidth,
                 height: imageHeight
             )
-            
-            // Convert from text container coordinates to view coordinates
             imageFrame.origin.x += self.textContainerInset.left + self.textContainer.lineFragmentPadding
             imageFrame.origin.y += self.textContainerInset.top
-            imageFrame.size.width -= 8 // Add some padding
-            
-            // Get or create image view
+            imageFrame.size.width -= 8
             let imageView: UIView
             if let existingView = imageViews[imageRef] {
                 imageView = existingView
@@ -181,8 +159,6 @@ extension UnifiedTextView {
                 imageViews[imageRef] = imageView
                 addSubview(imageView)
             }
-            
-            // Update frame
             imageView.frame = imageFrame
         }
     }
@@ -339,6 +315,9 @@ extension UnifiedTextView {
         case .imageText:
             // Blue tint for image blocks
             view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.05)
+        case .spacer:
+            // Gray tint for spacer blocks (more visible for debug)
+            view.backgroundColor = UIColor.systemGray.withAlphaComponent(0.25)
         }
     }
 }
@@ -390,5 +369,7 @@ private func layoutProvider(for blockType: UnifiedTextContentStorage.BlockMetada
         return TextBlockLayout()
     case .imageText:
         return ImageTextBlockLayout()
+    case .spacer:
+        return TextBlockLayout() // Or create a SpacerBlockLayout if needed
     }
 } 
