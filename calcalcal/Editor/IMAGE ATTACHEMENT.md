@@ -28,6 +28,8 @@ Imagine it's like polaroid photo. We have rectangular white block with 2:3 propo
 - this is the core element and can be a small (in textview and gallery) and on the large screen (when press on view photo)
 - Optionally in large version should be controls for interaction (... button that shows some options like "delete" or "retake")
 - when image/photo is selected we disable bg of image page and move it to its coordinate on textview. Additionally it can be two different blocks in different view: one on the image and one on the textview. That shares the same coordinates on the start. This transition should be flawless and fluid
+- it's also should be the same component for the textview
+- it should include some metadata for the validating of what we get from backend and how to sync all it (TBD, now only frontend)
 
 ### gallery view
 Is basically a grid of the image component. Should be like 3 image per row, and interaction with it depends of the context:
