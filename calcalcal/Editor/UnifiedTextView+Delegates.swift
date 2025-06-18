@@ -137,9 +137,16 @@ extension UnifiedTextView {
                 if currentLocation >= paragraphEnd - 2 {
                     // Create a new text block instead of continuing the image block
                     DispatchQueue.main.async {
+                        let oldLength = self.textStorage.length
                         self.addTextBlock("")
-                        // Force immediate update after adding block
                         self.updateParagraphBlocks()
+                        // Move caret to the start of the new block
+                        let newLength = self.textStorage.length
+                        let diff = newLength - oldLength
+                        if diff > 0 {
+                            self.selectedRange = NSRange(location: newLength - diff, length: 0)
+                        }
+                        self.scrollRangeToVisible(self.selectedRange)
                     }
                     return false // Prevent the default newline behavior
                 }

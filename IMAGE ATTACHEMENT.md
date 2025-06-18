@@ -49,14 +49,14 @@ It's enlarge image component (white 2:3 rectangle with square content), but inst
 2. implement component for gallery
     with state of disabled access
 3. Implement image page and opening it from the textview
-3. Understand how to add it to the textview fluidly and with right animation
+4. Understand how to add it to the textview fluidly and with right animation
 ### Second steps:
-4. implement component of camera
+5. implement component of camera
     state of disabled access
     share the same logic for adding it into the textview
-5. add it to the image page
+6. add it to the image page
 ### third step
-6. Add animations and define styles for opening/close
+7. Add animations and define styles for opening/close
 
 
 ## Additional requirements

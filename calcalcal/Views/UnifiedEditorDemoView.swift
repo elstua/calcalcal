@@ -12,6 +12,12 @@ struct UnifiedEditorDemoView: View {
     @State private var showingCalorieInput = false
     @State private var selectedBlockLocation = 0
     @StateObject private var editorProxy = UnifiedTextEditorProxy()
+    @State private var showGalleryOverlay = false
+    @State private var selectedGalleryImage: UIImage? = nil
+    @State private var overlayImageFrame: CGRect? = nil
+    @State private var destinationFrame: CGRect? = nil
+    @State private var isAnimatingImage = false
+    @State private var imageMap: [UUID: UIImage] = [:]
     
     var body: some View {
         NavigationView {
@@ -23,29 +29,27 @@ struct UnifiedEditorDemoView: View {
                     
                     Spacer()
                     
-                    Button(action: { addSampleBlock() }) {
-                        Label("Add Block", systemImage: "plus.circle")
-                    }
                     
                     Button(action: { addImageBlock() }) {
                         Label("Add Image", systemImage: "photo")
                     }
                     
-                    Button(action: { debugBlocks() }) {
-                        Label("Debug", systemImage: "ladybug")
+
+                    Button(action: { showGalleryOverlay = true }) {
+                        Label("Gallery", systemImage: "photo.on.rectangle")
                     }
                 }
                 .padding()
-                .background(Color(UIColor.systemBackground))
+                .background(Color(.systemBackground))
                 .overlay(
                     Rectangle()
-                        .fill(Color(UIColor.separator))
+                        .fill(Color(.separator))
                         .frame(height: 0.5),
                     alignment: .bottom
                 )
                 
                 // Unified Text Editor
-                UnifiedTextEditor(text: $editorText)
+                UnifiedTextEditor(text: $editorText, imageMap: imageMap)
                     .blockSpacing(20)
                     .proxy(editorProxy)
                     .onTextChange { text in
@@ -71,16 +75,52 @@ struct UnifiedEditorDemoView: View {
                     }
                 }
                 .padding()
-                .background(Color(UIColor.systemBackground))
+                .background(Color(.systemBackground))
                 .overlay(
                     Rectangle()
-                        .fill(Color(UIColor.separator))
+                        .fill(Color(.separator))
                         .frame(height: 0.5),
                     alignment: .top
                 )
             }
             .navigationTitle("Unified Editor Demo")
             .navigationBarTitleDisplayMode(.inline)
+            .overlay(
+                ZStack {
+                    if showGalleryOverlay {
+                        Color.black.opacity(0.7)
+                            .ignoresSafeArea()
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Button(action: { showGalleryOverlay = false }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.largeTitle)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                }
+                            }
+                            Spacer()
+                        }
+                        GalleryView(onImageTap: { uiImage, frame in
+                            let uuid = UUID()
+                            imageMap[uuid] = uiImage
+                            editorProxy.addImageBlock(imageReference: uuid)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                if let textView = editorProxy.textView {
+                                    editorText = textView.text
+                                }
+                            }
+                            selectedGalleryImage = uiImage
+                            overlayImageFrame = frame
+                            showGalleryOverlay = false
+                            isAnimatingImage = true
+                        })
+                        .frame(maxHeight: 400)
+                        .background(Color.clear)
+                    }
+                }
+            )
         }
     }
     
@@ -117,9 +157,11 @@ struct UnifiedEditorDemoView: View {
     }
     
     private func addImageBlock() {
+        let uuid = UUID()
+        // No image added to imageMap, so UIKit will show the placeholder
         let randomCalories = Int.random(in: 50...600)
         let calorieString = "\(randomCalories) kcal"
-        editorProxy.addImageBlock(calorieData: calorieString)
+        editorProxy.addImageBlock(imageReference: uuid, calorieData: calorieString)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let textView = editorProxy.textView {
                 editorText = textView.text
@@ -174,5 +216,19 @@ struct UnifiedEditorDemoView: View {
 struct UnifiedEditorDemoView_Previews: PreviewProvider {
     static var previews: some View {
         UnifiedEditorDemoView()
+    }
+}
+
+extension Image {
+    func asUIImage() -> UIImage? {
+        // Try to extract UIImage from SwiftUI Image (only works for system or asset images)
+        let mirror = Mirror(reflecting: self)
+        if let provider = mirror.descendant("provider") {
+            let providerMirror = Mirror(reflecting: provider)
+            if let uiImage = providerMirror.descendant("base") as? UIImage {
+                return uiImage
+            }
+        }
+        return nil
     }
 } 

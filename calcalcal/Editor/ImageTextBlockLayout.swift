@@ -6,17 +6,19 @@ class ImageTextBlockLayout: BlockLayoutProviding {
         let imageWidth = totalWidth * 0.30
         let remainingWidth = totalWidth - imageWidth
         let calorieAreaWidth = remainingWidth * 0.30
+        let boundingRect = view.boundingRect(for: paragraphRange)
+        let blockHeight = max(100, boundingRect.height)
         let imageFrame = CGRect(
             x: 0,
-            y: view.boundingRect(for: paragraphRange).origin.y,
+            y: boundingRect.origin.y,
             width: imageWidth,
-            height: 100
+            height: blockHeight
         )
         let calorieExclusionRect = CGRect(
             x: imageWidth + (remainingWidth - calorieAreaWidth),
-            y: 0,
+            y: boundingRect.origin.y,
             width: calorieAreaWidth,
-            height: view.bounds.height
+            height: blockHeight
         )
         return [UIBezierPath(rect: imageFrame), UIBezierPath(rect: calorieExclusionRect)]
     }

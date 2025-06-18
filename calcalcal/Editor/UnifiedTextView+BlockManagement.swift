@@ -356,12 +356,13 @@ extension UnifiedTextView {
                 }
             }
             if existingMetadata == nil || forceTextBlock {
-                let isImageBlock = existingMetadata?.blockType == .imageText
                 let isSpacerBlock = isOnlySpacer
+                // Always force .text if forceTextBlock is true (i.e., after image block)
+                let blockType: UnifiedTextContentStorage.BlockMetadata.BlockType = isSpacerBlock ? .spacer : (forceTextBlock ? .text : (existingMetadata?.blockType == .imageText ? .imageText : .text))
                 let metadata = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: isSpacerBlock ? .spacer : ((isImageBlock && !forceTextBlock) ? .imageText : .text),
+                    blockType: blockType,
                     blockSpacing: self.defaultBlockSpacing,
-                    imageReference: (isImageBlock && !forceTextBlock) ? existingMetadata?.imageReference : nil,
+                    imageReference: (blockType == .imageText) ? existingMetadata?.imageReference : nil,
                     calorieData: preservedCalories
                 )
                 self.unifiedContentStorage.setBlockMetadata(metadata, for: range)

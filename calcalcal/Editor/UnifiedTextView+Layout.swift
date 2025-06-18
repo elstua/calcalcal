@@ -1,4 +1,7 @@
 import UIKit
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 
 
 // MARK: - Layout Management Extension
@@ -89,8 +92,10 @@ extension UnifiedTextView {
             guard let metadata = metadata, paragraphRange.location < string.length, NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
-            let provider = layoutProvider(for: metadata.blockType)
-            exclusionPaths.append(contentsOf: provider.exclusionPaths(for: paragraphRange, in: self, metadata: metadata))
+            if metadata.blockType == .imageText {
+                let provider = layoutProvider(for: metadata.blockType)
+                exclusionPaths.append(contentsOf: provider.exclusionPaths(for: paragraphRange, in: self, metadata: metadata))
+            }
         }
         textContainer.exclusionPaths = exclusionPaths
         layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
@@ -141,10 +146,10 @@ extension UnifiedTextView {
             let boundingRect = self.boundingRect(for: paragraphRange)
             let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
             let imageWidth = containerWidth * 0.3
-            let imageHeight = max(100, boundingRect.height)
+            var imageHeight: CGFloat = max(100, boundingRect.height)
             var imageFrame = CGRect(
                 x: 0,
-                y: boundingRect.origin.y,
+                y: boundingRect.origin.y, // Always anchor to top of block
                 width: imageWidth,
                 height: imageHeight
             )
@@ -155,7 +160,19 @@ extension UnifiedTextView {
             if let existingView = imageViews[imageRef] {
                 imageView = existingView
             } else {
-                imageView = createImagePlaceholderView()
+                if let image = self.imageMap[imageRef] {
+                    // Use image aspect ratio for height if possible
+                    let aspectRatio = image.size.height / max(image.size.width, 1)
+                    imageHeight = min(max(imageWidth * aspectRatio, 100), 420) // Cap height
+                    imageFrame.size.height = imageHeight
+                    let imageViewObj = UIImageView(image: image)
+                    imageViewObj.contentMode = .scaleAspectFill
+                    imageViewObj.clipsToBounds = true
+                    imageViewObj.layer.cornerRadius = 4.0
+                    imageView = imageViewObj
+                } else {
+                    imageView = createImagePlaceholderView(imageWidth: imageWidth, imageHeight: imageHeight)
+                }
                 imageViews[imageRef] = imageView
                 addSubview(imageView)
             }
@@ -164,46 +181,20 @@ extension UnifiedTextView {
     }
     
     /// Create a placeholder image view
-    internal func createImagePlaceholderView() -> UIView {
+    internal func createImagePlaceholderView(imageWidth: CGFloat = 100, imageHeight: CGFloat = 120) -> UIView {
+        // #if canImport(SwiftUI)
+        // let imageComponent = ImageComponent(uiImage: nil, isLarge: false, onDelete: nil, onLongPress: nil)
+        // let hostingController = UIHostingController(rootView: imageComponent.frame(width: imageWidth, height: imageHeight))
+        // hostingController.view.backgroundColor = UIColor.clear
+        // hostingController.view.frame = CGRect(x: 0, y: 0, width: imageWidth, height: imageHeight)
+        // return hostingController.view
+        // #else
         let view = UIView()
         view.backgroundColor = UIColor.systemGray4
-        view.layer.borderColor = UIColor.systemGray3.cgColor
-        view.layer.borderWidth = 1.0
         view.layer.cornerRadius = 4.0
-        
-        // Add icon and label
-        let iconSize: CGFloat = 24
-        let iconView = UIView()
-        iconView.backgroundColor = .clear
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(iconView)
-        
-        let label = UILabel()
-        label.text = "Add Image"
-        label.font = UIFont.systemFont(ofSize: 12)
-        label.textColor = UIColor.systemGray2
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
-        
-        // Set up constraints
-        NSLayoutConstraint.activate([
-            iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -10),
-            iconView.widthAnchor.constraint(equalToConstant: iconSize),
-            iconView.heightAnchor.constraint(equalToConstant: iconSize),
-            
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 8),
-            label.leftAnchor.constraint(greaterThanOrEqualTo: view.leftAnchor, constant: 4),
-            label.rightAnchor.constraint(lessThanOrEqualTo: view.rightAnchor, constant: -4)
-        ])
-        
-        // Custom drawing for the icon (we'll do this in a custom view)
-        iconView.layer.borderColor = UIColor.systemGray2.cgColor
-        iconView.layer.borderWidth = 2.0
-        
+        view.frame = CGRect(x: 0, y: 0, width: imageWidth, height: imageHeight)
         return view
+        // #endif
     }
     
     // MARK: - Block Background Management

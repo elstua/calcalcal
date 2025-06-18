@@ -18,6 +18,7 @@ class UnifiedTextEditorProxy: ObservableObject {
 struct UnifiedTextEditor: UIViewRepresentable {
     
     @Binding var text: String
+    var imageMap: [UUID: UIImage] = [:]
     var onTextChange: ((String) -> Void)?
     var defaultBlockSpacing: CGFloat = 32
     var proxy: UnifiedTextEditorProxy?
@@ -26,9 +27,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         let textView = UnifiedTextView()
         textView.defaultBlockSpacing = defaultBlockSpacing
         textView.text = text
-        // Do NOT override the delegate here; let UnifiedTextView handle its own delegate logic
-        // textView.delegate = context.coordinator
-        // Connect proxy if provided
+        textView.imageMap = imageMap
         proxy?.textView = textView
         return textView
     }
@@ -47,6 +46,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
                 }
             }
         }
+        textView.imageMap = imageMap
     }
     
     func makeCoordinator() -> Coordinator {

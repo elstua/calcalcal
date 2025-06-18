@@ -1,7 +1,8 @@
 import SwiftUI
+import UIKit
 
 struct ImageComponent: View {
-    let image: Image?
+    let uiImage: UIImage?
     let isLarge: Bool
     let onDelete: (() -> Void)?
     let onLongPress: (() -> Void)? // Callback for long press
@@ -16,8 +17,8 @@ struct ImageComponent: View {
             
             VStack(spacing: 0) {
                 // Image or placeholder
-                if let image = image {
-                    image
+                if let uiImage = uiImage {
+                    Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: isLarge ? 320 : 86, height: isLarge ? 320 : 86)
@@ -56,11 +57,11 @@ struct ImageComponent_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
             // Small preview
-            ImageComponent(image: nil, isLarge: false, onDelete: nil, onLongPress: {})
+            ImageComponent(uiImage: nil as UIImage?, isLarge: false, onDelete: nil, onLongPress: {})
                 .previewDisplayName("Small")
             
             // Large preview
-            ImageComponent(image: nil, isLarge: true, onDelete: {}, onLongPress: {})
+            ImageComponent(uiImage: nil as UIImage?, isLarge: true, onDelete: {}, onLongPress: {})
                 .previewDisplayName("Large")
         }
         .padding()

@@ -216,4 +216,7 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     // MARK: - Helper Methods
     
     // MARK: - UITextViewDelegate
+    
+    /// Mapping from imageReference UUID to UIImage for image blocks
+    public var imageMap: [UUID: UIImage] = [:]
 } 
