@@ -25,26 +25,6 @@ struct UnifiedEditorDemoView: View {
         NavigationView {
             VStack(spacing: 0) {
                 // Debug Info Overlay
-                if !debugLastAction.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("[DEBUG]")
-                            .font(.caption).bold()
-                        Text("Last Action: \(debugLastAction)")
-                            .font(.caption2)
-                        if let uuid = debugLastImageUUID {
-                            Text("Last Image UUID: \(uuid.uuidString.prefix(8))...")
-                                .font(.caption2)
-                        }
-                        if !debugLastTextFlow.isEmpty {
-                            Text("TextFlow: \(debugLastTextFlow.prefix(40))...")
-                                .font(.caption2)
-                        }
-                    }
-                    .padding(8)
-                    .background(Color.yellow.opacity(0.2))
-                    .cornerRadius(8)
-                    .padding([.top, .horizontal])
-                }
                 
                 // Editor Header
                 HStack {

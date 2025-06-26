@@ -61,11 +61,17 @@ extension UnifiedTextView {
 // MARK: - UITextViewDelegate
 
 extension UnifiedTextView {
+
+    /// Generates a random calorie value between 50-1000 for placeholder data
+    func generateRandomCalories() -> String {
+        let calories = Int.random(in: 50...1000)
+        return String(calories)
+    }
     
     /// Helper to create a text block with placeholder calorieData
     func makeTextBlock(_ text: String) -> Block {
         // Placeholder for calorieData, can be replaced with real logic later
-        return Block(type: .text(text), calorieData: "placeholder")
+        return Block(type: .text(text), calorieData: generateRandomCalories())
     }
     
     func textViewDidChange(_ textView: UITextView) {
@@ -103,8 +109,18 @@ extension UnifiedTextView {
         }
         if newBlocks != self.blocks {
             print("Updating blocks array. New blocks: \(newBlocks)")
+            let changedIndices = diffChangedBlockIndices(old: self.blocks, new: newBlocks)
             self.blocks = newBlocks
-            renderBlocks()
+            if changedIndices.count == 0 {
+                print("No block indices changed, skipping render.")
+                return
+            } else if changedIndices.count <= 2 {
+                print("Partial update for block indices: \(changedIndices)")
+                renderBlocks(affectedBlockIndices: changedIndices)
+            } else {
+                print("Full rebuild, too many blocks changed.")
+                renderBlocks()
+            }
         } else {
             print("No change to blocks array.")
         }
@@ -166,6 +182,7 @@ extension UnifiedTextView {
             }
             guard let idx = blockIndex else { return true }
             var newBlocks = blocks
+            var affectedIndices: [Int] = []
             switch blocks[idx].type {
             case .text(let blockText):
                 // Split the text at the cursor offset
@@ -176,30 +193,34 @@ extension UnifiedTextView {
                 // Replace current block with left, insert new block with right
                 newBlocks[idx] = makeTextBlock(left)
                 newBlocks.insert(makeTextBlock(right), at: idx + 1)
+                affectedIndices = [idx, idx + 1]
                 self.blocks = newBlocks
                 let caretLocation = blockStart + (left as NSString).length + 1 // +1 for newline
-                renderBlocks(restoreCaretTo: caretLocation)
+                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
                 return false
             case .image(let data, let uuid):
                 // Insert a new empty text block after the image
                 newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                affectedIndices = [idx + 1]
                 self.blocks = newBlocks
                 let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation)
+                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
                 return false
             case .imageText(let data, let uuid, let text):
                 // Insert a new empty text block after the imageText block
                 newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                affectedIndices = [idx + 1]
                 self.blocks = newBlocks
                 let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation)
+                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
                 return false
             case .spacer:
                 // Insert a new empty text block after the spacer
                 newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                affectedIndices = [idx + 1]
                 self.blocks = newBlocks
                 let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation)
+                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
                 return false
             }
         }
@@ -234,4 +255,18 @@ extension UnifiedTextView {
         // Light update on selection change - just ensure visuals are correct
         setNeedsDisplay()
     }
+}
+
+// Utility: Diff two [Block] arrays and return indices of changed blocks
+private func diffChangedBlockIndices(old: [Block], new: [Block]) -> [Int] {
+    let count = max(old.count, new.count)
+    var changed: [Int] = []
+    for i in 0..<count {
+        let oldBlock = i < old.count ? old[i] : nil
+        let newBlock = i < new.count ? new[i] : nil
+        if oldBlock != newBlock {
+            changed.append(i)
+        }
+    }
+    return changed
 } 
