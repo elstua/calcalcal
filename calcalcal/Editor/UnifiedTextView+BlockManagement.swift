@@ -2,473 +2,179 @@ import UIKit
 
 // MARK: - Block Management Extension
 
+// MARK: - Block Model Integration
+
 extension UnifiedTextView {
-    
-    // MARK: - Block Analysis
-    
-    /// Get a comprehensive count and analysis of all blocks in the editor
-    func getBlockAnalysis() -> (totalBlocks: Int, textBlocks: Int, imageBlocks: Int, details: [String]) {
-        var totalBlocks = 0
-        var textBlocks = 0
-        var imageBlocks = 0
-        var details: [String] = []
-        
-        let string = textStorage.string as NSString
-        guard string.length > 0 else {
-            return (0, 0, 0, ["No content in editor"])
-        }
-        
-        // Enumerate all paragraphs to understand what's happening
-        string.enumerateSubstrings(in: NSRange(location: 0, length: string.length),
-                                  options: [.byParagraphs, .localized]) { (substring, range, enclosingRange, _) in
-            
-            let paragraphText = substring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let isEmpty = paragraphText.isEmpty
-            let hasMetadata = self.unifiedContentStorage.blockMetadata(at: range.location) != nil
-            
-            if !isEmpty {
-                totalBlocks += 1
-                
-                if let metadata = self.unifiedContentStorage.blockMetadata(at: range.location) {
-                    switch metadata.blockType {
-                    case .text:
-                        textBlocks += 1
-                        details.append("✅ Text Block #\(totalBlocks) at \(range.location)-\(range.location + range.length): '\(paragraphText.prefix(30))...'")
-                    case .imageText:
-                        imageBlocks += 1
-                        details.append("🖼️ Image Block #\(totalBlocks) at \(range.location)-\(range.location + range.length): '\(paragraphText.prefix(30))...'")
-                    case .spacer:
-                        details.append("⬜ Spacer Block #\(totalBlocks) at \(range.location)-\(range.location + range.length)")
-                    }
-                } else {
-                    details.append("❌ Paragraph #\(totalBlocks) at \(range.location)-\(range.location + range.length): NO METADATA - '\(paragraphText.prefix(30))...'")
-                }
-            } else {
-                details.append("⚪ Empty paragraph at \(range.location)-\(range.location + range.length)")
+    /// The array of blocks representing the editor's content
+    var blocks: [Block] {
+        get {
+            if let value = objc_getAssociatedObject(self, &AssociatedKeys.blocks) as? [Block] {
+                return value
             }
+            let initial: [Block] = []
+            objc_setAssociatedObject(self, &AssociatedKeys.blocks, initial, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            return initial
         }
-        
-        return (totalBlocks, textBlocks, imageBlocks, details)
-    }
-    
-    /// Print detailed block analysis to console for debugging
-    func printBlockAnalysis() {
-        let analysis = getBlockAnalysis()
-        
-        print("\n=== BLOCK ANALYSIS ===")
-        print("Total Blocks: \(analysis.totalBlocks)")
-        print("Text Blocks: \(analysis.textBlocks)")
-        print("Image Blocks: \(analysis.imageBlocks)")
-        print("Details:")
-        for detail in analysis.details {
-            print("  \(detail)")
-        }
-        
-        // Also check metadata enumeration with frame information
-        print("\nBlock Frame Analysis:")
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            let string = self.textStorage.string as NSString
-            if paragraphRange.location < string.length {
-                let text = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty {
-                    // Calculate the frame for debugging
-                    let boundingRect = self.boundingRect(for: paragraphRange)
-                    let lineCount = text.components(separatedBy: .newlines).count
-                    
-                    print("  📐 Block at \(paragraphRange.location)-\(paragraphRange.location + paragraphRange.length):")
-                    print("     Type: \(metadata?.blockType ?? .text)")
-                    print("     Content: '\(text.prefix(50))...'")
-                    print("     Lines: \(lineCount)")
-                    print("     Frame: \(boundingRect)")
-                    print("     Text Length: \(text.count) chars")
-                }
-            }
-        }
-        print("======================\n")
-    }
-    
-    /// Get the position (index) of the block at a given text location
-    func getBlockPosition(at location: Int) -> Int? {
-        var blockPosition = 0
-        var foundPosition: Int? = nil
-        
-        let string = textStorage.string as NSString
-        string.enumerateSubstrings(in: NSRange(location: 0, length: string.length),
-                                  options: [.byParagraphs, .localized]) { (substring, range, enclosingRange, _) in
-            
-            let paragraphText = substring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !paragraphText.isEmpty else { return }
-            
-            blockPosition += 1
-            
-            if NSLocationInRange(location, range) {
-                foundPosition = blockPosition
-            }
-        }
-        
-        return foundPosition
-    }
-    
-    // MARK: - Block Creation
-    
-    /// Add a new text block with the given content
-    func addTextBlock(_ text: String, calorieData: String? = nil) {
-        let blockText = text.isEmpty ? "\n" : text + "\n"
-        
-        // Create attributed string with proper font
-        let attributedText = NSMutableAttributedString(string: blockText)
-        attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
-        attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
-        // Add paragraph style for spacing
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 0
-        attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
-        
-        // Insert at the end
-        let insertionPoint = textStorage.length
-        textStorage.insert(attributedText, at: insertionPoint)
-        
-        // Set block metadata
-        let blockRange = NSRange(location: insertionPoint, length: blockText.count)
-        let metadata = UnifiedTextContentStorage.BlockMetadata(
-            blockType: .text,
-            blockSpacing: defaultBlockSpacing,
-            imageReference: nil,
-            calorieData: calorieData
-        )
-        
-        unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
-        
-        // Force immediate update for programmatically added blocks
-        forceUpdateParagraphBlocks()
-    }
-    
-    /// Add a new image-text block with placeholder image and text
-    func addImageBlock(_ text: String = "This is an image block with text flowing alongside. The image takes up 30% of the width while the text uses the remaining 70%.", imageReference: UUID? = nil, calorieData: String? = nil) {
-        // Always insert a spacer before the image block if not at start of a new line
-        let string = textStorage.string as NSString
-        var insertionPoint = selectedRange.location
-        if insertionPoint > 0 && string.character(at: insertionPoint - 1) != 10 {
-            addSpacerBlock()
-            insertionPoint = selectedRange.location
-        }
-        // Ensure we're at a new line
-        if insertionPoint > 0 && string.character(at: insertionPoint - 1) != 10 {
-            textStorage.insert(NSAttributedString(string: "\n"), at: insertionPoint)
-            insertionPoint += 1
-        }
-        // Insert the image block as its own paragraph
-        let blockText = text.isEmpty ? "\n" : text + "\n"
-        let attributedText = NSMutableAttributedString(string: blockText)
-        attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
-        attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 0
-        attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
-        textStorage.insert(attributedText, at: insertionPoint)
-        // Set block metadata with image reference
-        let blockRange = NSRange(location: insertionPoint, length: blockText.count)
-        let metadata = UnifiedTextContentStorage.BlockMetadata(
-            blockType: .imageText,
-            blockSpacing: defaultBlockSpacing * 2, // Extra spacing for image blocks
-            imageReference: imageReference ?? UUID(),
-            calorieData: calorieData
-        )
-        unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
-        print("DEBUG: Image block created at range \(blockRange)")
-        // FORCE IMMEDIATE AND COMPLETE LAYOUT RECALCULATION
-        forceCompleteLayoutUpdate()
-        // Move cursor to the end of the new block
-        selectedRange = NSRange(location: insertionPoint + blockText.count, length: 0)
-    }
-    
-    /// Force a complete and immediate layout update - use for critical layout changes
-    private func forceCompleteLayoutUpdate() {
-        print("💥 FORCING COMPLETE LAYOUT UPDATE")
-        // Defensive: Check textStorage length before all operations
-        let textLength = textStorage.length
-        if textLength == 0 { return }
-        // Step 1: Update exclusion paths first
-        updateExclusionPaths()
-        // Step 2: Force immediate processing of the layout changes
-        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textLength), actualCharacterRange: nil)
-        layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textLength))
-        // Step 3: Force synchronous layout of ALL text
-        if textLength > 0 {
-            layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textLength))
-        }
-        // Step 4: Force immediate view layout
-        setNeedsLayout()
-        layoutIfNeeded() // This forces synchronous layout
-        // Step 5: Update visual elements with the new layout
-        updateImageViews()
-        updateBlockBackgroundViews()
-        // Step 6: Force display update
-        setNeedsDisplay()
-        // Step 7: Small delay to ensure text system has processed everything, then update again
-        DispatchQueue.main.async {
-            // Additional pass to ensure everything is updated
-            self.setNeedsLayout()
-            self.layoutIfNeeded()
-            // Double-check exclusion paths are applied
-            self.updateExclusionPaths()
-            print("✅ Complete layout update finished")
-        }
-        // Reset the flag since we just updated everything
-        needsExclusionPathUpdate = false
-    }
-    
-    /// Add a new spacer block (full width, 24pt height, grey background for debug)
-    func addSpacerBlock() {
-        let blockText = "\n" // Spacer block is just an empty paragraph
-        let attributedText = NSMutableAttributedString(string: blockText)
-        // Style: match text area font and color for consistency
-        attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
-        attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
-        // Paragraph style for spacing
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacing = 0
-        attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
-        // Insert at the end (or at cursor if needed)
-        let insertionPoint = selectedRange.location
-        textStorage.insert(attributedText, at: insertionPoint)
-        // Set block metadata
-        let blockRange = NSRange(location: insertionPoint, length: blockText.count)
-        let metadata = UnifiedTextContentStorage.BlockMetadata(
-            blockType: .spacer,
-            blockSpacing: defaultSpacerHeight, // Use 24pt height for spacer
-            imageReference: nil,
-            calorieData: nil
-        )
-        unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
-        // Force immediate update for programmatically added blocks
-        forceUpdateParagraphBlocks()
-        // Move cursor to the end of the new block
-        selectedRange = NSRange(location: insertionPoint + blockText.count, length: 0)
-    }
-    
-    // MARK: - Block Updates
-    
-    /// Force immediate block update bypassing throttling - use for critical operations
-    internal func forceUpdateParagraphBlocks() {
-        print("🚀 Force update - bypassing throttling")
-        
-        // Reset throttling to allow immediate update
-        lastUpdateTime = 0
-        
-        // Perform immediate update
-        updateParagraphBlocks()
-        
-        // Check if we have any image blocks that need immediate layout update
-        var hasImageBlocks = false
-        unifiedContentStorage.enumerateParagraphs { _, metadata in
-            if let metadata = metadata, metadata.blockType == .imageText {
-                hasImageBlocks = true
-            }
-        }
-        
-        if hasImageBlocks {
-            // Use complete layout update for image blocks
-            forceCompleteLayoutUpdate()
-        } else {
-            // Standard update for text-only content
-            updateExclusionPaths()
-            updateImageViews()
-            updateBlockBackgroundViews()
-            
-            // Force immediate layout and display update
-            layoutIfNeeded()
-            setNeedsDisplay()
-            
-            // Reset the flag since we just updated everything
-            needsExclusionPathUpdate = false
+        set {
+            objc_setAssociatedObject(self, &AssociatedKeys.blocks, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         }
     }
-    
-    /// Update paragraph detection after text changes
-    internal func updateParagraphBlocks(changedRange: NSRange? = nil) {
-        let currentTime = CACurrentMediaTime()
-        print("🔄 updateParagraphBlocks called at \(currentTime)")
-        // Remove throttling and delayed update logic
-        // let timeSinceLastUpdate = currentTime - lastUpdateTime
-        // let shouldThrottle = timeSinceLastUpdate < updateThrottleInterval
-        lastUpdateTime = currentTime
-        let string = textStorage.string as NSString
-        let isEmptyContent = string.length == 0
-        let isFirstUpdate = currentBlockStructure.isEmpty
-        // if shouldThrottle && !isEmptyContent && !isFirstUpdate {
-        //     print("⏰ Throttling update - too frequent (\(timeSinceLastUpdate)s since last)")
-        //     DispatchQueue.main.asyncAfter(deadline: .now() + updateThrottleInterval) {
-        //         self.updateParagraphBlocks(changedRange: changedRange)
-        //     }
-        //     return
-        // }
-        var blockStructure = ""
-        // Only clean up metadata for changed range if provided
-        cleanupOrphanedMetadata(changedRange: changedRange)
-        // Only enumerate paragraphs in changedRange if provided
-        let enumerateRange = changedRange ?? NSRange(location: 0, length: string.length)
-        // Clamp enumerateRange to string bounds (robust)
-        let stringLength = string.length
-        var safeLocation = min(enumerateRange.location, max(0, stringLength - 1))
-        if stringLength == 0 { safeLocation = 0 }
-        let safeLength = max(0, min(enumerateRange.length, stringLength - safeLocation))
-        let safeEnumerateRange = NSRange(location: safeLocation, length: safeLength)
-        if safeEnumerateRange.location >= stringLength || stringLength == 0 {
-            // Nothing to enumerate, return early
-            return
-        }
-        unifiedContentStorage.enumerateParagraphs(in: safeEnumerateRange) { paragraphRange, metadata in
-            blockStructure += "\(paragraphRange.location):\(paragraphRange.length);"
-            if let metadata = metadata {
-                blockStructure += "\(metadata.blockType);"
-            }
-        }
-        if blockStructure == currentBlockStructure && !isFirstUpdate {
-            print("✅ Block structure unchanged - skipping update")
-            return
-        }
-        print("🔧 Block structure changed - performing update for range: \(String(describing: changedRange))")
-        var paragraphsProcessed = 0
-        var metadataAssigned = 0
-        string.enumerateSubstrings(in: safeEnumerateRange, options: [.byParagraphs, .localized]) { (substring, range, enclosingRange, _) in
-            paragraphsProcessed += 1
-            let paragraphString = substring ?? ""
-            let trimmed = paragraphString.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Check if paragraph is empty or only contains a spacer attachment
-            let isOnlySpacer: Bool = trimmed.isEmpty
-            guard !trimmed.isEmpty || isOnlySpacer else {
-                return
-            }
-            let existingMetadata = self.unifiedContentStorage.blockMetadata(at: range.location)
-            // Preserve calorieData from either existingMetadata or text storage attributes
-            let attributes = self.textStorage.attributes(at: range.location, effectiveRange: nil)
-            var preservedCalories = (existingMetadata?.calorieData) ?? (attributes[UnifiedTextContentStorage.calorieDataAttributeName] as? String)
-            if preservedCalories == nil {
-                let randomCalories = Int.random(in: 50...600)
-                preservedCalories = "\(randomCalories) kcal"
-            }
-            var forceTextBlock = false
-            if range.location > 0 {
-                let prevRange = NSRange(location: max(0, range.location - 1), length: 1)
-                if let prevMetadata = self.unifiedContentStorage.blockMetadata(at: prevRange.location), prevMetadata.blockType == .imageText {
-                    forceTextBlock = true
-                }
-            }
-            if existingMetadata == nil || forceTextBlock {
-                let isSpacerBlock = isOnlySpacer
-                // Always force .text if forceTextBlock is true (i.e., after image block)
-                let blockType: UnifiedTextContentStorage.BlockMetadata.BlockType = isSpacerBlock ? .spacer : (forceTextBlock ? .text : (existingMetadata?.blockType == .imageText ? .imageText : .text))
-                let metadata = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: blockType,
-                    blockSpacing: self.defaultBlockSpacing,
-                    imageReference: (blockType == .imageText) ? existingMetadata?.imageReference : nil,
-                    calorieData: preservedCalories
-                )
-                self.unifiedContentStorage.setBlockMetadata(metadata, for: range)
+
+    /// Render the blocks array into the text storage and metadata
+    func renderBlocks(restoreCaretTo caret: Int? = nil) {
+        // Save current caret position if not provided
+        let caretToRestore = caret ?? self.selectedRange.location
+        // Clear the text storage
+        textStorage.setAttributedString(NSAttributedString(string: ""))
+        
+        // Track the current insertion point
+        var currentLocation = 0
+        
+        for block in blocks {
+            switch block.type {
+            case .text(let text):
+                let blockText = text + "\n"
+                let attributedText = NSMutableAttributedString(string: blockText)
+                attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
+                attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
                 let paragraphStyle = NSMutableParagraphStyle()
                 paragraphStyle.paragraphSpacing = 0
-                self.textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
-                metadataAssigned += 1
-                print("📝 Auto-assigned block metadata to paragraph at \(range.location)-\(range.location + range.length): type=\(metadata.blockType), content='\(paragraphString.prefix(30))...'")
-            }
-        }
-        string.enumerateSubstrings(in: safeEnumerateRange, options: [.byParagraphs, .localized]) { (substring, range, enclosingRange, _) in
-            guard let substring = substring, !substring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                return
-            }
-            if self.unifiedContentStorage.blockMetadata(at: range.location) == nil {
-                print("⚠️ WARNING: Paragraph at \(range.location)-\(range.location + range.length) still has no metadata after auto-assignment!")
+                attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
+                textStorage.append(attributedText)
+                // Assign metadata
+                let blockRange = NSRange(location: currentLocation, length: blockText.count)
                 let metadata = UnifiedTextContentStorage.BlockMetadata(
                     blockType: .text,
-                    blockSpacing: self.defaultBlockSpacing,
+                    blockSpacing: defaultBlockSpacing,
+                    imageReference: nil,
+                    calorieData: block.calorieData
+                )
+                unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                currentLocation += blockText.count
+            case .image(let imageData, let imageRef):
+                // Decode UIImage from Data
+                if let image = UIImage(data: imageData) {
+                    let attachment = NSTextAttachment()
+                    attachment.image = image
+                    // Set a default size for the image (customize as needed)
+                    let maxWidth: CGFloat = 200
+                    let aspectRatio = image.size.width > 0 ? image.size.height / image.size.width : 1
+                    let imageHeight = maxWidth * aspectRatio
+                    attachment.bounds = CGRect(x: 0, y: 0, width: maxWidth, height: imageHeight)
+                    let attributedImage = NSAttributedString(attachment: attachment)
+                    let attributedText = NSMutableAttributedString(attributedString: attributedImage)
+                    // Add a newline after the image
+                    attributedText.append(NSAttributedString(string: "\n"))
+                    textStorage.append(attributedText)
+                    // Assign metadata
+                    let blockRange = NSRange(location: currentLocation, length: attributedText.length)
+                    let metadata = UnifiedTextContentStorage.BlockMetadata(
+                        blockType: .imageText,
+                        blockSpacing: defaultBlockSpacing * 2,
+                        imageReference: imageRef,
+                        calorieData: block.calorieData
+                    )
+                    unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                    currentLocation += attributedText.length
+                } else {
+                    // Fallback: show placeholder text if image can't be decoded
+                    let blockText = "[Image]\n"
+                    let attributedText = NSMutableAttributedString(string: blockText)
+                    attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
+                    attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
+                    let paragraphStyle = NSMutableParagraphStyle()
+                    paragraphStyle.paragraphSpacing = 0
+                    attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
+                    textStorage.append(attributedText)
+                    // Assign metadata
+                    let blockRange = NSRange(location: currentLocation, length: blockText.count)
+                    let metadata = UnifiedTextContentStorage.BlockMetadata(
+                        blockType: .imageText,
+                        blockSpacing: defaultBlockSpacing * 2,
+                        imageReference: imageRef,
+                        calorieData: block.calorieData
+                    )
+                    unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                    currentLocation += blockText.count
+                }
+            case .imageText(let imageData, let imageRef, let text):
+                // Do NOT inject image as NSTextAttachment. Only inject the text (placeholder or actual) for the right side.
+                let textString = text + "\n"
+                let attributedText = NSMutableAttributedString(string: textString)
+                attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: textString.count))
+                attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: textString.count))
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.paragraphSpacing = 0
+                attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: textString.count))
+                textStorage.append(attributedText)
+                // Assign metadata
+                let blockRange = NSRange(location: currentLocation, length: attributedText.length)
+                let metadata = UnifiedTextContentStorage.BlockMetadata(
+                    blockType: .imageText,
+                    blockSpacing: defaultBlockSpacing * 2,
+                    imageReference: imageRef,
+                    calorieData: block.calorieData
+                )
+                unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                currentLocation += attributedText.length
+            case .spacer:
+                let blockText = "\n"
+                let attributedText = NSMutableAttributedString(string: blockText)
+                attributedText.addAttribute(.font, value: self.font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
+                attributedText.addAttribute(.foregroundColor, value: self.textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.paragraphSpacing = 0
+                attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
+                textStorage.append(attributedText)
+                // Assign metadata
+                let blockRange = NSRange(location: currentLocation, length: blockText.count)
+                let metadata = UnifiedTextContentStorage.BlockMetadata(
+                    blockType: .spacer,
+                    blockSpacing: defaultSpacerHeight,
                     imageReference: nil,
                     calorieData: nil
                 )
-                self.unifiedContentStorage.setBlockMetadata(metadata, for: range)
-                let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.paragraphSpacing = 0
-                self.textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
-                print("🔧 Force-assigned metadata to paragraph: '\(substring.prefix(30))...'")
+                unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                currentLocation += blockText.count
             }
         }
-        print("🔄 updateParagraphBlocks: Processed \(paragraphsProcessed) paragraphs, assigned metadata to \(metadataAssigned) new blocks")
-        currentBlockStructure = blockStructure
-        needsExclusionPathUpdate = true
+        // After rendering, force layout and display update
         setNeedsLayout()
         setNeedsDisplay()
+        // Restore caret position if possible
+        let newCaret = min(caretToRestore, textStorage.length)
+        self.selectedRange = NSRange(location: newCaret, length: 0)
     }
-    
-    /// Clean up metadata and image views for text ranges that no longer exist
-    internal func cleanupOrphanedMetadata(changedRange: NSRange? = nil) {
-        var validImageRefs = Set<UUID>()
-        var validBlockKeys = Set<String>()
-        let string = textStorage.string as NSString
-        let enumerateRange = changedRange ?? NSRange(location: 0, length: string.length)
-        if string.length > 0 {
-            string.enumerateSubstrings(in: enumerateRange, options: [.byParagraphs, .localized]) { (substring, range, enclosingRange, _) in
-                guard let substring = substring, !substring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    return
-                }
-                if let metadata = self.unifiedContentStorage.blockMetadata(at: range.location) {
-                    let blockKey = "\(range.location):\(range.length)"
-                    validBlockKeys.insert(blockKey)
-                    if metadata.blockType == .imageText, let imageRef = metadata.imageReference {
-                        validImageRefs.insert(imageRef)
-                    }
-                }
-            }
-        }
-        // Remove image views for orphaned image references (only in changed range if provided)
-        var imagesToRemove: [UUID] = []
-        for (imageRef, imageView) in imageViews {
-            if !validImageRefs.contains(imageRef) {
-                imageView.removeFromSuperview()
-                imagesToRemove.append(imageRef)
-            }
-        }
-        for imageRef in imagesToRemove {
-            imageViews.removeValue(forKey: imageRef)
-        }
-        // Remove background views for orphaned block keys (only in changed range if provided)
-        var backgroundsToRemove: [String] = []
-        for (blockKey, backgroundView) in blockBackgroundViews {
-            if !validBlockKeys.contains(blockKey) && !blockKey.contains("_separator") {
-                backgroundView.removeFromSuperview()
-                backgroundsToRemove.append(blockKey)
-                let separatorKey = blockKey + "_separator"
-                if let separatorView = blockBackgroundViews[separatorKey] {
-                    separatorView.removeFromSuperview()
-                    backgroundsToRemove.append(separatorKey)
-                }
-            }
-        }
-        for backgroundKey in backgroundsToRemove {
-            blockBackgroundViews.removeValue(forKey: backgroundKey)
-        }
+
+    /// Add a new text block to the model and re-render
+    func addTextBlockModel(_ text: String, calorieData: String? = nil) {
+        var currentBlocks = self.blocks
+        let block = Block(type: .text(text), calorieData: calorieData)
+        currentBlocks.append(block)
+        self.blocks = currentBlocks
+        renderBlocks()
     }
-    
-    // MARK: - Calorie Management
-    
-    /// Update calorie data for the block at the given location
-    func updateCalorieData(_ calories: String, at location: Int) {
-        guard let metadata = unifiedContentStorage.blockMetadata(at: location) else { return }
-        
-        // Find the paragraph range
-        var paragraphRange = NSRange(location: 0, length: 0)
-        unifiedContentStorage.enumerateParagraphs { range, blockMetadata in
-            if NSLocationInRange(location, range) {
-                paragraphRange = range
-                return
-            }
-        }
-        
-        // Update metadata
-        var updatedMetadata = metadata
-        updatedMetadata.calorieData = calories
-        unifiedContentStorage.setBlockMetadata(updatedMetadata, for: paragraphRange)
-        
-        // Trigger redraw
-        setNeedsDisplay()
+
+    /// Add a new image block to the model and re-render
+    func addImageBlockModel(_ image: UIImage, text: String = "Enter description...", calorieData: String? = nil) {
+        guard let imageData = image.pngData() else { return }
+        var currentBlocks = self.blocks
+        let block = Block(type: .imageText(imageData, UUID(), text), calorieData: calorieData)
+        currentBlocks.append(block)
+        self.blocks = currentBlocks
+        renderBlocks()
     }
+
+    /// Add a new spacer block to the model and re-render
+    func addSpacerBlockModel() {
+        var currentBlocks = self.blocks
+        let block = Block(type: .spacer, calorieData: nil)
+        currentBlocks.append(block)
+        self.blocks = currentBlocks
+        renderBlocks()
+    }
+}
+
+private struct AssociatedKeys {
+    static var blocks = "UnifiedTextView_blocks"
 } 

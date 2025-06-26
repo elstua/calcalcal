@@ -1,56 +1,52 @@
 import SwiftUI
 import UIKit
 
-/// Proxy class to expose UnifiedTextView methods to SwiftUI
-class UnifiedTextEditorProxy: ObservableObject {
-    weak var textView: UnifiedTextView?
-    
-    func addTextBlock(_ text: String, calorieData: String? = nil) {
-        textView?.addTextBlock(text, calorieData: calorieData)
-    }
-    
-    func addImageBlock(_ text: String = "This is an image block with text flowing alongside. The image takes up 30% of the width while the text uses the remaining 70%.", imageReference: UUID? = nil, calorieData: String? = nil) {
-        textView?.addImageBlock(text, imageReference: imageReference, calorieData: calorieData)
-    }
-}
-
 /// SwiftUI wrapper for the unified text editor
 struct UnifiedTextEditor: UIViewRepresentable {
     
-    @Binding var text: String
+    @Binding var blocks: [Block]
     var imageMap: [UUID: UIImage] = [:]
-    var onTextChange: ((String) -> Void)?
+    var onBlocksChange: (([Block]) -> Void)?
     var defaultBlockSpacing: CGFloat = 32
-    var proxy: UnifiedTextEditorProxy?
     
     func makeUIView(context: Context) -> UnifiedTextView {
         let textView = UnifiedTextView()
         textView.defaultBlockSpacing = defaultBlockSpacing
-        textView.text = text
+        textView.blocks = blocks
         textView.imageMap = imageMap
-        proxy?.textView = textView
+        textView.delegate = context.coordinator
+        print("[makeUIView] Initial blocks: \(blocks)")
+        textView.renderBlocks()
+        print("[makeUIView] Called renderBlocks()")
         return textView
     }
     
     func updateUIView(_ textView: UnifiedTextView, context: Context) {
-        // Update text if it changed externally
-        if textView.text != text {
-            textView.text = text
-            
-            // If text was cleared externally, force cleanup of all visual elements
-            if text.isEmpty {
-                // Force update to clean up image views and metadata
-                DispatchQueue.main.async {
-                    textView.setNeedsLayout()
-                    textView.layoutIfNeeded()
-                }
-            }
+        // Only update if the change is external
+        if textView.blocks != blocks {
+            print("[updateUIView] Updating blocks: \(blocks)")
+            textView.blocks = blocks
+            textView.renderBlocks()
+            print("[updateUIView] Called renderBlocks()")
         }
         textView.imageMap = imageMap
     }
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
+    }
+    
+    /// Syncs the blocks array from the UITextView's content and metadata
+    func updateBlocksFromTextStorage(_ textView: UnifiedTextView) {
+        // This is a placeholder implementation. You should parse the textView's content and metadata to reconstruct blocks.
+        // For now, we just assign textView.blocks to the binding.
+        let newBlocks = textView.blocks
+        if newBlocks != blocks {
+            DispatchQueue.main.async {
+                self.blocks = newBlocks
+                self.onBlocksChange?(newBlocks)
+            }
+        }
     }
     
     class Coordinator: NSObject, UITextViewDelegate {
@@ -61,10 +57,9 @@ struct UnifiedTextEditor: UIViewRepresentable {
         }
         
         func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
-            parent.onTextChange?(textView.text)
-            
-            // The UnifiedTextView already handles block updates internally
+            guard let unifiedTextView = textView as? UnifiedTextView else { return }
+            unifiedTextView.textViewDidChange(textView)
+            parent.updateBlocksFromTextStorage(unifiedTextView)
         }
     }
 }
@@ -79,15 +74,9 @@ extension UnifiedTextEditor {
         return editor
     }
     
-    func onTextChange(_ action: @escaping (String) -> Void) -> UnifiedTextEditor {
+    func onBlocksChange(_ action: @escaping ([Block]) -> Void) -> UnifiedTextEditor {
         var editor = self
-        editor.onTextChange = action
-        return editor
-    }
-    
-    func proxy(_ proxy: UnifiedTextEditorProxy) -> UnifiedTextEditor {
-        var editor = self
-        editor.proxy = proxy
+        editor.onBlocksChange = action
         return editor
     }
 } 

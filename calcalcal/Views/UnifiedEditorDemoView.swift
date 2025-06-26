@@ -2,26 +2,50 @@ import SwiftUI
 import UIKit
 
 struct UnifiedEditorDemoView: View {
-    @State private var editorText = """
-    Welcome to the Unified Text Editor!
-    This is a paragraph that acts as a block. Each paragraph is automatically treated as a separate block with spacing.
-    You can type naturally and press Enter to create new blocks. The editor maintains a continuous text flow while preserving block structure.
-    Try editing this text and see how the blocks update automatically!
-    """
+    @State private var blocks: [Block] = [
+        Block(type: .text("Welcome to the Unified Text Editor!"), calorieData: nil),
+        Block(type: .text("This is a paragraph that acts as a block. Each paragraph is automatically treated as a separate block with spacing."), calorieData: nil),
+        Block(type: .text("You can type naturally and press Enter to create new blocks. The editor maintains a continuous text flow while preserving block structure."), calorieData: nil),
+        Block(type: .text("Try editing this text and see how the blocks update automatically!"), calorieData: nil)
+    ]
     
     @State private var showingCalorieInput = false
     @State private var selectedBlockLocation = 0
-    @StateObject private var editorProxy = UnifiedTextEditorProxy()
     @State private var showGalleryOverlay = false
     @State private var selectedGalleryImage: UIImage? = nil
     @State private var overlayImageFrame: CGRect? = nil
     @State private var destinationFrame: CGRect? = nil
     @State private var isAnimatingImage = false
     @State private var imageMap: [UUID: UIImage] = [:]
+    @State private var debugLastAction: String = ""
+    @State private var debugLastImageUUID: UUID? = nil
+    @State private var debugLastTextFlow: String = ""
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
+                // Debug Info Overlay
+                if !debugLastAction.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("[DEBUG]")
+                            .font(.caption).bold()
+                        Text("Last Action: \(debugLastAction)")
+                            .font(.caption2)
+                        if let uuid = debugLastImageUUID {
+                            Text("Last Image UUID: \(uuid.uuidString.prefix(8))...")
+                                .font(.caption2)
+                        }
+                        if !debugLastTextFlow.isEmpty {
+                            Text("TextFlow: \(debugLastTextFlow.prefix(40))...")
+                                .font(.caption2)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.yellow.opacity(0.2))
+                    .cornerRadius(8)
+                    .padding([.top, .horizontal])
+                }
+                
                 // Editor Header
                 HStack {
                     Text("Block-Based Editor")
@@ -34,7 +58,7 @@ struct UnifiedEditorDemoView: View {
                         Label("Add Image", systemImage: "photo")
                     }
                     
-
+                    
                     Button(action: { showGalleryOverlay = true }) {
                         Label("Gallery", systemImage: "photo.on.rectangle")
                     }
@@ -49,11 +73,11 @@ struct UnifiedEditorDemoView: View {
                 )
                 
                 // Unified Text Editor
-                UnifiedTextEditor(text: $editorText, imageMap: imageMap)
+                UnifiedTextEditor(blocks: $blocks, imageMap: imageMap)
                     .blockSpacing(20)
-                    .proxy(editorProxy)
-                    .onTextChange { text in
-                        print("Text changed: \(text.count) characters")
+                    .onBlocksChange { updatedBlocks in
+                        print("Blocks changed: \(updatedBlocks.count) blocks")
+                        self.debugLastAction = "onBlocksChange"
                     }
                 
                 // Bottom Toolbar
@@ -64,7 +88,7 @@ struct UnifiedEditorDemoView: View {
                     
                     Spacer()
                     
-                    Text("Blocks: \(countBlocks())")
+                    Text("Blocks: \(blocks.count)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -103,18 +127,21 @@ struct UnifiedEditorDemoView: View {
                             Spacer()
                         }
                         GalleryView(onImageTap: { uiImage, frame in
-                            let uuid = UUID()
-                            imageMap[uuid] = uiImage
-                            editorProxy.addImageBlock(imageReference: uuid)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                if let textView = editorProxy.textView {
-                                    editorText = textView.text
-                                }
-                            }
+                            let randomCalories = Int.random(in: 50...600)
+                            let calorieString = "\(randomCalories) kcal"
+                            debugLastAction = "Add Image (gallery)"
+                            let newUUID = UUID()
+                            debugLastImageUUID = newUUID
+                            // Use the new imageText block type with placeholder text
+                            let newBlock = Block(type: .imageText(uiImage.pngData()!, newUUID, "Enter description..."), calorieData: calorieString)
+                            self.blocks.append(newBlock)
+                            self.imageMap[newUUID] = uiImage
+
                             selectedGalleryImage = uiImage
                             overlayImageFrame = frame
                             showGalleryOverlay = false
                             isAnimatingImage = true
+                            print("[DEBUG] Gallery image selected")
                         })
                         .frame(maxHeight: 400)
                         .background(Color.clear)
@@ -127,15 +154,15 @@ struct UnifiedEditorDemoView: View {
     // MARK: - Helper Functions
     
     private func countBlocks() -> Int {
-        // Use the actual text view's block analysis if available
-        if let textView = editorProxy.textView {
-            let analysis = textView.getBlockAnalysis()
-            return analysis.totalBlocks
+        return blocks.count
+    }
+    
+    private func showBlockInfo() {
+        print("=== Block Information ===")
+        for (index, block) in blocks.enumerated() {
+             print("Block \(index + 1): \(block)")
         }
-        
-        // Fallback to simple paragraph counting
-        let paragraphs = editorText.components(separatedBy: "\n\n")
-        return paragraphs.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+        print("Total blocks: \(blocks.count)")
     }
     
     private func addSampleBlock() {
@@ -148,66 +175,32 @@ struct UnifiedEditorDemoView: View {
         let randomText = sampleTexts.randomElement() ?? ""
         let randomCalories = Int.random(in: 50...600)
         let calorieString = "\(randomCalories) kcal"
-        editorProxy.addTextBlock(randomText, calorieData: calorieString)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if let textView = editorProxy.textView {
-                editorText = textView.text
-            }
-        }
+        
+        let newBlock = Block(type: .text(randomText), calorieData: calorieString)
+        self.blocks.append(newBlock)
     }
     
     private func addImageBlock() {
-        let uuid = UUID()
-        // No image added to imageMap, so UIKit will show the placeholder
         let randomCalories = Int.random(in: 50...600)
         let calorieString = "\(randomCalories) kcal"
-        editorProxy.addImageBlock(imageReference: uuid, calorieData: calorieString)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            if let textView = editorProxy.textView {
-                editorText = textView.text
-            }
+        if let image = UIImage(systemName: "photo") {
+            let newUUID = UUID()
+            // Use the new imageText block type with placeholder text
+            let newBlock = Block(type: .imageText(image.pngData()!, newUUID, "Enter description..."), calorieData: calorieString)
+            self.blocks.append(newBlock)
+            self.imageMap[newUUID] = image
+            debugLastAction = "Add Image (button)"
+            debugLastImageUUID = newUUID
         }
-    }
-    
-    private func showBlockInfo() {
-        let blocks = editorText.components(separatedBy: "\n\n")
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        
-        print("=== Block Information ===")
-        for (index, block) in blocks.enumerated() {
-            print("Block \(index + 1): \(block.prefix(50))...")
-        }
-        print("Total blocks: \(blocks.count)")
     }
     
     private func clearAllText() {
-        editorText = ""
-    }
-    
-    private func debugBlocks() {
-        print("\n🐞 DEBUG BLOCKS REQUESTED")
-        
-        // Print analysis from the actual text view
-        if let textView = editorProxy.textView {
-            textView.printBlockAnalysis()
-        } else {
-            print("❌ No text view available in proxy")
-        }
-        
-        // Also show the SwiftUI binding text analysis
-        print("SwiftUI Binding Text Analysis:")
-        print("  Full text length: \(editorText.count)")
-        print("  Number of \\n\\n separators: \(editorText.components(separatedBy: "\n\n").count - 1)")
-        
-        let paragraphs = editorText.components(separatedBy: "\n\n")
-        for (index, paragraph) in paragraphs.enumerated() {
-            let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                print("  SwiftUI Paragraph \(index + 1): '\(trimmed.prefix(50))...'")
-            } else {
-                print("  SwiftUI Paragraph \(index + 1): [EMPTY]")
-            }
-        }
+        blocks.removeAll()
+        imageMap.removeAll()
+        debugLastAction = "Clear All Text"
+        debugLastImageUUID = nil
+        debugLastTextFlow = ""
+        print("[DEBUG] Cleared all text")
     }
 }
 
@@ -231,4 +224,5 @@ extension Image {
         }
         return nil
     }
-} 
+}
+

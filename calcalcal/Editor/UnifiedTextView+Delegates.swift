@@ -27,7 +27,7 @@ extension UnifiedTextView {
         // Update blocks immediately on EVERY character change
         // This prevents bugs caused by delayed updates
         DispatchQueue.main.async {
-            self.updateParagraphBlocks(changedRange: editedRange)
+
             // After updating, re-apply image block metadata to paragraphs that are still image blocks
             let string = self.textStorage.string as NSString
             self.unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
@@ -62,108 +62,145 @@ extension UnifiedTextView {
 
 extension UnifiedTextView {
     
+    /// Helper to create a text block with placeholder calorieData
+    func makeTextBlock(_ text: String) -> Block {
+        // Placeholder for calorieData, can be replaced with real logic later
+        return Block(type: .text(text), calorieData: "placeholder")
+    }
+    
     func textViewDidChange(_ textView: UITextView) {
-        print("📝 Text view did change - triggering immediate block update")
-        
-        // Update paragraph blocks immediately on every change
-        updateParagraphBlocks()
-        
-        // Check if current cursor is in an image block
-        let currentLocation = selectedRange.location
-        var isInImageBlock = false
-        
-        if currentLocation > 0 && currentLocation <= textStorage.length {
-            if let metadata = unifiedContentStorage.blockMetadata(at: currentLocation) {
-                isInImageBlock = metadata.blockType == .imageText
-            }
-        }
-        
-        if isInImageBlock {
-            // For image blocks, force aggressive layout updates to ensure text flows correctly
-            print("🖼️ Text change in image block - forcing complete layout update")
-            
-            // Use a micro-delay to ensure text storage changes are processed first
-            DispatchQueue.main.async {
-                // Force complete layout recalculation
-                self.updateExclusionPaths()
-                
-                // Force immediate processing
-                self.layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: self.textStorage.length), actualCharacterRange: nil)
-                if self.textStorage.length > 0 {
-                    self.layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: self.textStorage.length))
+        print("📝 textViewDidChange called")
+        print("Current textStorage: \(textStorage.string)")
+        // Parse the text storage into blocks and update the model
+        let string = textStorage.string as NSString
+        var newBlocks: [Block] = []
+        var location = 0
+        while location < string.length {
+            var paragraphStart = 0
+            var paragraphEnd = 0
+            var contentsEnd = 0
+            string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+            let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
+            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
+            print("Detected paragraph: '", paragraphText, "' at range: ", paragraphRange)
+            if let metadata = unifiedContentStorage.blockMetadata(at: paragraphStart) {
+                switch metadata.blockType {
+                case .text:
+                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData))
+                case .imageText:
+                    if let imageRef = metadata.imageReference, let image = imageMap[imageRef], let imageData = image.pngData() {
+                        // Preserve both image and text
+                        newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData))
+                    }
+                case .spacer:
+                    newBlocks.append(Block(type: .spacer, calorieData: nil))
                 }
-                
-                // Update visual elements
-                self.updateImageViews()
-                self.updateBlockBackgroundViews()
-                
-                // Force synchronous layout
-                self.setNeedsLayout()
-                self.layoutIfNeeded()
-                self.setNeedsDisplay()
-                
-                self.needsExclusionPathUpdate = false
+            } else {
+                // Fallback: treat as text block
+                newBlocks.append(makeTextBlock(paragraphText))
             }
+            location = paragraphEnd
+        }
+        if newBlocks != self.blocks {
+            print("Updating blocks array. New blocks: \(newBlocks)")
+            self.blocks = newBlocks
+            renderBlocks()
         } else {
-            // Force immediate redraw and layout updates for other blocks
-            setNeedsDisplay()
-            setNeedsLayout()
-            
-            // Ensure exclusion paths are updated
-            needsExclusionPathUpdate = true
+            print("No change to blocks array.")
         }
     }
     
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         print("🎯 Text will change: range=\(range), text='\(text)'")
-        
-        // Pre-emptively prepare for the change
-        // This helps ensure we're ready for the update
-        
-        // Handle Enter key press
+        // Handle Enter key press in a model-driven way
         if text == "\n" {
-            // Check if we're at the end of an image block
-            let currentLocation = range.location
-            let currentMetadata = unifiedContentStorage.blockMetadata(at: currentLocation)
-            
-            if let metadata = currentMetadata, metadata.blockType == .imageText {
-                // Check if we're at or near the end of the paragraph
-                var paragraphEnd = 0
-                let string = textStorage.string as NSString
-                string.getParagraphStart(nil, end: &paragraphEnd, contentsEnd: nil, 
-                                       for: NSRange(location: currentLocation, length: 0))
-                
-                // If we're at the end of the paragraph or close to it
-                if currentLocation >= paragraphEnd - 2 {
-                    // Create a new text block instead of continuing the image block
-                    DispatchQueue.main.async {
-                        let oldLength = self.textStorage.length
-                        self.addTextBlock("")
-                        self.updateParagraphBlocks()
-                        // Move caret to the start of the new block
-                        let newLength = self.textStorage.length
-                        let diff = newLength - oldLength
-                        if diff > 0 {
-                            self.selectedRange = NSRange(location: newLength - diff, length: 0)
-                        }
-                        self.scrollRangeToVisible(self.selectedRange)
+            let cursorLocation = range.location
+            // Find the block index and offset
+            let string = textStorage.string as NSString
+            var blockIndex: Int? = nil
+            var blockStart = 0
+            var blockEnd = 0
+            var runningLocation = 0
+            for (i, block) in blocks.enumerated() {
+                switch block.type {
+                case .text(let blockText):
+                    let blockLength = (blockText + "\n").count
+                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
+                        blockIndex = i
+                        blockStart = runningLocation
+                        blockEnd = runningLocation + blockLength
+                        break
                     }
-                    return false // Prevent the default newline behavior
+                    runningLocation += blockLength
+                case .image(let data, let uuid):
+                    // Image blocks are 1 char (attachment) + newline
+                    let blockLength = 2
+                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
+                        blockIndex = i
+                        blockStart = runningLocation
+                        blockEnd = runningLocation + blockLength
+                        break
+                    }
+                    runningLocation += blockLength
+                case .imageText(let data, let uuid, let text):
+                    // Treat as a single block (1 char + text + newline)
+                    let blockLength = (text + "\n").count + 1
+                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
+                        blockIndex = i
+                        blockStart = runningLocation
+                        blockEnd = runningLocation + blockLength
+                        break
+                    }
+                    runningLocation += blockLength
+                case .spacer:
+                    let blockLength = 1 // newline
+                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
+                        blockIndex = i
+                        blockStart = runningLocation
+                        blockEnd = runningLocation + blockLength
+                        break
+                    }
+                    runningLocation += blockLength
                 }
-            } else {
-                // Insert a spacer, then a new paragraph
-                addSpacerBlock()
-                let newline = NSAttributedString(string: "\n")
-                textStorage.insert(newline, at: selectedRange.location)
-                // Set font and paragraph style for the new paragraph
-                let font = self.font ?? UIFont.systemFont(ofSize: 16)
-                let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.paragraphSpacing = 0
-                let newParagraphRange = NSRange(location: selectedRange.location, length: 1)
-                textStorage.addAttribute(.font, value: font, range: newParagraphRange)
-                textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: newParagraphRange)
-                selectedRange = NSRange(location: selectedRange.location + 1, length: 0)
-                return false // Prevent default behavior
+                if blockIndex != nil { break }
+            }
+            guard let idx = blockIndex else { return true }
+            var newBlocks = blocks
+            switch blocks[idx].type {
+            case .text(let blockText):
+                // Split the text at the cursor offset
+                let offsetInBlock = cursorLocation - blockStart
+                let nsBlockText = blockText as NSString
+                let left = nsBlockText.substring(to: max(0, min(offsetInBlock, nsBlockText.length)))
+                let right = nsBlockText.substring(from: max(0, min(offsetInBlock, nsBlockText.length)))
+                // Replace current block with left, insert new block with right
+                newBlocks[idx] = makeTextBlock(left)
+                newBlocks.insert(makeTextBlock(right), at: idx + 1)
+                self.blocks = newBlocks
+                let caretLocation = blockStart + (left as NSString).length + 1 // +1 for newline
+                renderBlocks(restoreCaretTo: caretLocation)
+                return false
+            case .image(let data, let uuid):
+                // Insert a new empty text block after the image
+                newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                self.blocks = newBlocks
+                let caretLocation = blockEnd + 1
+                renderBlocks(restoreCaretTo: caretLocation)
+                return false
+            case .imageText(let data, let uuid, let text):
+                // Insert a new empty text block after the imageText block
+                newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                self.blocks = newBlocks
+                let caretLocation = blockEnd + 1
+                renderBlocks(restoreCaretTo: caretLocation)
+                return false
+            case .spacer:
+                // Insert a new empty text block after the spacer
+                newBlocks.insert(makeTextBlock(""), at: idx + 1)
+                self.blocks = newBlocks
+                let caretLocation = blockEnd + 1
+                renderBlocks(restoreCaretTo: caretLocation)
+                return false
             }
         }
         
@@ -184,11 +221,6 @@ extension UnifiedTextView {
                     // The text storage delegate will clean up the metadata
                 }
             }
-        }
-        
-        // Schedule immediate update after this change completes
-        DispatchQueue.main.async {
-            self.updateParagraphBlocks()
         }
         
         return true

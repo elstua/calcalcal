@@ -137,54 +137,6 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
         drawCalorieLabels(in: rect)
     }
     
-    // MARK: - Delete Handling
-    
-    override func deleteBackward() {
-        let currentRange = selectedRange
-        if currentRange.length == 0 && currentRange.location > 0 {
-            let string = textStorage.string as NSString
-            var paragraphStart = 0
-            var paragraphEnd = 0
-            string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: nil, for: NSRange(location: currentRange.location, length: 0))
-            // Check if previous block is a spacer block
-            if currentRange.location == paragraphStart && paragraphStart > 0 {
-                // Get previous paragraph range
-                var prevParagraphStart = 0
-                var prevParagraphEnd = 0
-                string.getParagraphStart(&prevParagraphStart, end: &prevParagraphEnd, contentsEnd: nil, for: NSRange(location: max(0, paragraphStart - 1), length: 0))
-                let prevMetadata = unifiedContentStorage.blockMetadata(at: prevParagraphStart)
-                if let meta = prevMetadata, meta.blockType == .spacer {
-                    // Delete the spacer block
-                    textStorage.deleteCharacters(in: NSRange(location: prevParagraphStart, length: prevParagraphEnd - prevParagraphStart))
-                    selectedRange = NSRange(location: prevParagraphStart, length: 0)
-                    updateParagraphBlocks()
-                    return
-                }
-            }
-        }
-        // Check if we're at the beginning of an image block
-        if currentRange.length == 0 && currentRange.location > 0 {
-            let currentLocation = currentRange.location
-            var paragraphStart = 0
-            var paragraphEnd = 0
-            let string = textStorage.string as NSString
-            string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: nil,
-                                   for: NSRange(location: currentLocation, length: 0))
-            let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
-            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            if let metadata = unifiedContentStorage.blockMetadata(at: currentLocation),
-               metadata.blockType == .imageText,
-               paragraphText.isEmpty {
-                textStorage.deleteCharacters(in: paragraphRange)
-                let newLocation = max(0, paragraphStart - 1)
-                selectedRange = NSRange(location: newLocation, length: 0)
-                updateParagraphBlocks()
-                return
-            }
-        }
-        super.deleteBackward()
-    }
-    
     // MARK: - Caret Rect Customization
     override func caretRect(for position: UITextPosition) -> CGRect {
         var rect = super.caretRect(for: position)
