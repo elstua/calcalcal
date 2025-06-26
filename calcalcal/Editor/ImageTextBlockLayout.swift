@@ -46,4 +46,67 @@ class ImageTextBlockLayout: BlockLayoutProviding {
         let calorieAreaWidth = remainingWidth * 0.30
         return remainingWidth - calorieAreaWidth - view.textContainer.lineFragmentPadding * 2
     }
+}
+
+extension ImageTextBlockLayout {
+    /// Creates an attributed string and metadata for an image block
+    static func attributedStringForImageBlock(imageData: Data, imageRef: UUID, font: UIFont?, textColor: UIColor?, defaultBlockSpacing: CGFloat, calorieData: String?) -> (NSAttributedString, UnifiedTextContentStorage.BlockMetadata) {
+        if let image = UIImage(data: imageData) {
+            let attachment = NSTextAttachment()
+            attachment.image = image
+            let maxWidth: CGFloat = 200
+            let aspectRatio = image.size.width > 0 ? image.size.height / image.size.width : 1
+            let imageHeight = maxWidth * aspectRatio
+            attachment.bounds = CGRect(x: 0, y: 0, width: maxWidth, height: imageHeight)
+            let attributedImage = NSAttributedString(attachment: attachment)
+            let attributedText = NSMutableAttributedString(attributedString: attributedImage)
+            attributedText.append(NSAttributedString(string: "\n"))
+            let metadata = UnifiedTextContentStorage.BlockMetadata(
+                blockType: .imageText,
+                blockSpacing: defaultBlockSpacing * 2,
+                imageReference: imageRef,
+                calorieData: calorieData
+            )
+            return (attributedText, metadata)
+        } else {
+            let blockText = "[Image]\n"
+            let attributedText = NSMutableAttributedString(string: blockText)
+            attributedText.addAttribute(.font, value: font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: blockText.count))
+            attributedText.addAttribute(.foregroundColor, value: textColor ?? UIColor.label, range: NSRange(location: 0, length: blockText.count))
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.paragraphSpacing = 0
+            attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
+            let metadata = UnifiedTextContentStorage.BlockMetadata(
+                blockType: .imageText,
+                blockSpacing: defaultBlockSpacing * 2,
+                imageReference: imageRef,
+                calorieData: calorieData
+            )
+            return (attributedText, metadata)
+        }
+    }
+
+    /// Creates an attributed string and metadata for an imageText block (text only, image handled by layout)
+    static func attributedStringForImageTextBlock(text: String, imageRef: UUID, font: UIFont?, textColor: UIColor?, defaultBlockSpacing: CGFloat, calorieData: String?) -> (NSAttributedString, UnifiedTextContentStorage.BlockMetadata) {
+        let textString = text + "\n"
+        let attributedText = NSMutableAttributedString(string: textString)
+        attributedText.addAttribute(.font, value: font ?? UIFont.systemFont(ofSize: 16), range: NSRange(location: 0, length: textString.count))
+        attributedText.addAttribute(.foregroundColor, value: textColor ?? UIColor.label, range: NSRange(location: 0, length: textString.count))
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.paragraphSpacing = 0
+        attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: textString.count))
+        let metadata = UnifiedTextContentStorage.BlockMetadata(
+            blockType: .imageText,
+            blockSpacing: defaultBlockSpacing * 2,
+            imageReference: imageRef,
+            calorieData: calorieData
+        )
+        return (attributedText, metadata)
+    }
+
+    /// Helper to create a new imageText block
+    static func createImageTextBlock(image: UIImage, text: String = "Enter description...", calorieData: String? = nil) -> Block? {
+        guard let imageData = image.pngData() else { return nil }
+        return Block(type: .imageText(imageData, UUID(), text), calorieData: calorieData)
+    }
 } 
