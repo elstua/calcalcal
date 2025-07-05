@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Calcalcal is IOS calorie tracker app that give user opportunity to log food in any simple language and form. With help of LLMs it recieve this context and count amount of calories in every food.
+
+# inside project
+
+tbd
+
+# architecture overview
+
+# mapping with backend
