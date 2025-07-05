@@ -1,3 +1,4 @@
+// This file will be moved to calcalcal/Models/BlockModel.swift for shared access.
 //
 // BlockModel.swift
 //
