@@ -6,6 +6,7 @@ import Foundation
 struct SmallEntryBlock: View {
     let entry: DiaryEntry
     var onTap: (() -> Void)? = nil
+    var isEditable: Bool = false
     
     var body: some View {
         Button(action: {
@@ -79,16 +80,14 @@ struct SmallEntryBlock_Previews: PreviewProvider {
             aiGeneratedSummary: "Lunch: salad, apple."
         )
         var body: some View {
-            SmallEntryBlock(entry: entry) {
-                showSheet = true
-            }
-            .sheet(isPresented: $showSheet) {
-                BigEntryBlock(entry: entry)
-                    .padding()
-                    .background(Color(.systemGroupedBackground))
-            }
-            .padding()
-            .background(Color(.systemGroupedBackground))
+            SmallEntryBlock(entry: entry, onTap: { showSheet = true }, isEditable: false)
+                .sheet(isPresented: $showSheet) {
+                    BigEntryBlock(entry: entry, isEditable: true)
+                        .padding()
+                        .background(Color(.systemGroupedBackground))
+                }
+                .padding()
+                .background(Color(.systemGroupedBackground))
         }
     }
     static var previews: some View {

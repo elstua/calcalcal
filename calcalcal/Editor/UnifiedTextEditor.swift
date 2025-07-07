@@ -8,6 +8,24 @@ struct UnifiedTextEditor: UIViewRepresentable {
     var imageMap: [UUID: UIImage] = [:]
     var onBlocksChange: (([Block]) -> Void)?
     var defaultBlockSpacing: CGFloat = 32
+    var isEditable: Bool = true
+    @Binding var shouldBecomeFirstResponder: Bool
+    
+    init(
+        blocks: Binding<[Block]>,
+        imageMap: [UUID: UIImage] = [:],
+        onBlocksChange: (([Block]) -> Void)? = nil,
+        defaultBlockSpacing: CGFloat = 32,
+        isEditable: Bool = true,
+        shouldBecomeFirstResponder: Binding<Bool> = .constant(false)
+    ) {
+        self._blocks = blocks
+        self.imageMap = imageMap
+        self.onBlocksChange = onBlocksChange
+        self.defaultBlockSpacing = defaultBlockSpacing
+        self.isEditable = isEditable
+        self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+    }
     
     func makeUIView(context: Context) -> UnifiedTextView {
         let textView = UnifiedTextView()
@@ -15,9 +33,16 @@ struct UnifiedTextEditor: UIViewRepresentable {
         textView.blocks = blocks
         textView.imageMap = imageMap
         textView.delegate = context.coordinator
+        textView.isEditable = isEditable
         print("[makeUIView] Initial blocks: \(blocks)")
         textView.renderBlocks()
         print("[makeUIView] Called renderBlocks()")
+        if shouldBecomeFirstResponder {
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+                self.shouldBecomeFirstResponder = false
+            }
+        }
         return textView
     }
     
@@ -30,6 +55,13 @@ struct UnifiedTextEditor: UIViewRepresentable {
             print("[updateUIView] Called renderBlocks()")
         }
         textView.imageMap = imageMap
+        textView.isEditable = isEditable
+        if shouldBecomeFirstResponder {
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+                self.shouldBecomeFirstResponder = false
+            }
+        }
     }
     
     func makeCoordinator() -> Coordinator {

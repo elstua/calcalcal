@@ -14,6 +14,8 @@ struct BigEntryBlock: View {
     var onTap: (() -> Void)? = nil
     // For now, imageMap is empty; can be extended for real images
     var imageMap: [UUID: UIImage] = [:]
+    var isEditable: Bool = false
+    @Binding var shouldBecomeFirstResponder: Bool
     
     @State private var isExpanded: Bool = false
     @State private var blocks: [Block]
@@ -24,7 +26,9 @@ struct BigEntryBlock: View {
          showShadow: Bool = true,
          onAddImage: (() -> Void)? = nil,
          onTap: (() -> Void)? = nil,
-         imageMap: [UUID: UIImage] = [:]) {
+         imageMap: [UUID: UIImage] = [:],
+         isEditable: Bool = false,
+         shouldBecomeFirstResponder: Binding<Bool> = .constant(false)) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
@@ -32,6 +36,8 @@ struct BigEntryBlock: View {
         self.onAddImage = onAddImage
         self.onTap = onTap
         self.imageMap = imageMap
+        self.isEditable = isEditable
+        self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
         _blocks = State(initialValue: entry.blocks)
     }
     
@@ -47,7 +53,7 @@ struct BigEntryBlock: View {
             .padding([.top, .horizontal])
             
             // Always show the full editor
-            UnifiedTextEditor(blocks: $blocks, imageMap: imageMap)
+            UnifiedTextEditor(blocks: $blocks, imageMap: imageMap, isEditable: isEditable, shouldBecomeFirstResponder: $shouldBecomeFirstResponder)
                 .blockSpacing(20)
                 .frame(maxHeight: .infinity)
                 .padding(.horizontal)
@@ -89,17 +95,20 @@ struct BigEntryBlockWithSheet: View {
     var cornerRadius: CGFloat = 24
     var showShadow: Bool = true
     var imageMap: [UUID: UIImage] = [:]
+    var isEditable: Bool = false
     
     init(entry: DiaryEntry,
          height: CGFloat = 550,
          cornerRadius: CGFloat = 24,
          showShadow: Bool = true,
-         imageMap: [UUID: UIImage] = [:]) {
+         imageMap: [UUID: UIImage] = [:],
+         isEditable: Bool = false) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
         self.showShadow = showShadow
         self.imageMap = imageMap
+        self.isEditable = isEditable
         _blocks = State(initialValue: entry.blocks)
     }
     
@@ -118,7 +127,8 @@ struct BigEntryBlockWithSheet: View {
             showShadow: showShadow,
             onAddImage: {},
             onTap: { showSheet = true },
-            imageMap: imageMap
+            imageMap: imageMap,
+            isEditable: isEditable
         )
         .fullScreenCover(isPresented: $showSheet) {
             NavigationView {
@@ -136,7 +146,8 @@ struct BigEntryBlockWithSheet: View {
                     showShadow: false,
                     onAddImage: {},
                     onTap: { showSheet = false },
-                    imageMap: imageMap
+                    imageMap: imageMap,
+                    isEditable: isEditable
                 )
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -167,7 +178,9 @@ struct BigEntryBlock_Previews: PreviewProvider {
             aiGeneratedSummary: "Breakfast: eggs, toast, juice. Lunch: salad, apple. Snack: bar."
         )
         VStack {
-            BigEntryBlock(entry: entry)
+            BigEntryBlock(entry: entry, isEditable: false)
+                .padding()
+            BigEntryBlock(entry: entry, isEditable: true)
                 .padding()
         }
         .background(Color(.systemGroupedBackground))
