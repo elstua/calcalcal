@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+This is an IOS project that build with swiftui and UIkit in some parts of the product. For some reasons when coding agent create new features it shows linter errors like 'no such module UIKit'm which is basically a problem on cursor side, because project works fine.
+
+Ignore all 
+- You can @ files here
+- You can use markdown but dont have to

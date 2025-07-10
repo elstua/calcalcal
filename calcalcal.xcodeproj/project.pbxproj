@@ -30,7 +30,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		AC8D1E182D85015B00EDDE01 /* Exceptions for "calcalcal" folder in "calcalcal" target */ = {
+		DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "calcalcal" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -43,7 +43,7 @@
 		ACB9E5D82D594D7D00C37803 /* calcalcal */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				AC8D1E182D85015B00EDDE01 /* Exceptions for "calcalcal" folder in "calcalcal" target */,
+				DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "calcalcal" target */,
 			);
 			path = calcalcal;
 			sourceTree = "<group>";
@@ -412,6 +412,7 @@
 				DEVELOPMENT_TEAM = UD49WN727D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -441,6 +442,7 @@
 				DEVELOPMENT_TEAM = UD49WN727D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
