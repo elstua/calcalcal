@@ -16,6 +16,7 @@ struct BigEntryBlock: View {
     var imageMap: [UUID: UIImage] = [:]
     var isEditable: Bool = false
     @Binding var shouldBecomeFirstResponder: Bool
+    var forceExpanded: Bool = false
     
     @State private var isExpanded: Bool = false
     @State private var blocks: [Block]
@@ -28,7 +29,8 @@ struct BigEntryBlock: View {
          onTap: (() -> Void)? = nil,
          imageMap: [UUID: UIImage] = [:],
          isEditable: Bool = false,
-         shouldBecomeFirstResponder: Binding<Bool> = .constant(false)) {
+         shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
+         forceExpanded: Bool = false) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
@@ -38,6 +40,7 @@ struct BigEntryBlock: View {
         self.imageMap = imageMap
         self.isEditable = isEditable
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self.forceExpanded = forceExpanded
         _blocks = State(initialValue: entry.blocks)
     }
     
@@ -67,17 +70,26 @@ struct BigEntryBlock: View {
             )
             .padding(.bottom, 8)
         }
-        .frame(height: isExpanded ? nil : height)
+        .frame(height: (forceExpanded || isExpanded) ? nil : height)
         .background(Color.white)
         .cornerRadius(cornerRadius)
         .shadow(color: showShadow ? Color.black.opacity(0.08) : .clear, radius: 8, x: 0, y: 4)
         .onTapGesture {
-            withAnimation(.spring()) {
-                isExpanded.toggle()
+            if !forceExpanded {
+                withAnimation(.spring()) {
+                    isExpanded.toggle()
+                    onTap?()
+                }
+            } else {
                 onTap?()
             }
         }
         .animation(.spring(), value: isExpanded)
+        .onAppear {
+            if forceExpanded {
+                isExpanded = true
+            }
+        }
     }
     
     private func formattedDate(_ date: Date) -> String {
