@@ -72,7 +72,7 @@ struct DiaryEntryPopupView: View {
                         .padding()
                 }
             }
-            BigEntryBlock(entry: entry, isEditable: true, shouldBecomeFirstResponder: $shouldFocusEditor)
+            BigEntryBlock(entry: entry, isEditable: true, shouldBecomeFirstResponder: $shouldFocusEditor, forceExpanded: true)
                 .padding()
                 .cornerRadius(24)
                 .shadow(radius: 10)
