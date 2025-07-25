@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import UIKit
 // Explicit imports for model visibility
 
 // MARK: - DiaryListView
@@ -104,7 +105,7 @@ extension DiaryListView {
         let calendar = Calendar.current
         let today = Date()
         return (0..<count).map { offset in
-            let date = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
+            let date = calendar.date(byAdding: .day, value: -Int(offset), to: today) ?? today
             let blocks = [
                 Block(type: .text("Breakfast: \(Int.random(in: 1...3)) eggs, toast, juice"), calorieData: "\(Int.random(in: 200...400))"),
                 Block(type: .text("Lunch: Chicken salad, apple"), calorieData: "\(Int.random(in: 300...500))"),
