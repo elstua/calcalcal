@@ -18,13 +18,10 @@ const corsHeaders = {
 }
 
 async function verifyAppleToken(identityToken: string): Promise<Record<string, unknown>> {
-  // Minimal verification for MVP; verifies signature and issuer/audience if available
-  // NOTE: For production, validate audience (aud) matches your Services ID or App ID
   const JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"))
   const { payload, protectedHeader } = await jwtVerify(identityToken, JWKS, {
     issuer: "https://appleid.apple.com",
   })
-  // payload will include sub (Apple user id), email, email_verified, etc.
   return { payload, header: protectedHeader }
 }
 
@@ -125,3 +122,5 @@ serve(async (req) => {
     return json({ error: message }, { status: 500 })
   }
 })
+
+

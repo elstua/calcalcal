@@ -16,6 +16,49 @@ class AuthManager: NSObject, ObservableObject {
         checkExistingSession()
         testNetworkConnection() // Test network connectivity
     }
+
+    // MARK: - JSON Decoder (tolerant dates)
+    static func makeJSONDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+
+            // Try ISO8601 with fractional seconds first
+            let isoWithFractional = ISO8601DateFormatter()
+            if #available(iOS 11.2, *) {
+                isoWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            } else {
+                isoWithFractional.formatOptions = [.withInternetDateTime]
+            }
+            if let date = isoWithFractional.date(from: dateString) {
+                return date
+            }
+
+            // Try ISO8601 without fractional seconds
+            let isoNoFractional = ISO8601DateFormatter()
+            isoNoFractional.formatOptions = [.withInternetDateTime]
+            if let date = isoNoFractional.date(from: dateString) {
+                return date
+            }
+
+            // Try common Postgres timestamp formats
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Expected date string to be ISO8601-formatted, got: \(dateString)")
+        }
+        return decoder
+    }
     
     // MARK: - Apple Sign-In
     
@@ -173,7 +216,8 @@ class AuthManager: NSObject, ObservableObject {
                     return
                 }
                 
-                let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
+                let decoder = AuthManager.makeJSONDecoder()
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 
                 DispatchQueue.main.async {
                     if authResponse.success, let user = authResponse.user {
@@ -276,7 +320,7 @@ class AuthManager: NSObject, ObservableObject {
     private func authenticateWithBackend(identityToken: String, user: ASAuthorizationAppleIDCredential) {
         Task {
             do {
-                let urlString = "\(Configuration.supabaseURL)/functions/v1/auth-apple-signin"
+                let urlString = "\(Configuration.supabaseURL)/functions/v1/apple-signin"
                 print("🔍 === APPLE SIGN-IN DEBUG ===")
                 print("Attempting to connect to: \(urlString)")
                 
@@ -365,7 +409,8 @@ class AuthManager: NSObject, ObservableObject {
                     return
                 }
                 
-                let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
+                let decoder = AuthManager.makeJSONDecoder()
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 
                 print("✅ Authentication successful!")
                 print("   - Success: \(authResponse.success)")
