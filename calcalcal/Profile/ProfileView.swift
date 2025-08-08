@@ -1,43 +1,47 @@
 import SwiftUI
 
 struct ProfileView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var showingSettings = false
+    
     var body: some View {
-        VStack(spacing: 20) {
-            // Name as big header
-            Text("Artem Savelev")
-                .font(.largeTitle)
-                .fontWeight(.regular)
-                .padding(.top, 20)
-                .padding(.horizontal, 20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Email placeholder
-            Text("artem.savelev@example.com")
-                .font(.title3)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            Spacer()
-            
-            // Sign out button at the bottom
-            Button(action: {
-                // Sign out action - will be implemented later
-                print("Sign out tapped")
-            }) {
-                Text("Sign Out")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .cornerRadius(12)
+        NavigationView {
+            VStack(spacing: 20) {
+                // User Info
+                VStack(spacing: 10) {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.blue)
+                    
+                    Text(appState.currentUser?.name ?? "User")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(appState.currentUser?.email ?? "")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Settings Button
+                Button("Settings") {
+                    showingSettings = true
+                }
+                .buttonStyle(.bordered)
+                
+                Spacer()
+                
+                // Sign Out Button
+                Button("Sign Out") {
+                    appState.authManager.signOut()
+                }
+                .foregroundColor(.red)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 40)
+            .padding()
+            .navigationTitle("Profile")
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
     }
 }
 
