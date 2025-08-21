@@ -10,6 +10,7 @@ struct BigEntryBlock: View {
     var height: CGFloat = 550
     var cornerRadius: CGFloat = 24
     var showShadow: Bool = true
+    var useExternalDecoration: Bool = false
     var onAddImage: (() -> Void)? = nil
     var onTap: (() -> Void)? = nil
     // For now, imageMap is empty; can be extended for real images
@@ -17,30 +18,34 @@ struct BigEntryBlock: View {
     var isEditable: Bool = false
     @Binding var shouldBecomeFirstResponder: Bool
     var forceExpanded: Bool = false
+    var onBlocksChange: (([Block]) -> Void)? = nil
     
-    @State private var isExpanded: Bool = false
     @State private var blocks: [Block]
     
     init(entry: DiaryEntry,
          height: CGFloat = 550,
          cornerRadius: CGFloat = 24,
          showShadow: Bool = true,
+         useExternalDecoration: Bool = false,
          onAddImage: (() -> Void)? = nil,
          onTap: (() -> Void)? = nil,
          imageMap: [UUID: UIImage] = [:],
          isEditable: Bool = false,
          shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
-         forceExpanded: Bool = false) {
+         forceExpanded: Bool = false,
+         onBlocksChange: (([Block]) -> Void)? = nil) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
         self.showShadow = showShadow
+        self.useExternalDecoration = useExternalDecoration
         self.onAddImage = onAddImage
         self.onTap = onTap
         self.imageMap = imageMap
         self.isEditable = isEditable
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
         self.forceExpanded = forceExpanded
+        self.onBlocksChange = onBlocksChange
         _blocks = State(initialValue: entry.blocks)
     }
     
@@ -58,6 +63,11 @@ struct BigEntryBlock: View {
             // Always show the full editor
             UnifiedTextEditor(blocks: $blocks, imageMap: imageMap, isEditable: isEditable, shouldBecomeFirstResponder: $shouldBecomeFirstResponder)
                 .blockSpacing(20)
+                .onBlocksChange { newBlocks in
+                    // Keep local state and bubble up to parent
+                    self.blocks = newBlocks
+                    self.onBlocksChange?(newBlocks)
+                }
                 .frame(maxHeight: .infinity)
                 .padding(.horizontal)
             
@@ -65,31 +75,16 @@ struct BigEntryBlock: View {
             
             // Footer
             EntryFooterView(
-                calorieSummary: "\(entry.totalCalories ?? 0) kcal",
+                calorieSummary: "\(entry.totalCalories.map { String($0) } ?? "…") kcal",
                 onAddImage: { onAddImage?() }
             )
             .padding(.bottom, 8)
         }
-        .frame(height: (forceExpanded || isExpanded) ? nil : height)
-        .background(Color.white)
-        .cornerRadius(cornerRadius)
-        .shadow(color: showShadow ? Color.black.opacity(0.08) : .clear, radius: 8, x: 0, y: 4)
-        .onTapGesture {
-            if !forceExpanded {
-                withAnimation(.spring()) {
-                    isExpanded.toggle()
-                    onTap?()
-                }
-            } else {
-                onTap?()
-            }
-        }
-        .animation(.spring(), value: isExpanded)
-        .onAppear {
-            if forceExpanded {
-                isExpanded = true
-            }
-        }
+        .frame(height: forceExpanded ? nil : height)
+        .background(useExternalDecoration ? Color.clear : Color.white)
+        .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
+        .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+        .onTapGesture { onTap?() }
     }
     
     private func formattedDate(_ date: Date) -> String {

@@ -61,17 +61,10 @@ extension UnifiedTextView {
 // MARK: - UITextViewDelegate
 
 extension UnifiedTextView {
-
-    /// Generates a random calorie value between 50-1000 for placeholder data
-    func generateRandomCalories() -> String {
-        let calories = Int.random(in: 50...1000)
-        return String(calories)
-    }
     
-    /// Helper to create a text block with placeholder calorieData
+    /// Helper to create a text block without mock calorie data
     func makeTextBlock(_ text: String) -> Block {
-        // Placeholder for calorieData, can be replaced with real logic later
-        return Block(type: .text(text), calorieData: generateRandomCalories())
+        return Block(type: .text(text), calorieData: nil)
     }
     
     func textViewDidChange(_ textView: UITextView) {

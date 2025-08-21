@@ -70,13 +70,43 @@ struct UnifiedTextEditor: UIViewRepresentable {
     
     /// Syncs the blocks array from the UITextView's content and metadata
     func updateBlocksFromTextStorage(_ textView: UnifiedTextView) {
-        // This is a placeholder implementation. You should parse the textView's content and metadata to reconstruct blocks.
-        // For now, we just assign textView.blocks to the binding.
-        let newBlocks = textView.blocks
-        if newBlocks != blocks {
+        // Reconstruct blocks from the UITextView's text storage and our metadata
+        let nsString = textView.textStorage.string as NSString
+        var reconstructed: [Block] = []
+        var location = 0
+        while location < nsString.length {
+            var paragraphStart = 0
+            var paragraphEnd = 0
+            var contentsEnd = 0
+            nsString.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+            let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
+            let paragraphText = nsString.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let metadata = textView.unifiedContentStorage.blockMetadata(at: paragraphStart) {
+                switch metadata.blockType {
+                case .text:
+                    reconstructed.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData))
+                case .imageText:
+                    if let imageRef = metadata.imageReference,
+                       let image = textView.imageMap[imageRef],
+                       let data = image.pngData() {
+                        reconstructed.append(Block(type: .imageText(data, imageRef, paragraphText), calorieData: metadata.calorieData))
+                    }
+                case .spacer:
+                    reconstructed.append(Block(type: .spacer, calorieData: nil))
+                }
+            } else {
+                // Fallback: treat as a plain text block when no metadata present
+                reconstructed.append(Block(type: .text(paragraphText), calorieData: nil))
+            }
+
+            location = paragraphEnd
+        }
+
+        if reconstructed != blocks {
             DispatchQueue.main.async {
-                self.blocks = newBlocks
-                self.onBlocksChange?(newBlocks)
+                self.blocks = reconstructed
+                self.onBlocksChange?(reconstructed)
             }
         }
     }

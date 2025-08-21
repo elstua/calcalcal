@@ -7,55 +7,53 @@ struct SmallEntryBlock: View {
     let entry: DiaryEntry
     var onTap: (() -> Void)? = nil
     var isEditable: Bool = false
+    var useExternalDecoration: Bool = false
     
     var body: some View {
-        Button(action: {
-            onTap?()
-        }) {
-            HStack(alignment: .top, spacing: 12) {
-                // Day number
-                Text(dayNumberString(entry.date))
-                    .font(.title.bold())
-                    .foregroundColor(.primary)
-                    .frame(width: 44, height: 44)
-                    .background(Color.gray.opacity(0.15))
-                    .clipShape(Circle())
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    // Summary or empty state
-                    if let summary = entry.aiGeneratedSummary, !summary.isEmpty {
-                        Text(summary)
+        HStack(alignment: .top, spacing: 12) {
+            // Day number
+            Text(dayNumberString(entry.date))
+                .font(.title.bold())
+                .foregroundColor(.primary)
+                .frame(width: 44, height: 44)
+                .background(Color.gray.opacity(0.15))
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 4) {
+                // Summary or empty state
+                if let summary = entry.aiGeneratedSummary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                } else if let firstText = entry.blocks.first(where: { if case .text = $0.type { return true } else { return false } }) {
+                    if case let .text(text) = firstText.type {
+                        Text(text)
                             .font(.body)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
-                    } else if let firstText = entry.blocks.first(where: { if case .text = $0.type { return true } else { return false } }) {
-                        if case let .text(text) = firstText.type {
-                            Text(text)
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .lineLimit(2)
-                        }
-                    } else {
-                        Text("No entry yet. Start logging your food!")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
                     }
-                    // Calorie summary
-                    Text("\(entry.totalCalories ?? 0) kcal")
-                        .font(.caption)
-                        .foregroundColor(.accentColor)
-                        .padding(.top, 2)
+                } else {
+                    Text("No entry yet. Start logging your food!")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .italic()
                 }
-                Spacer()
+                // Calorie summary (placeholder when missing)
+                Text("\(entry.totalCalories.map { String($0) } ?? "…") kcal")
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                    .padding(.top, 2)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 16)
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+            Spacer()
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(useExternalDecoration ? Color.clear : Color.white)
+        .cornerRadius(useExternalDecoration ? 0 : 16)
+        .shadow(color: useExternalDecoration ? .clear : Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
     }
     
     private func dayNumberString(_ date: Date) -> String {

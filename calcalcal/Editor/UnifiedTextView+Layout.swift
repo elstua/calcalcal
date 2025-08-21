@@ -276,16 +276,14 @@ extension UnifiedTextView {
             backgroundView.frame = blockFrame
             updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
             backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
-            if let calories = metadata.calorieData {
-                let calorieLabel = CalorieLabelView()
-                calorieLabel.setCalories(calories)
-                if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata, blockFrame: blockFrame) {
-                    calorieLabel.frame = calorieLabelFrame
-                }
-                backgroundView.addSubview(calorieLabel)
-            } else {
-                print("[CalorieLabel] Block at \(blockKey) | NO calorieData")
+            // Show placeholder when no backend calories yet
+            let caloriesText = metadata.calorieData ?? "…"
+            let calorieLabel = CalorieLabelView()
+            calorieLabel.setCalories(caloriesText)
+            if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata, blockFrame: blockFrame) {
+                calorieLabel.frame = calorieLabelFrame
             }
+            backgroundView.addSubview(calorieLabel)
         }
     }
     

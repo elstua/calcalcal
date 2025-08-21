@@ -5,52 +5,225 @@ import UIKit
 
 // MARK: - DiaryListView
 struct DiaryListView: View {
-    @State private var entries: [DiaryEntry] = DiaryListView.generateMockEntries(count: 10)
+    @State private var entries: [DiaryEntry] = DiaryListView.initialPlaceholderEntries()
+    @State private var items: [TimelineItem] = []
     @State private var selectedEntry: DiaryEntry? = nil
     @State private var showPopup: Bool = false
+    
+    // Shared geometry hooks (optional)
+    var sharedNamespace: Namespace.ID? = nil
+    var presentedEntryId: UUID? = nil
+    var onRequestOpen: ((DiaryEntry) -> Void)? = nil
+    var onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil
+    var userOffsetMinutes: Int? = nil // Optional override; fallback to device timezone if nil
+    private var timelineConfig = DayTimelineConfig(keepHeadCount: 5, collapseWithinInitialWindow: true)
+
+    init(
+        sharedNamespace: Namespace.ID? = nil,
+        presentedEntryId: UUID? = nil,
+        onRequestOpen: ((DiaryEntry) -> Void)? = nil,
+        onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil,
+        userOffsetMinutes: Int? = nil
+    ) {
+        self.sharedNamespace = sharedNamespace
+        self.presentedEntryId = presentedEntryId
+        self.onRequestOpen = onRequestOpen
+        self.onRequestImageMap = onRequestImageMap
+        self.userOffsetMinutes = userOffsetMinutes
+    }
     
     var body: some View {
         ZStack {
             ScrollView {
-                let enumeratedEntries = Array(entries.enumerated())
+                let enumeratedItems = Array(items.enumerated())
                 VStack(spacing: 20) {
-                    ForEach(enumeratedEntries, id: \.element.id) { (index, entry) in
-                        entryBlockView(index: index, entry: entry)
+                    ForEach(enumeratedItems, id: \.element.id) { (index, item) in
+                        timelineRowView(index: index, item: item)
                     }
                 }
                 .padding(.vertical)
             }
             .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
             
-            if showPopup, let entry = selectedEntry {
+            // If no external opener is supplied, show local popup regardless of namespace
+            if showPopup, let entry = selectedEntry, onRequestOpen == nil {
                 DiaryEntryPopupView(entry: entry, isPresented: $showPopup)
                     .transition(.move(edge: .bottom))
                     .zIndex(1)
             }
         }
+        .onAppear { recalcTimeline() }
+        .onReceive(NotificationCenter.default.publisher(for: .editorOverlayDidCommit)) { notification in
+            guard let userInfo = notification.userInfo,
+                  let entryId = userInfo["entryId"] as? UUID,
+                  let blocks = userInfo["blocks"] as? [Block] else { return }
+            if let index = entries.firstIndex(where: { $0.id == entryId }) {
+                entries[index].blocks = blocks
+                entries[index].lastModified = Date()
+                recalcTimeline()
+            }
+        }
     }
 
     @ViewBuilder
-    private func entryBlockView(index: Int, entry: DiaryEntry) -> some View {
-        if index == 0 {
-            BigEntryBlock(
-                entry: entry,
-                onTap: {
-                    showPopup = true
-                    selectedEntry = entry
-                }, isEditable: false
-            )
+    private func timelineRowView(index: Int, item: TimelineItem) -> some View {
+        switch item {
+        case .todayEntry(let entry):
+            if let ns = sharedNamespace {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .matchedGeometryEffect(id: "bg-\(entry.id)", in: ns)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        .allowsHitTesting(false)
+                    BigEntryBlock(
+                        entry: entry,
+                        height: 550,
+                        cornerRadius: 0,
+                        showShadow: false,
+                        useExternalDecoration: true,
+                        onAddImage: { },
+                        onTap: {
+                            if let open = onRequestOpen { open(entry) }
+                            else { showPopup = true; selectedEntry = entry }
+                        },
+                        isEditable: false,
+                        shouldBecomeFirstResponder: .constant(false)
+                    )
+                    .padding(.horizontal)
+                }
+                .matchedEditorSource(id: entry.id, isPresented: presentedEntryId == entry.id, namespace: ns)
+            } else {
+                BigEntryBlock(
+                    entry: entry,
+                    onAddImage: { },
+                    onTap: {
+                        if let open = onRequestOpen { open(entry) }
+                        else { showPopup = true; selectedEntry = entry }
+                    },
+                    isEditable: false,
+                    shouldBecomeFirstResponder: .constant(false)
+                )
+                .padding(.horizontal)
+            }
+        case .entry(let entry):
+            if let ns = sharedNamespace {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .matchedGeometryEffect(id: "bg-\(entry.id)", in: ns)
+                        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                        .allowsHitTesting(false)
+                    SmallEntryBlock(
+                        entry: entry,
+                        onTap: {
+                            if let open = onRequestOpen { open(entry) }
+                            else { showPopup = true; selectedEntry = entry }
+                        },
+                        isEditable: false,
+                        useExternalDecoration: true
+                    )
+                    .padding(.horizontal)
+                }
+                .matchedEditorSource(id: entry.id, isPresented: presentedEntryId == entry.id, namespace: ns)
+            } else {
+                SmallEntryBlock(
+                    entry: entry,
+                    onTap: {
+                        if let open = onRequestOpen { open(entry) }
+                        else { showPopup = true; selectedEntry = entry }
+                    },
+                    isEditable: false
+                )
+                .padding(.horizontal)
+            }
+        case .placeholder(let localDay):
+            placeholderRow(localDay: localDay, isToday: index == 0)
+                .padding(.horizontal)
+        case .collapsed(let range, let count, let id):
+            let primary = "\(count) \(count == 1 ? "day" : "days"), \(DayTimelineGenerator.formatRange(range: range, offsetMinutes: effectiveOffsetMinutes()))"
+            let secondary = "Tap to show \(min(14, count)) more days"
+            CollapsedEmptyRunView(primaryText: primary, secondaryText: secondary) {
+                let mapping = mapEntriesByLocalDay()
+                items = DayTimelineGenerator.apply(
+                    .expandCollapsedRun(id: id),
+                    to: items,
+                    userOffsetMinutes: effectiveOffsetMinutes(),
+                    config: timelineConfig,
+                    entriesByDay: mapping
+                )
+            }
             .padding(.horizontal)
+        }
+    }
+
+    private func placeholderRow(localDay: LocalDay, isToday: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Day number
+            Text(dayNumberString(from: localDay))
+                .font(.title.bold())
+                .foregroundColor(.primary)
+                .frame(width: 44, height: 44)
+                .background(Color.gray.opacity(0.15))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(isToday ? "write what you ate today" : "No entry yet. Start logging your food!")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .italic()
+                Text("… kcal")
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                    .padding(.top, 2)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+
+    private func dayNumberString(from localDay: LocalDay) -> String {
+        let local = localDay.startUTC.addingTimeInterval(TimeInterval(effectiveOffsetMinutes() * 60))
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter.string(from: local)
+    }
+
+    private func recalcTimeline() {
+        items = DayTimelineGenerator.generate(
+            entries: entries,
+            userOffsetMinutes: effectiveOffsetMinutes(),
+            config: timelineConfig
+        )
+    }
+
+    private func effectiveOffsetMinutes() -> Int {
+        if let m = userOffsetMinutes { return m }
+        return TimeZone.current.secondsFromGMT() / 60
+    }
+
+    private func mapEntriesByLocalDay() -> [String: DiaryEntry] {
+        var result: [String: DiaryEntry] = [:]
+        let offset = effectiveOffsetMinutes()
+        for e in entries {
+            let key = LocalDayMath.yyyymmdd(for: e.date, offsetMinutes: offset)
+            result[key] = e
+        }
+        return result
+    }
+}
+
+// MARK: - Small helper for optional ViewModifier application
+extension View {
+    @ViewBuilder
+    func ifLet<T, V: View>(_ value: T?, transform: (Self, T) -> V) -> some View {
+        if let value = value {
+            transform(self, value)
         } else {
-            SmallEntryBlock(
-                entry: entry,
-                onTap: {
-                    showPopup = true
-                    selectedEntry = entry
-                },
-                isEditable: false
-            )
-            .padding(.horizontal)
+            self
         }
     }
 }
@@ -101,27 +274,18 @@ struct DiaryEntryPopupView: View {
 
 // MARK: - Mock Data Generation
 extension DiaryListView {
-    static func generateMockEntries(count: Int) -> [DiaryEntry] {
-        let calendar = Calendar.current
+    static func initialPlaceholderEntries() -> [DiaryEntry] {
         let today = Date()
-        return (0..<count).map { offset in
-            let date = calendar.date(byAdding: .day, value: -Int(offset), to: today) ?? today
-            let blocks = [
-                Block(type: .text("Breakfast: \(Int.random(in: 1...3)) eggs, toast, juice"), calorieData: "\(Int.random(in: 200...400))"),
-                Block(type: .text("Lunch: Chicken salad, apple"), calorieData: "\(Int.random(in: 300...500))"),
-                Block(type: .text("Snack: Protein bar"), calorieData: "\(Int.random(in: 100...250))")
-            ]
-            let totalCalories = blocks.compactMap { Int($0.calorieData ?? "0") }.reduce(0, +)
-            let summary = "Breakfast: eggs, toast, juice. Lunch: salad, apple. Snack: bar."
-            return DiaryEntry(
-                id: UUID(),
-                date: date,
-                blocks: blocks,
-                totalCalories: totalCalories,
-                lastModified: date,
-                aiGeneratedSummary: summary
-            )
-        }
+        let placeholderBlock = Block(type: .text("write what you ate today"), calorieData: nil)
+        let entry = DiaryEntry(
+            id: UUID(),
+            date: today,
+            blocks: [placeholderBlock],
+            totalCalories: nil,
+            lastModified: today,
+            aiGeneratedSummary: nil
+        )
+        return [entry]
     }
 }
 

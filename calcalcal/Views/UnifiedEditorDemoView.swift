@@ -1,6 +1,9 @@
+// This demo view is only available in DEBUG builds and previews
+#if DEBUG
 import SwiftUI
 import UIKit
 
+#if DEBUG
 struct UnifiedEditorDemoView: View {
     @State private var blocks: [Block] = [
         Block(type: .text("Welcome to the Unified Text Editor!"), calorieData: nil),
@@ -191,6 +194,7 @@ struct UnifiedEditorDemoView_Previews: PreviewProvider {
         UnifiedEditorDemoView()
     }
 }
+#endif
 
 extension Image {
     func asUIImage() -> UIImage? {
@@ -205,4 +209,5 @@ extension Image {
         return nil
     }
 }
+#endif
 
