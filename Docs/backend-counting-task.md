@@ -98,22 +98,108 @@ Image handling details (client)
 - uploadImage(file): call signed URL function, then PUT binary; return final storage URL (or a path that can be resolved to a signed URL for display).
 - image cache helpers: resolve/download storage URLs into local cache; maintain `imageUUID -> storageURL` mapping and update entries post-upload.
 
-### Later: AI analysis flow (outline only)
-- Trigger: after content save (or explicit user action), call `ai/analyze` with `{ entryId, blocks }`. For first version, derive `blocks` from paragraphs with `{ id, position, content, type: "text" }`.
-- Edge function:
-  - Use cache by content hash.
-  - Update `diary_entries.blocks` and set `ai_analysis_status` to `completed`/`failed`.
-  - Recompute totals server-side from analyzed blocks.
-- Client: poll or subscribe to entry updates to reflect totals and per-block nutrition.
+### AI analysis (v1)
 
-Block identity & position (future)
+Goal
+- Add text-only AI analysis that turns paragraph blocks into per-block macros and day totals, with caching and clear client/server contracts. Images, multi-model fallback, and RAG come later.
+
+Trigger
+- After a successful upsert of `content` for a day (non-empty), client calls `POST /functions/v1/ai/analyze` with `{ entryId, blocks }`.
+
+Endpoint contract
+- Headers:
+  - `Authorization: Bearer <access_token>` (required)
+  - `apikey: <anon_key>`
+  - `Content-Type: application/json`
+- Request body:
+```
+{
+  "entryId": "uuid",
+  "blocks": [
+    {
+      "id": "string",
+      "position": 1,
+      "type": "text",
+      "content": "1 banana and 2 eggs"
+    }
+  ]
+}
+```
+- Response body (success):
+```
+{
+  "success": true,
+  "updatedBlocksCount": 3,
+  "ai_analysis_status": "completed"
+}
+```
+
+Expected AI result schema (per block)
+```
+{
+  "id": "echo from input",
+  "calories": 0,
+  "protein": 0.0,
+  "fat": 0.0,
+  "carbs": 0.0,
+  "fiber": 0.0,
+  "sugar": 0.0,
+  "sodium": 0.0,
+  "confidence": 0.0,
+  "food_name": "optional, normalized",
+  "serving": { "quantity": 1, "unit": "piece|g|ml|serving" }
+}
+```
+- We copy numeric fields onto the block, and store the full object under `block.ai_analysis`.
+
+Prompt spec (LLM)
+- System prompt:
+```
+You are a nutrition expert. Given a single paragraph describing what a person ate, output only JSON that conforms to the schema:
+{
+  "id": "string",
+  "calories": number,
+  "protein": number,
+  "fat": number,
+  "carbs": number,
+  "fiber": number,
+  "sugar": number,
+  "sodium": number,
+  "confidence": number,
+  "food_name": "string",
+  "serving": { "quantity": number, "unit": "piece|g|ml|serving" }
+}
+Assume common portion sizes if unspecified; avoid unrealistic values; prefer typical USDA-like averages. Return ONLY the JSON object, no prose.
+```
+- User content: one block’s text with its `id`.
+
+Backend behavior (Edge function)
+- Auth & ownership: verify the `entryId` belongs to `auth.uid()` using the caller’s access token; abort 403 otherwise.
+- Set `ai_analysis_status = 'processing'`.
+- For each block with non-empty `content`:
+  - Compute `sha256(content)`; check `ai_analysis_cache` and reuse if present.
+  - Otherwise call OpenAI with model from `AI_MODEL` (default existing), `temperature <= 0.3`.
+  - Parse JSON; on parse error, retry once with a stricter instruction; if still invalid, treat as zeros and low confidence.
+  - Merge numeric fields onto block and attach full `ai_analysis` payload and `confidence`.
+- Recompute totals using `public.calculate_diary_totals(updatedBlocks)` and update `diary_entries` totals and `blocks` atomically; set `ai_analysis_status = 'completed'`.
+- On error: set `ai_analysis_status = 'failed'` and `ai_analysis_error`.
+- Limits: cap blocks per call (e.g., 50) and content length per block.
+
+Client behavior (iOS)
+- Trigger after successful `upsertContent` when `content.trim() != ""`.
+- Build `[Block]` array with `{ id, position, type: "text", content }` and call the function.
+- UI: show processing state; poll the entry (`id=eq.{entryId}`) for `ai_analysis_status` until `completed|failed` and update totals when done.
+- Retries: backoff on 429/5xx (e.g., 2s/5s/10s, max 3 attempts); allow manual retry on failure.
+- Concurrency: avoid overlapping analyze calls for the same entry; cancel previous if content changes.
+
+Future
 - Persist stable `id` and `position` for each paragraph block sent to AI to preserve mapping across updates.
 - Maintain a client-side map from editor paragraphs to block ids; reuse ids when content changes but the paragraph remains semantically the same.
 - Store `id`, `position`, and optional `created_at` inside `diary_entries.blocks` JSON when AI results are written back; server totals remain derived from these blocks.
 - Navigation and grouping continue to use `diary_entries.date` as the canonical day; per-block dates are not required.
+ - Multi-model fallback and RAG with food DB can be layered later behind the same contract.
 
 ### Open questions
-- Days range: confirm N (7/14/30?). Current doc suggests 30. OK to ship with 30?
 - Timezone: should the source of truth be server-side (based on `user_profiles.timezone_offset`) or client-only? How do we handle DST changes?
 - Empty days UX: show placeholders for all N past days, or only days with entries plus today? For brand-new users, show only today or a week of placeholders?
 - Entry creation: create on first keystroke vs. save button vs. background autosave cadence?
@@ -128,33 +214,37 @@ Block identity & position (future)
 - Large images / upload failures: show explicit progress and retry; cap image size client-side.
 
 ### Concrete tasks checklist
-- Frontend cleanup
+- Frontend cleanup (done)
   - Remove random calorie injection and placeholder demo text from production flows
   - Implement `updateBlocksFromTextStorage` to sync `[Block]` from editor
   - Define serialization: blocks -> `content` string; collect image URLs separately
   - Hide/remove debug overlays and excessive logging
 
-- iOS networking
+- iOS networking (done)
   - Add diary API methods: list range, get by date, patch content/images
   - Add image upload flow (signed URL + PUT)
   - Implement local image cache + background upload queue
   - Maintain `imageUUID -> storageURL` mapping and update entries post-upload
   - Add get-or-create entry behavior on edit
 
-- Backend contracts
+- Backend contracts (done)
   - Confirm `diary_entries` schema and RLS (already present)
   - Define client->server content format and server response fields used by iOS
   - Validate `update_diary_entry_content` trigger behavior in local dev
 
-- Day list
+- Day list (done)
   - Implement client-side range generation for last N days (configurable)
   - Placeholder UI for empty days; no row creation until user edits
   - Respect `timezone_offset` for day boundaries
 
-- AI analysis (later)
-  - Define JSON payload schema for blocks (text-first)
-  - Decide trigger timing (on save vs explicit)
-  - Real-time or polling for status and updated totals
+- AI analysis (v1)
+  - Backend: verify ownership (`entryId` belongs to caller) before processing
+  - Backend: set `processing`, analyze blocks with cache-by-hash, write `blocks` and totals, set `completed`
+  - Backend: env-driven model (`AI_MODEL`), block limit, parse-retry on invalid JSON, basic metrics/logging
+  - Backend: error path sets `failed` and `ai_analysis_error`
+  - iOS: build block payload from editor, trigger analyze after upsert, debounce/concurrency control
+  - iOS: show processing state, poll for status, update totals on completion, retry with backoff on errors
+  - QA: seed cache case (same content twice) returns without LLM call; verify totals recompute
 
 ### Deliverables for this phase
 - Clean editor behavior with no mock calories in production UI
@@ -162,12 +252,47 @@ Block identity & position (future)
 - Hybrid image handling working end-to-end (local cache + storage URLs persisted)
 - Day list showing last N days with proper empty states
 - API surface on iOS covering list, get-or-create, update, and upload
-- Written contract for AI payload (for later)
+- AI v1 working: per-block macros computed, day totals updated, cache hit path verified
 
 ### Acceptance criteria
 - New user sees today plus last N days as placeholders (no crashes, no mock data visible)
 - Typing into today creates/saves an entry; reopening shows persisted text
 - Images added are cached locally immediately, uploaded in background, and their storage URLs are persisted; removed images are removed from the entry and cache
-- No AI calls yet; totals remain zero or placeholder until AI is integrated
+- After save + analyze, `ai_analysis_status` transitions `pending → processing → completed` (or `failed` on error)
+- Blocks gain numeric nutrition fields and `ai_analysis` payload; day `total_*` columns reflect the sum
+- Cache hit: identical block content is served from `ai_analysis_cache` without a new LLM call
+- Failure path: `failed` status set with `ai_analysis_error`, user can retry; no crashes
+
+### Implementation tasks for AI (small, testable)
+- Backend – auth & ownership check in `ai/analyze`
+  - Outcome: Function rejects requests where `entryId` is not owned by `auth.uid()` with 403; owned entries proceed.
+  - Verify: Call with another user's token → 403; call with owner token → 200 and status flips to `processing`.
+- Backend – totals recompute from analyzed blocks before updating row
+  - Outcome: After analysis, `diary_entries.total_*` reflect the sum of updated block fields in the same write.
+  - Verify: Seed blocks with known outputs, call analyze (or mock cache), then `select total_*` equals sum of block values.
+- Backend – env-driven `AI_MODEL` with default; temperature <= 0.3
+  - Outcome: Model can be switched via `AI_MODEL` env; default remains current; temperature set to <= 0.3.
+  - Verify: Set `AI_MODEL=gpt-4o-mini` (or other), observe outbound `model` in logs; responses still parsed.
+- Backend – block limit and empty-content short-circuit; parse-retry once
+  - Outcome: Requests with > limit return 400; empty/whitespace blocks skipped; one retry on invalid JSON before fallback to zeros.
+  - Verify: Send 100 blocks → 400; send empty block → skipped in update count; force malformed JSON → logged retry then zeros.
+- Backend – basic metrics logs (cache hit/miss, duration); structured errors
+  - Outcome: Logs include per-request block count, cache hit ratio, elapsed ms; errors include `ai_step` and message.
+  - Verify: Inspect function logs for fields; provoke cache hit/miss and an error path.
+- iOS – build `{ id, position, content }` payload from editor
+  - Outcome: Utility produces array for current editor paragraphs with stable ids and positions.
+  - Verify: Unit test comparing expected payload for sample blocks; ids remain stable across minor edits.
+- iOS – call analyze after successful upsert; debounce and cancel on new edits
+  - Outcome: Analyze triggers only after save, debounced; if user types again quickly, prior analyze is cancelled/skipped.
+  - Verify: Add rapid edits; observe single network call; new edit cancels previous in-flight call.
+- iOS – poll entry status and update UI totals on completion
+  - Outcome: UI shows processing; when `completed`, editor/footer and day card totals update from server.
+  - Verify: Simulate function completion; observe UI totals change and status indicator clear.
+- iOS – retry/backoff policy; surface failure state with retry action
+  - Outcome: On 429/5xx, client retries with backoff up to N; on `failed`, user sees retry option.
+  - Verify: Stub server to return 500/429; observe 3 attempts with backoff; manual retry succeeds.
+- QA – unit tests for payload builder; integration test hitting local function; cache hit scenario
+  - Outcome: Tests cover payload formation, end-to-end analyze happy path, and cache reuse (no second LLM call).
+  - Verify: Run tests locally/CI; assert cache table hit and no outbound AI call on second identical request.
 
 

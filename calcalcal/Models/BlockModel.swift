@@ -42,6 +42,41 @@ extension Array where Element == Block {
         }
         return paragraphs.joined(separator: "\n\n")
     }
+
+    /// Build AI analyze payload blocks: text-bearing blocks only with id, position, type, content
+    func toAnalyzeBlocks() -> [[String: Any]] {
+        var position = 0
+        var result: [[String: Any]] = []
+        for block in self {
+            switch block.type {
+            case .text(let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    position += 1
+                    result.append([
+                        "id": UUID().uuidString,
+                        "position": position,
+                        "type": "text",
+                        "content": trimmed
+                    ])
+                }
+            case .imageText(_, _, let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    position += 1
+                    result.append([
+                        "id": UUID().uuidString,
+                        "position": position,
+                        "type": "text",
+                        "content": trimmed
+                    ])
+                }
+            case .image, .spacer:
+                continue
+            }
+        }
+        return result
+    }
 }
 
 extension String {

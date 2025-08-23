@@ -253,6 +253,18 @@ extension EditorOverlay {
         do {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
+                // Trigger AI analysis after successful upsert
+                let payload = blocks.toAnalyzeBlocks()
+                if !payload.isEmpty {
+                    Task.detached {
+                        do {
+                            _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
+                            print("🤖 Analyze triggered for entry \(row.id) with \(payload.count) blocks")
+                        } catch {
+                            print("❌ Analyze error: \(error)")
+                        }
+                    }
+                }
                 await MainActor.run {
                     NotificationCenter.default.post(
                         name: .diaryEntryTotalsUpdated,

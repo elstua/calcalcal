@@ -1,6 +1,8 @@
 import Foundation
 
 struct DiaryAPI {
+    struct AnalyzeResponse: Codable { let success: Bool; let updatedBlocksCount: Int? }
+    struct AnalyzeError: Codable { let error: String; let code: String?; let ai_step: String? }
     struct Row: Codable {
         let id: String
         let user_id: String
@@ -126,6 +128,36 @@ struct DiaryAPI {
         } else {
             return try await insert(date: date, content: content, userId: userId)
         }
+    }
+
+    static func analyze(entryId: String, blocksPayload: [[String: Any]]) async throws -> AnalyzeResponse {
+        let base = Configuration.supabaseURL
+        // Function is served as single-segment name: ai-analyze
+        let urlString = "\(base)/functions/v1/ai-analyze"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        let body = try JSONSerialization.data(withJSONObject: [
+            "entryId": entryId,
+            "blocks": blocksPayload
+        ])
+        var request = try makeRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if !(200..<300).contains(http.statusCode) {
+            // Try to decode structured error for debugging
+            if let apiErr = try? JSONDecoder().decode(AnalyzeError.self, from: data) {
+                print("❌ Analyze HTTP \(http.statusCode): code=\(apiErr.code ?? "-") step=\(apiErr.ai_step ?? "-") error=\(apiErr.error)")
+                throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
+                    NSLocalizedDescriptionKey: apiErr.error,
+                    "code": apiErr.code ?? "",
+                    "ai_step": apiErr.ai_step ?? ""
+                ])
+            } else if let body = String(data: data, encoding: .utf8) {
+                print("❌ Analyze HTTP \(http.statusCode) raw body: \(body)")
+            }
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        return try decoder.decode(AnalyzeResponse.self, from: data)
     }
 }
 
