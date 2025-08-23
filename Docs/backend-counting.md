@@ -42,7 +42,7 @@ Day counting responsibility (frontend)
 Gap handling & pagination
 - Always anchor the list at today to encourage current logging. Show placeholders for the last 30 days.
 - Sparse timeline rendering:
-  - Always show: Today, Yesterday, Day before yesterday.
+  - Always show: Today, Yesterday, Day before yesterday and two more days
   - Show at most 1–2 empty placeholders immediately before the latest entry segment.
   - Collapse any run of >14 consecutive empty days into a single summarized row (e.g., "17–1 Sept • 17 empty days"), with on-demand expansion in 14‑day slices.
   - When expanded, insert actual day rows for the next 14 days (placeholders if empty); allow repeated expansion until the run is fully revealed.

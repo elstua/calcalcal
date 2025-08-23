@@ -15,12 +15,11 @@ struct MainTabView: View {
                     sharedNamespace: editorNamespace,
                     presentedEntryId: presentedEntry?.id,
                     onRequestOpen: { entry in
-                        // Capture entry for overlay and animate
-                        presentedEntry = entry
-                        presentedBlocks = entry.blocks
-                        // Reset focus so we request it after animation begins
+                        // Prepare focus and blocks, then present within a single animated transaction
                         shouldFocusEditor = false
+                        presentedBlocks = entry.blocks
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
+                            presentedEntry = entry
                             isOverlayVisible = true
                         }
                         // Trigger keyboard a moment after the transition starts for smoother feel

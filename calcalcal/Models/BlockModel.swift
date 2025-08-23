@@ -20,3 +20,35 @@ struct Block: Equatable {
     var calorieData: String?
     // Add more metadata as needed
 } 
+
+// MARK: - Text-only serialization utilities
+extension Array where Element == Block {
+    /// Serialize blocks to a single plain text `content` string by joining text-bearing blocks
+    /// with double newline. Image and spacer blocks are ignored for v1 text persistence.
+    func toContentString() -> String {
+        let paragraphs: [String] = self.compactMap { block in
+            switch block.type {
+            case .text(let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            case .imageText(_, _, let text):
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            case .image:
+                return nil
+            case .spacer:
+                return nil
+            }
+        }
+        return paragraphs.joined(separator: "\n\n")
+    }
+}
+
+extension String {
+    /// Deserialize a `content` string into text-only blocks by splitting on double newline.
+    /// Image/spacer information is not reconstructible in v1 and is omitted.
+    func toTextBlocks() -> [Block] {
+        let parts = self.components(separatedBy: "\n\n")
+        return parts.map { Block(type: .text($0), calorieData: nil) }
+    }
+}

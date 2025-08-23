@@ -223,6 +223,8 @@ class AuthManager: NSObject, ObservableObject {
                     if authResponse.success, let user = authResponse.user {
                         self.currentUser = user
                         self.isAuthenticated = true
+                        // Persist user id for DiaryAPI inserts
+                        UserDefaults.standard.set(user.id, forKey: "current_user_id")
                     } else {
                         self.isAuthenticated = false
                         self.currentUser = nil
@@ -433,6 +435,8 @@ class AuthManager: NSObject, ObservableObject {
                             
                             self.currentUser = user
                             self.isAuthenticated = true
+                            // Persist user id for DiaryAPI inserts
+                            UserDefaults.standard.set(user.id, forKey: "current_user_id")
                             
                             print("✅ Session saved and APIClient updated successfully")
                         } catch {

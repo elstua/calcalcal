@@ -12,6 +12,9 @@ struct EditorOverlay: View {
     @State private var pickedImage: UIImage? = nil
     @GestureState private var dragOffset: CGSize = .zero
     @State private var hasDismissedKeyboardForDrag: Bool = false
+    @State private var useMatchedGeometry: Bool = true
+    @State private var debounceWorkItem: DispatchWorkItem? = nil
+    @State private var lastSavedAt: Date? = nil
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -19,45 +22,90 @@ struct EditorOverlay: View {
             let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
             Color.black.opacity(0.35 * progress)
                 .ignoresSafeArea()
-                .onTapGesture { onClose() }
+                .onTapGesture { dismissWithMatched() }
             
-            // Editor card with matched geometry
+            // Wrapper that responds to keyboard. Keep matched view inside for stable geometry.
             VStack(spacing: 0) {
-                // Matched background shape with zero corner radius
-                RoundedRectangle(cornerRadius: 0, style: .continuous)
-                    .fill(Color(.systemBackground))
-                    .matchedGeometryEffect(id: "bg-\(entry.id)", in: namespace)
-                BigEntryBlock(
-                    entry: DiaryEntry(
-                        id: entry.id,
-                        date: entry.date,
-                        blocks: blocks,
-                        totalCalories: entry.totalCalories,
-                        lastModified: entry.lastModified,
-                        aiGeneratedSummary: entry.aiGeneratedSummary
-                    ),
-                    height: .infinity,
-                    cornerRadius: 0,
-                    showShadow: false,
-                    useExternalDecoration: true,
-                    onAddImage: { showImagePicker = true },
-                    onTap: {},
-                    imageMap: [:],
-                    isEditable: true,
-                    shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                    forceExpanded: true,
-                    onBlocksChange: { updated in
-                        blocks = updated
+                Group {
+                    if useMatchedGeometry {
+                        VStack(spacing: 0) {
+                            BigEntryBlock(
+                                entry: DiaryEntry(
+                                    id: entry.id,
+                                    date: entry.date,
+                                    blocks: blocks,
+                                    totalCalories: entry.totalCalories,
+                                    lastModified: entry.lastModified,
+                                    aiGeneratedSummary: entry.aiGeneratedSummary
+                                ),
+                                height: .infinity,
+                                cornerRadius: 0,
+                                showShadow: false,
+                                useExternalDecoration: true,
+                                onAddImage: { showImagePicker = true },
+                                onTap: {},
+                                imageMap: [:],
+                                isEditable: true,
+                                shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                                forceExpanded: true,
+                                onBlocksChange: { updated in
+                                    blocks = updated
+                                }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .onChange(of: blocks) { newValue in
+                                scheduleAutosave(blocks: newValue)
+                            }
+                        }
+                        .background(
+                            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                                .fill(Color(.systemBackground))
+                                .matchedGeometryEffect(id: "bg-\(entry.id)", in: namespace, isSource: false)
+                        )
+                        .matchedGeometryEffect(id: entry.id, in: namespace, isSource: false)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    } else {
+                        VStack(spacing: 0) {
+                            BigEntryBlock(
+                                entry: DiaryEntry(
+                                    id: entry.id,
+                                    date: entry.date,
+                                    blocks: blocks,
+                                    totalCalories: entry.totalCalories,
+                                    lastModified: entry.lastModified,
+                                    aiGeneratedSummary: entry.aiGeneratedSummary
+                                ),
+                                height: .infinity,
+                                cornerRadius: 0,
+                                showShadow: false,
+                                useExternalDecoration: true,
+                                onAddImage: { showImagePicker = true },
+                                onTap: {},
+                                imageMap: [:],
+                                isEditable: true,
+                                shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                                forceExpanded: true,
+                                onBlocksChange: { updated in
+                                    blocks = updated
+                                }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .onChange(of: blocks) { newValue in
+                                scheduleAutosave(blocks: newValue)
+                            }
+                        }
+                        .background(
+                            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                                .fill(Color(.systemBackground))
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
-                )
-                .matchedGeometryEffect(id: entry.id, in: namespace, isSource: false)
-                .offset(y: max(0, dragOffset.height))
-                .onChange(of: blocks) { _ in }
+                }
             }
-            .ignoresSafeArea(edges: .bottom)
+            .offset(y: max(0, dragOffset.height))
             .overlay(alignment: .topTrailing) {
                 // Close button
-                Button(action: onClose) {
+                Button(action: { dismissWithMatched() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(.secondary)
@@ -78,7 +126,7 @@ struct EditorOverlay: View {
                     .onEnded { value in
                         let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
                         if shouldDismiss {
-                            onClose()
+                            dismissWithMatched()
                         } else {
                             // Restore focus if we had dismissed it for drag
                             if hasDismissedKeyboardForDrag {
@@ -107,6 +155,16 @@ struct EditorOverlay: View {
                     }
                     pickedImage = nil
                 }
+        }
+        .onAppear {
+            // Allow matched geometry during the opening transition, then detach
+            useMatchedGeometry = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                useMatchedGeometry = false
+            }
+        }
+        .onDisappear {
+            flushSave()
         }
     }
 }
@@ -145,6 +203,75 @@ struct ImagePicker: UIViewControllerRepresentable {
 
 extension Notification.Name {
     static let editorOverlayDidCommit = Notification.Name("editorOverlayDidCommit")
+}
+
+// MARK: - Private helpers
+extension EditorOverlay {
+    private func dismissWithMatched() {
+        // Re-enable matched geometry just before closing to allow a smooth return animation
+        useMatchedGeometry = true
+        onClose()
+    }
+}
+
+// MARK: - Autosave helpers
+extension EditorOverlay {
+    private func scheduleAutosave(blocks: [Block]) {
+        debounceWorkItem?.cancel()
+        print("🕐 Autosave scheduled in 1s…")
+        let workItem = DispatchWorkItem {
+            print("💾 Autosave firing…")
+            Task { await save(blocks: blocks) }
+        }
+        debounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+    }
+
+    private func flushSave() {
+        if let work = debounceWorkItem {
+            work.cancel()
+            debounceWorkItem = nil
+        }
+        print("🔚 Flushing autosave on close…")
+        Task { await save(blocks: blocks) }
+    }
+
+    private func save(blocks: [Block]) async {
+        let content = blocks.toContentString()
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let placeholders: Set<String> = [
+            "write what you ate today",
+            "write what you ate this day"
+        ]
+        if trimmed.isEmpty || placeholders.contains(trimmed) {
+            print("⏭️ Autosave skipped (empty/placeholder content)")
+            return
+        }
+        let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
+        let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
+        print("⬆️ Upserting content for day \(day)… (overlay)")
+        do {
+            if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
+                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .diaryEntryTotalsUpdated,
+                        object: nil,
+                        userInfo: [
+                            "entryId": entry.id,
+                            "totalCalories": row.total_calories as Any
+                        ]
+                    )
+                }
+            } else {
+                print("⚠️ Missing user id; deferring insert until available")
+            }
+            lastSavedAt = Date()
+            print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
+        } catch {
+            print("❌ Autosave error: \(error)")
+        }
+    }
 }
 
 
