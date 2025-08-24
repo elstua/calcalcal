@@ -18,6 +18,7 @@ enum BlockType: Equatable {
 struct Block: Equatable {
     var type: BlockType
     var calorieData: String?
+    var nutrition: NutritionData?
     // Add more metadata as needed
 } 
 
@@ -84,6 +85,18 @@ extension String {
     /// Image/spacer information is not reconstructible in v1 and is omitted.
     func toTextBlocks() -> [Block] {
         let parts = self.components(separatedBy: "\n\n")
-        return parts.map { Block(type: .text($0), calorieData: nil) }
+        return parts.map { Block(type: .text($0), calorieData: nil, nutrition: nil) }
     }
+}
+
+// MARK: - Nutrition data container
+struct NutritionData: Codable, Equatable {
+    var calories: Int?
+    var protein: Double?
+    var fat: Double?
+    var carbs: Double?
+    var fiber: Double?
+    var sugar: Double?
+    var sodium: Double?
+    var confidence: Double?
 }

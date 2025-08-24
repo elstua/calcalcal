@@ -21,6 +21,9 @@ function err(code: string, message: string, status: number, ai_step?: string) {
 
 // LLM call helper moved to openai.ts
 
+// Track prompt changes for easier debugging of cache behavior
+const PROMPT_VERSION = "2024-08-24_v1"
+
 async function sha256(text: string): Promise<string> {
   const data = new TextEncoder().encode(text)
   const hashBuffer = await crypto.subtle.digest("SHA-256", data)
@@ -38,6 +41,7 @@ serve(async (req) => {
     let aiStep = "init"
     let cacheHits = 0
     let cacheMisses = 0
+    let parseFailures = 0
     const { entryId, blocks } = await req.json()
     if (!entryId || !Array.isArray(blocks)) {
       return err("bad_request", "entryId and blocks are required", 400, "validate_input")
@@ -58,7 +62,7 @@ serve(async (req) => {
     }
 
     // Model and temperature from env with safe defaults
-    const model = Deno.env.get("AI_MODEL") || "gpt-5-mini"
+    const model = Deno.env.get("AI_MODEL") || "gpt-4o-mini"
     const tempEnv = Number(Deno.env.get("AI_TEMPERATURE") || "0.2")
     const temperature = Math.max(0, Math.min(0.3, isNaN(tempEnv) ? 0.2 : tempEnv))
     const maxBlocksEnv = Number(Deno.env.get("AI_MAX_BLOCKS") || "50")
@@ -130,11 +134,11 @@ serve(async (req) => {
       aiStep = "cache_lookup"
       const { data: cached } = await supabase
         .from("ai_analysis_cache")
-        .select("analysis_result, confidence")
+        .select("analysis_result, confidence, parse_ok")
         .eq("content_hash", contentHash)
         .maybeSingle()
 
-      if (cached) {
+      if (cached && (cached as any)?.parse_ok !== false) {
         const analysis = cached.analysis_result as any
         cacheHits++
         updatedBlocks.push({
@@ -156,16 +160,24 @@ serve(async (req) => {
       const prompt = buildPrimaryPrompt(contentText)
       // First attempt (tolerate provider failures in dev by falling back to zeros)
       aiStep = "openai_call_primary"
-      let content = "{}"
+      let content = ""
+      let usedModel: string | undefined = undefined
+      let usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined = undefined
+      let parseError: string | null = null
+      let attempt: "primary" | "retry" = "primary"
       try {
-        content = await callOpenAI(prompt, openaiKey, model, temperature)
+        const result = await callOpenAI(prompt, openaiKey, model, temperature)
+        content = result?.content ?? ""
+        usedModel = result?.model ?? model
+        usage = result?.usage
         if (debug) {
           console.log(
             JSON.stringify({
               event: "openai_call_primary_ok",
               contentLength: content.length,
-              model,
+              model: usedModel,
               temperature,
+              promptVersion: PROMPT_VERSION,
             }),
           )
         }
@@ -175,12 +187,13 @@ serve(async (req) => {
             JSON.stringify({
               event: "openai_call_primary_error",
               error: e instanceof Error ? e.message : String(e),
-              model,
+              model: usedModel ?? model,
               temperature,
+              promptVersion: PROMPT_VERSION,
             }),
           )
         }
-        content = "{}"
+        content = ""
       }
       let analysis: any = {}
       let parsedOk = false
@@ -189,6 +202,7 @@ serve(async (req) => {
         parsedOk = typeof analysis === "object" && analysis !== null
       } catch {
         parsedOk = false
+        parseError = "Invalid JSON from provider"
       }
       if (debug) {
         console.log(
@@ -196,6 +210,7 @@ serve(async (req) => {
             event: "openai_parse_primary",
             parsedOk,
             hasCalories: typeof analysis?.calories !== "undefined",
+            contentPreview: content?.slice(0, 80) ?? "",
           }),
         )
       }
@@ -204,14 +219,19 @@ serve(async (req) => {
         const retryPrompt = buildRetryPrompt(contentText)
         aiStep = "openai_call_retry"
         try {
-          content = await callOpenAI(retryPrompt, openaiKey, model, temperature)
+          const result = await callOpenAI(retryPrompt, openaiKey, model, temperature)
+          content = result?.content ?? ""
+          usedModel = result?.model ?? model
+          usage = result?.usage
+          attempt = "retry"
           if (debug) {
             console.log(
               JSON.stringify({
                 event: "openai_call_retry_ok",
                 contentLength: content.length,
-                model,
+                model: usedModel,
                 temperature,
+                promptVersion: PROMPT_VERSION,
               }),
             )
           }
@@ -221,12 +241,13 @@ serve(async (req) => {
               JSON.stringify({
                 event: "openai_call_retry_error",
                 error: e instanceof Error ? e.message : String(e),
-                model,
+                model: usedModel ?? model,
                 temperature,
+                promptVersion: PROMPT_VERSION,
               }),
             )
           }
-          content = "{}"
+          content = ""
         }
         try {
           analysis = JSON.parse(content)
@@ -234,6 +255,7 @@ serve(async (req) => {
         } catch {
           analysis = {}
           parsedOk = false
+          parseError = "Invalid JSON from provider (retry)"
         }
         if (debug) {
           console.log(
@@ -241,9 +263,13 @@ serve(async (req) => {
               event: "openai_parse_retry",
               parsedOk,
               hasCalories: typeof analysis?.calories !== "undefined",
+              contentPreview: content?.slice(0, 80) ?? "",
             }),
           )
         }
+      }
+      if (!parsedOk) {
+        parseFailures++
       }
       cacheMisses++
 
@@ -254,6 +280,16 @@ serve(async (req) => {
         content: contentText,
         analysis_result: analysis,
         confidence: analysis?.confidence ?? 0,
+        raw_response_text: content ?? null,
+        provider_model: usedModel ?? model,
+        temperature,
+        prompt_version: PROMPT_VERSION,
+        parse_ok: parsedOk,
+        parse_error_text: parsedOk ? null : parseError,
+        attempt,
+        usage_prompt_tokens: usage?.prompt_tokens ?? null,
+        usage_completion_tokens: usage?.completion_tokens ?? null,
+        usage_total_tokens: usage?.total_tokens ?? null,
       })
       if (debug) {
         console.log(
@@ -261,6 +297,8 @@ serve(async (req) => {
             event: "cache_inserted",
             contentHash,
             cachedCalories: analysis?.calories ?? null,
+            parseOk: parsedOk,
+            attempt,
           }),
         )
       }
@@ -346,7 +384,11 @@ serve(async (req) => {
       }),
     )
 
-    return json({ success: true, updatedBlocksCount: updatedBlocks.length })
+    const response: any = { success: true, updatedBlocksCount: updatedBlocks.length }
+    if (debug) {
+      response.debug = { cacheHits, cacheMisses, parseFailures }
+    }
+    return json(response)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     try {

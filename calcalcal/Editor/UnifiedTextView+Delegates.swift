@@ -85,14 +85,22 @@ extension UnifiedTextView {
             if let metadata = unifiedContentStorage.blockMetadata(at: paragraphStart) {
                 switch metadata.blockType {
                 case .text:
-                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData))
+                    var nutrition: NutritionData? = nil
+                    if let data = metadata.nutritionJSON {
+                        nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                    }
+                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
                 case .imageText:
                     if let imageRef = metadata.imageReference, let image = imageMap[imageRef], let imageData = image.pngData() {
                         // Preserve both image and text
-                        newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData))
+                        var nutrition: NutritionData? = nil
+                        if let d = metadata.nutritionJSON {
+                            nutrition = try? JSONDecoder().decode(NutritionData.self, from: d)
+                        }
+                        newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
                     }
                 case .spacer:
-                    newBlocks.append(Block(type: .spacer, calorieData: nil))
+                    newBlocks.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
                 }
             } else {
                 // Fallback: treat as text block

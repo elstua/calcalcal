@@ -19,6 +19,8 @@ struct BigEntryBlock: View {
     @Binding var shouldBecomeFirstResponder: Bool
     var forceExpanded: Bool = false
     var onBlocksChange: (([Block]) -> Void)? = nil
+    // Optional override for displaying totals while editing/live-updating
+    var overrideTotalCalories: Int? = nil
     
     @State private var blocks: [Block]
     
@@ -33,7 +35,8 @@ struct BigEntryBlock: View {
          isEditable: Bool = false,
          shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
          forceExpanded: Bool = false,
-         onBlocksChange: (([Block]) -> Void)? = nil) {
+         onBlocksChange: (([Block]) -> Void)? = nil,
+         overrideTotalCalories: Int? = nil) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
@@ -46,6 +49,7 @@ struct BigEntryBlock: View {
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
+        self.overrideTotalCalories = overrideTotalCalories
         _blocks = State(initialValue: entry.blocks)
     }
     
@@ -75,7 +79,7 @@ struct BigEntryBlock: View {
             
             // Footer
             EntryFooterView(
-                calorieSummary: "\(entry.totalCalories.map { String($0) } ?? "…") kcal",
+                calorieSummary: "\((overrideTotalCalories ?? entry.totalCalories).map { String($0) } ?? "…") kcal",
                 onAddImage: { onAddImage?() }
             )
             .padding(.bottom, 8)
@@ -85,6 +89,10 @@ struct BigEntryBlock: View {
         .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
         .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
         .onTapGesture { onTap?() }
+        // Keep internal editor blocks in sync with external model
+        .onChange(of: entry.blocks) { newValue in
+            self.blocks = newValue
+        }
     }
     
     private func formattedDate(_ date: Date) -> String {

@@ -16,6 +16,7 @@ class UnifiedTextContentStorage: NSObject {
         var blockSpacing: CGFloat
         var imageReference: UUID?
         var calorieData: String?
+        var nutritionJSON: Data?
     }
     
     /// Reference to the text storage
@@ -27,6 +28,7 @@ class UnifiedTextContentStorage: NSObject {
     static let blockSpacingAttributeName = NSAttributedString.Key("UnifiedEditor.blockSpacing")
     static let imageReferenceAttributeName = NSAttributedString.Key("UnifiedEditor.imageReference")
     static let calorieDataAttributeName = NSAttributedString.Key("UnifiedEditor.calorieData")
+    static let nutritionJSONAttributeName = NSAttributedString.Key("UnifiedEditor.nutritionJSON")
     
     // MARK: - Block Management
     
@@ -44,6 +46,7 @@ class UnifiedTextContentStorage: NSObject {
         existingAttributes[Self.blockSpacingAttributeName] = metadata.blockSpacing
         existingAttributes[Self.imageReferenceAttributeName] = metadata.imageReference as Any
         existingAttributes[Self.calorieDataAttributeName] = metadata.calorieData as Any
+        existingAttributes[Self.nutritionJSONAttributeName] = metadata.nutritionJSON as Any
         
         // Apply all attributes together to preserve formatting
         textStorage.addAttributes(existingAttributes, range: range)
@@ -74,12 +77,14 @@ class UnifiedTextContentStorage: NSObject {
         let blockSpacing = attributes[Self.blockSpacingAttributeName] as? CGFloat ?? 16.0
         let imageReference = attributes[Self.imageReferenceAttributeName] as? UUID
         let calorieData = attributes[Self.calorieDataAttributeName] as? String
+        let nutritionJSON = attributes[Self.nutritionJSONAttributeName] as? Data
         
         return BlockMetadata(
             blockType: blockType,
             blockSpacing: blockSpacing,
             imageReference: imageReference,
-            calorieData: calorieData
+            calorieData: calorieData,
+            nutritionJSON: nutritionJSON
         )
     }
     
@@ -120,5 +125,6 @@ class UnifiedTextContentStorage: NSObject {
         textStorage?.removeAttribute(Self.blockSpacingAttributeName, range: range)
         textStorage?.removeAttribute(Self.imageReferenceAttributeName, range: range)
         textStorage?.removeAttribute(Self.calorieDataAttributeName, range: range)
+        textStorage?.removeAttribute(Self.nutritionJSONAttributeName, range: range)
     }
 } 

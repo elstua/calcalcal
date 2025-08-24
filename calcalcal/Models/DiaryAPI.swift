@@ -13,6 +13,20 @@ struct DiaryAPI {
         let updated_at: String?
     }
 
+    struct DBBlock: Codable {
+        let position: Int?
+        let content: String?
+        let calories: Int?
+        let protein: Double?
+        let fat: Double?
+        let carbs: Double?
+        let fiber: Double?
+        let sugar: Double?
+        let sodium: Double?
+        let confidence: Double?
+    }
+    private struct BlocksRow: Codable { let blocks: [DBBlock]? }
+
     private static func makeRequest(url: URL, method: String = "GET", body: Data? = nil) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -67,6 +81,34 @@ struct DiaryAPI {
         }
         let rows = try decodeRows(data)
         return rows.first
+    }
+
+    static func getById(_ id: String) async throws -> Row? {
+        let base = Configuration.supabaseURL
+        let select = "id,user_id,date,content,images,total_calories,updated_at"
+        let urlString = "\(base)/rest/v1/diary_entries?select=\(select)&id=eq.\(id)&limit=1"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        let request = try makeRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        let rows = try decodeRows(data)
+        return rows.first
+    }
+
+    static func getBlocksById(_ id: String) async throws -> [DBBlock] {
+        let base = Configuration.supabaseURL
+        let urlString = "\(base)/rest/v1/diary_entries?select=blocks&id=eq.\(id)&limit=1"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        let request = try makeRequest(url: url)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        let decoder = JSONDecoder()
+        let rows = try decoder.decode([BlocksRow].self, from: data)
+        return rows.first?.blocks ?? []
     }
 
     static func insert(date: String, content: String) async throws -> Row {

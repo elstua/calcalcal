@@ -41,12 +41,14 @@ extension UnifiedTextView {
                     paragraphStyle.paragraphSpacing = 0
                     attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
                     newAttributedText = attributedText
-                    metadata = UnifiedTextContentStorage.BlockMetadata(
+                    var meta = UnifiedTextContentStorage.BlockMetadata(
                         blockType: .text,
                         blockSpacing: defaultBlockSpacing,
                         imageReference: nil,
-                        calorieData: block.calorieData
+                        calorieData: block.calorieData,
+                        nutritionJSON: try? JSONEncoder().encode(block.nutrition)
                     )
+                    metadata = meta
                 case .image(let imageData, let imageRef):
                     let (attributedText, meta) = ImageTextBlockLayout.attributedStringForImageBlock(
                         imageData: imageData,
@@ -57,7 +59,9 @@ extension UnifiedTextView {
                         calorieData: block.calorieData
                     )
                     newAttributedText = attributedText
-                    metadata = meta
+                    var meta2 = meta
+                    meta2.nutritionJSON = try? JSONEncoder().encode(block.nutrition)
+                    metadata = meta2
                 case .imageText(_, let imageRef, let text):
                     let (attributedText, meta) = ImageTextBlockLayout.attributedStringForImageTextBlock(
                         text: text,
@@ -68,7 +72,9 @@ extension UnifiedTextView {
                         calorieData: block.calorieData
                     )
                     newAttributedText = attributedText
-                    metadata = meta
+                    var meta3 = meta
+                    meta3.nutritionJSON = try? JSONEncoder().encode(block.nutrition)
+                    metadata = meta3
                 case .spacer:
                     let blockText = "\n"
                     let attributedText = NSMutableAttributedString(string: blockText)
@@ -78,12 +84,14 @@ extension UnifiedTextView {
                     paragraphStyle.paragraphSpacing = 0
                     attributedText.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: blockText.count))
                     newAttributedText = attributedText
-                    metadata = UnifiedTextContentStorage.BlockMetadata(
+                    let metadataTemp = UnifiedTextContentStorage.BlockMetadata(
                         blockType: .spacer,
                         blockSpacing: defaultSpacerHeight,
                         imageReference: nil,
-                        calorieData: nil
+                        calorieData: nil,
+                        nutritionJSON: nil
                     )
+                    metadata = metadataTemp
                 }
                 // Replace the text in textStorage for this block
                 if blockRange.location + blockRange.length <= textStorage.length {
@@ -136,11 +144,12 @@ extension UnifiedTextView {
                 textStorage.append(attributedText)
                 // Assign metadata
                 let blockRange = NSRange(location: currentLocation, length: blockText.count)
-                let metadata = UnifiedTextContentStorage.BlockMetadata(
+                var metadata = UnifiedTextContentStorage.BlockMetadata(
                     blockType: .text,
                     blockSpacing: defaultBlockSpacing,
                     imageReference: nil,
-                    calorieData: block.calorieData
+                    calorieData: block.calorieData,
+                    nutritionJSON: try? JSONEncoder().encode(block.nutrition)
                 )
                 unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
                 currentLocation += blockText.count
@@ -155,7 +164,9 @@ extension UnifiedTextView {
                 )
                 textStorage.append(attributedText)
                 let blockRange = NSRange(location: currentLocation, length: attributedText.length)
-                unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                var meta2 = metadata
+                meta2.nutritionJSON = try? JSONEncoder().encode(block.nutrition)
+                unifiedContentStorage.setBlockMetadata(meta2, for: blockRange)
                 currentLocation += attributedText.length
             case .imageText(_, let imageRef, let text):
                 let (attributedText, metadata) = ImageTextBlockLayout.attributedStringForImageTextBlock(
@@ -168,7 +179,9 @@ extension UnifiedTextView {
                 )
                 textStorage.append(attributedText)
                 let blockRange = NSRange(location: currentLocation, length: attributedText.length)
-                unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
+                var meta3 = metadata
+                meta3.nutritionJSON = try? JSONEncoder().encode(block.nutrition)
+                unifiedContentStorage.setBlockMetadata(meta3, for: blockRange)
                 currentLocation += attributedText.length
             case .spacer:
                 let blockText = "\n"
@@ -185,7 +198,8 @@ extension UnifiedTextView {
                     blockType: .spacer,
                     blockSpacing: defaultSpacerHeight,
                     imageReference: nil,
-                    calorieData: nil
+                    calorieData: nil,
+                    nutritionJSON: nil
                 )
                 unifiedContentStorage.setBlockMetadata(metadata, for: blockRange)
                 currentLocation += blockText.count

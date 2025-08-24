@@ -85,19 +85,27 @@ struct UnifiedTextEditor: UIViewRepresentable {
             if let metadata = textView.unifiedContentStorage.blockMetadata(at: paragraphStart) {
                 switch metadata.blockType {
                 case .text:
-                    reconstructed.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData))
+                    var nutrition: NutritionData? = nil
+                    if let data = metadata.nutritionJSON {
+                        nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                    }
+                    reconstructed.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
                 case .imageText:
                     if let imageRef = metadata.imageReference,
                        let image = textView.imageMap[imageRef],
                        let data = image.pngData() {
-                        reconstructed.append(Block(type: .imageText(data, imageRef, paragraphText), calorieData: metadata.calorieData))
+                        var nutrition: NutritionData? = nil
+                        if let ndata = metadata.nutritionJSON {
+                            nutrition = try? JSONDecoder().decode(NutritionData.self, from: ndata)
+                        }
+                        reconstructed.append(Block(type: .imageText(data, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
                     }
                 case .spacer:
-                    reconstructed.append(Block(type: .spacer, calorieData: nil))
+                    reconstructed.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
                 }
             } else {
                 // Fallback: treat as a plain text block when no metadata present
-                reconstructed.append(Block(type: .text(paragraphText), calorieData: nil))
+                reconstructed.append(Block(type: .text(paragraphText), calorieData: nil, nutrition: nil))
             }
 
             location = paragraphEnd

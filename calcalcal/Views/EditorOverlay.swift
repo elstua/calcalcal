@@ -15,6 +15,7 @@ struct EditorOverlay: View {
     @State private var useMatchedGeometry: Bool = true
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
+    @State private var liveTotalCalories: Int? = nil
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,7 +35,7 @@ struct EditorOverlay: View {
                                     id: entry.id,
                                     date: entry.date,
                                     blocks: blocks,
-                                    totalCalories: entry.totalCalories,
+                                    totalCalories: liveTotalCalories ?? entry.totalCalories,
                                     lastModified: entry.lastModified,
                                     aiGeneratedSummary: entry.aiGeneratedSummary
                                 ),
@@ -50,7 +51,8 @@ struct EditorOverlay: View {
                                 forceExpanded: true,
                                 onBlocksChange: { updated in
                                     blocks = updated
-                                }
+                                },
+                                overrideTotalCalories: liveTotalCalories ?? entry.totalCalories
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .onChange(of: blocks) { newValue in
@@ -71,7 +73,7 @@ struct EditorOverlay: View {
                                     id: entry.id,
                                     date: entry.date,
                                     blocks: blocks,
-                                    totalCalories: entry.totalCalories,
+                                    totalCalories: liveTotalCalories ?? entry.totalCalories,
                                     lastModified: entry.lastModified,
                                     aiGeneratedSummary: entry.aiGeneratedSummary
                                 ),
@@ -87,7 +89,8 @@ struct EditorOverlay: View {
                                 forceExpanded: true,
                                 onBlocksChange: { updated in
                                     blocks = updated
-                                }
+                                },
+                                overrideTotalCalories: liveTotalCalories ?? entry.totalCalories
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .onChange(of: blocks) { newValue in
@@ -159,8 +162,66 @@ struct EditorOverlay: View {
         .onAppear {
             // Allow matched geometry during the opening transition, then detach
             useMatchedGeometry = true
+            liveTotalCalories = entry.totalCalories
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 useMatchedGeometry = false
+            }
+            // Fetch existing per-block calories for this entry (if already analyzed)
+            Task {
+                do {
+                    let dbBlocks = try await DiaryAPI.getBlocksById(entry.id.uuidString)
+                    await MainActor.run {
+                        var updated = blocks
+                        var i = 0
+                        for idx in updated.indices {
+                            switch updated[idx].type {
+                            case .text(let t):
+                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !trimmed.isEmpty {
+                                    if i < dbBlocks.count {
+                                        let kcal = dbBlocks[i].calories ?? 0
+                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
+                                        updated[idx].nutrition = NutritionData(
+                                            calories: dbBlocks[i].calories,
+                                            protein: dbBlocks[i].protein,
+                                            fat: dbBlocks[i].fat,
+                                            carbs: dbBlocks[i].carbs,
+                                            fiber: dbBlocks[i].fiber,
+                                            sugar: dbBlocks[i].sugar,
+                                            sodium: dbBlocks[i].sodium,
+                                            confidence: dbBlocks[i].confidence
+                                        )
+                                    }
+                                    i += 1
+                                }
+                            case .imageText(_, _, let t):
+                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !trimmed.isEmpty {
+                                    if i < dbBlocks.count {
+                                        let kcal = dbBlocks[i].calories ?? 0
+                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
+                                        updated[idx].nutrition = NutritionData(
+                                            calories: dbBlocks[i].calories,
+                                            protein: dbBlocks[i].protein,
+                                            fat: dbBlocks[i].fat,
+                                            carbs: dbBlocks[i].carbs,
+                                            fiber: dbBlocks[i].fiber,
+                                            sugar: dbBlocks[i].sugar,
+                                            sodium: dbBlocks[i].sodium,
+                                            confidence: dbBlocks[i].confidence
+                                        )
+                                    }
+                                    i += 1
+                                }
+                            default:
+                                break
+                            }
+                        }
+                        self.blocks = updated
+                    }
+                } catch {
+                    // Best-effort; ignore if blocks not available yet
+                }
             }
         }
         .onDisappear {
@@ -260,6 +321,75 @@ extension EditorOverlay {
                         do {
                             _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
                             print("🤖 Analyze triggered for entry \(row.id) with \(payload.count) blocks")
+                            // Poll for updated totals and per-block calories after analysis completes (simple backoff up to ~6s)
+                            for delay in [0.8, 1.2, 2.0, 2.8] {
+                                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                                let refreshed = try? await DiaryAPI.getById(row.id)
+                                let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
+                                await MainActor.run {
+                                    if let refreshed {
+                                        NotificationCenter.default.post(
+                                            name: .diaryEntryTotalsUpdated,
+                                            object: nil,
+                                            userInfo: [
+                                                "entryId": entry.id,
+                                                "totalCalories": refreshed.total_calories as Any
+                                            ]
+                                        )
+                                        self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
+                                    }
+                                    if let dbBlocks {
+                                        var updated = blocks
+                                        var i = 0
+                                        for idx in updated.indices {
+                                            switch updated[idx].type {
+                                            case .text(let t):
+                                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                if !trimmed.isEmpty {
+                                                    if i < dbBlocks.count {
+                                                        let kcal = dbBlocks[i].calories ?? 0
+                                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
+                                                        updated[idx].nutrition = NutritionData(
+                                                            calories: dbBlocks[i].calories,
+                                                            protein: dbBlocks[i].protein,
+                                                            fat: dbBlocks[i].fat,
+                                                            carbs: dbBlocks[i].carbs,
+                                                            fiber: dbBlocks[i].fiber,
+                                                            sugar: dbBlocks[i].sugar,
+                                                            sodium: dbBlocks[i].sodium,
+                                                            confidence: dbBlocks[i].confidence
+                                                        )
+                                                    }
+                                                    i += 1
+                                                }
+                                            case .imageText(_, _, let t):
+                                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                if !trimmed.isEmpty {
+                                                    if i < dbBlocks.count {
+                                                        let kcal = dbBlocks[i].calories ?? 0
+                                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
+                                                        updated[idx].nutrition = NutritionData(
+                                                            calories: dbBlocks[i].calories,
+                                                            protein: dbBlocks[i].protein,
+                                                            fat: dbBlocks[i].fat,
+                                                            carbs: dbBlocks[i].carbs,
+                                                            fiber: dbBlocks[i].fiber,
+                                                            sugar: dbBlocks[i].sugar,
+                                                            sodium: dbBlocks[i].sodium,
+                                                            confidence: dbBlocks[i].confidence
+                                                        )
+                                                    }
+                                                    i += 1
+                                                }
+                                            default:
+                                                break
+                                            }
+                                        }
+                                        self.blocks = updated
+                                    }
+                                }
+                                if let refreshed = refreshed, let cals = refreshed.total_calories, cals > 0 { break }
+                            }
                         } catch {
                             print("❌ Analyze error: \(error)")
                         }
