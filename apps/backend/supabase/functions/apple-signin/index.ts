@@ -79,18 +79,57 @@ serve(async (req) => {
     const candidateName = (authedUser.user_metadata?.name as string | undefined) || (user?.name as string | undefined)
     const appleId = (authedUser.user_metadata?.apple_id as string | undefined) || (applePayload?.sub as string | undefined) || user?.id
 
-    const { error: upsertErr } = await serviceClient.from("user_profiles").upsert(
-      {
+    // Fetch existing profile; only set name/email on first sign-in to avoid overwriting with nulls later
+    const { data: existingProfile, error: fetchErr } = await serviceClient
+      .from("user_profiles")
+      .select("id, email, name, apple_id")
+      .eq("id", authedUser.id)
+      .maybeSingle()
+
+    if (fetchErr) {
+      return json({ error: fetchErr.message }, { status: 400 })
+    }
+
+    if (!existingProfile) {
+      const { error: insertErr } = await serviceClient.from("user_profiles").insert({
         id: authedUser.id,
         email: candidateEmail ?? null,
         name: candidateName ?? null,
         apple_id: appleId ?? null,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    )
-    if (upsertErr) {
-      return json({ error: upsertErr.message }, { status: 400 })
+      })
+      if (insertErr) {
+        return json({ error: insertErr.message }, { status: 400 })
+      }
+
+      // Best-effort: persist name/apple_id to Auth user_metadata on first sign-in
+      try {
+        if (candidateName || appleId) {
+          await serviceClient.auth.admin.updateUserById(authedUser.id, {
+            user_metadata: {
+              ...(candidateName ? { name: candidateName } : {}),
+              ...(appleId ? { apple_id: appleId } : {}),
+            },
+          })
+        }
+      } catch (_e) {
+        // no-op
+      }
+    } else {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (!existingProfile.email && candidateEmail) updates.email = candidateEmail
+      if (!existingProfile.name && candidateName) updates.name = candidateName
+      if (!existingProfile.apple_id && appleId) updates.apple_id = appleId
+
+      if (Object.keys(updates).length > 1) {
+        const { error: updateErr } = await serviceClient
+          .from("user_profiles")
+          .update(updates)
+          .eq("id", authedUser.id)
+        if (updateErr) {
+          return json({ error: updateErr.message }, { status: 400 })
+        }
+      }
     }
 
     // 3) Fetch the full profile row (user-scoped)

@@ -7,6 +7,7 @@ import UIKit
 extension UnifiedTextView {
     
     func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorage.EditActions, range editedRange: NSRange, changeInLength delta: Int) {
+        if isProgrammaticUpdate { return }
         // Respond to ALL content changes immediately, not just deletions
         guard editedMask.contains(.editedCharacters) else { return }
         
@@ -26,7 +27,8 @@ extension UnifiedTextView {
         
         // Update blocks immediately on EVERY character change
         // This prevents bugs caused by delayed updates
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, !self.isProgrammaticUpdate else { return }
 
             // After updating, re-apply image block metadata to paragraphs that are still image blocks
             let string = self.textStorage.string as NSString
@@ -68,6 +70,7 @@ extension UnifiedTextView {
     }
     
     func textViewDidChange(_ textView: UITextView) {
+        if isProgrammaticUpdate { return }
         print("📝 textViewDidChange called")
         print("Current textStorage: \(textStorage.string)")
         // Parse the text storage into blocks and update the model
@@ -128,6 +131,8 @@ extension UnifiedTextView {
     }
     
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        if isProgrammaticUpdate { return false }
+        isUserEditing = true
         print("🎯 Text will change: range=\(range), text='\(text)'")
         // Handle Enter key press in a model-driven way
         if text == "\n" {
@@ -141,7 +146,7 @@ extension UnifiedTextView {
             for (i, block) in blocks.enumerated() {
                 switch block.type {
                 case .text(let blockText):
-                    let blockLength = (blockText + "\n").count
+                    let blockLength = (blockText as NSString).length + 1
                     if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
                         blockIndex = i
                         blockStart = runningLocation
@@ -161,7 +166,7 @@ extension UnifiedTextView {
                     runningLocation += blockLength
                 case .imageText(let data, let uuid, let text):
                     // Treat as a single block (1 char + text + newline)
-                    let blockLength = (text + "\n").count + 1
+                    let blockLength = 1 + (text as NSString).length + 1
                     if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
                         blockIndex = i
                         blockStart = runningLocation
@@ -249,12 +254,15 @@ extension UnifiedTextView {
     }
     
     func textViewDidChangeSelection(_ textView: UITextView) {
+        if isProgrammaticUpdate { return }
         // Even selection changes might require block updates
         // This ensures we stay synchronized with cursor position
         print("📍 Selection changed to: \(textView.selectedRange)")
         
         // Light update on selection change - just ensure visuals are correct
         setNeedsDisplay()
+        // End of an edit gesture when selection change happens after input
+        isUserEditing = false
     }
 }
 

@@ -39,6 +39,12 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     
     /// Minimum time between updates (in seconds) to prevent excessive processing
     internal let updateThrottleInterval: TimeInterval = 0.016 // ~60fps
+
+    /// Guard to prevent delegate feedback loops during programmatic mutations
+    internal var isProgrammaticUpdate: Bool = false
+
+    /// Indicates active user typing/editing session
+    internal var isUserEditing: Bool = false
     
     // MARK: - Configuration
     
