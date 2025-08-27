@@ -1,13 +1,53 @@
-<key>NSPhotoLibraryUsageDescription</key>
-<string>This app needs access to your photo library to display your images in the gallery.</string>
-<key>NSAppTransportSecurity</key>
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
 <dict>
-    <key>NSAllowsLocalNetworking</key>
-    <true/>
-    <key>NSAllowsArbitraryLoads</key>
-    <true/>
-</dict> 
-<key>SUPABASE_URL</key>
-<string>https://lospxwasburnwmlqducq.supabase.co</string>
-<key>SUPABASE_ANON_KEY</key>
-<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0</string>
+	<key>CFBundleDisplayName</key>
+	<string>Calycal</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.healthcare-fitness</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Need to get the images for calorie tracking.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array/>
+		</dict>
+	</dict>
+	<key>SUPABASE_URL</key>
+	<string>https://lospxwasburnwmlqducq.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvc3B4d2FzYnVybndtbHFkdWNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NDQyNjEsImV4cCI6MjA2OTEyMDI2MX0.1Nyeo2k0uctrIUqNpm2w22fYzgDSBnXxkzPlzQgFcKg</string>
+</dict>
+</plist>

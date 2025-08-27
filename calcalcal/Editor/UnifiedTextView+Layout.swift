@@ -10,43 +10,51 @@ extension UnifiedTextView {
     
     // MARK: - TextKit Compatibility Helper
     
-    /// Get bounding rect for character range without TextKit 1 APIs
+    /// Get bounding rect for character range using proper text measurement
     internal func boundingRect(for characterRange: NSRange) -> CGRect {
         // Ensure the range is valid
-        guard characterRange.location < textStorage.length else { return .zero }
-        
-        // Prefer using UITextInput selection rects (respects exclusions, attachments, wrapping)
-        if let start = position(from: beginningOfDocument, offset: characterRange.location),
-           let end = position(from: start, offset: characterRange.length),
-           let range = textRange(from: start, to: end) {
-            let rects = selectionRects(for: range)
-            var unionRect: CGRect = .null
-            for r in rects where !r.rect.isEmpty {
-                unionRect = unionRect.union(r.rect)
-            }
-            if !unionRect.isNull && !unionRect.isEmpty {
-                // Already in view coordinates; return as-is
-                return unionRect
-            }
+        guard characterRange.location < textStorage.length else {
+            return CGRect.zero
         }
         
-        // Fallback: approximate using attributed measurement
-        let font = self.font ?? UIFont.systemFont(ofSize: 16)
-        let lineHeight = font.lineHeight
-        let containerWidth = textContainer.size.width - textContainer.lineFragmentPadding * 2
+        // Get the actual paragraph text for this range
         let string = textStorage.string as NSString
         let paragraphText = string.substring(with: characterRange)
+        
+        // Use TextKit 1 for accurate measurements when we need precise positioning
+        // This is necessary for proper block positioning and sizing
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: characterRange, actualCharacterRange: nil)
+        let boundingRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+        
+        // If TextKit 1 gives us a valid rect, use it
+        if !boundingRect.isEmpty {
+            return boundingRect
+        }
+        
+        // Fallback to manual calculation if TextKit 1 fails
+        let font = self.font ?? UIFont.systemFont(ofSize: 16)
+        let lineHeight = font.lineHeight
+        
+        // Calculate the actual number of lines this paragraph will take
+        let containerWidth = textContainer.size.width - textContainer.lineFragmentPadding * 2
+        
+        // Create a temporary text storage to measure the paragraph
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: self.textColor ?? UIColor.label
         ]
+        
         let attributedParagraph = NSAttributedString(string: paragraphText, attributes: attributes)
+        
+        // Calculate the height needed for this text
         let constraintSize = CGSize(width: containerWidth, height: CGFloat.greatestFiniteMagnitude)
         let boundingSize = attributedParagraph.boundingRect(
             with: constraintSize,
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             context: nil
         ).size
+        
+        // Calculate Y position by measuring all text before this range
         let textBeforeRange = string.substring(to: characterRange.location)
         let attributedTextBefore = NSAttributedString(string: textBeforeRange, attributes: attributes)
         let heightBefore = attributedTextBefore.boundingRect(
@@ -54,12 +62,18 @@ extension UnifiedTextView {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             context: nil
         ).size.height
-        return CGRect(x: textContainerInset.left, y: textContainerInset.top + heightBefore, width: containerWidth, height: max(boundingSize.height, lineHeight))
+        
+        return CGRect(
+            x: 0,
+            y: heightBefore,
+            width: containerWidth,
+            height: max(boundingSize.height, lineHeight) // Ensure minimum height
+        )
     }
     
     /// Invalidate layout for character range using appropriate API
     private func invalidateLayout(for characterRange: NSRange) {
-        // Avoid layoutManager invalidations to keep TextKit 2 mode
+        // For most cases, we can simply trigger a redraw without accessing layoutManager
         setNeedsDisplay()
         setNeedsLayout()
     }
@@ -84,6 +98,9 @@ extension UnifiedTextView {
             }
         }
         textContainer.exclusionPaths = exclusionPaths
+        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
+        layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textStorage.length))
+        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length))
         setNeedsLayout()
         setNeedsDisplay()
     }
@@ -257,7 +274,7 @@ extension UnifiedTextView {
                 insertSubview(backgroundView, at: 0)
             }
             backgroundView.frame = blockFrame
-//            updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
+            updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
             backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
             // Show placeholder when no backend calories yet
             let caloriesText = metadata.calorieData ?? "…"
@@ -274,24 +291,24 @@ extension UnifiedTextView {
     private func createBlockBackgroundView(for blockType: UnifiedTextContentStorage.BlockMetadata.BlockType) -> UIView {
         let view = UIView()
         view.isUserInteractionEnabled = false // Don't interfere with text editing
-//        updateBlockBackgroundAppearance(view, for: blockType)
+        updateBlockBackgroundAppearance(view, for: blockType)
         return view
     }
     
     /// Update block background view appearance
-//    private func updateBlockBackgroundAppearance(_ view: UIView, for blockType: UnifiedTextContentStorage.BlockMetadata.BlockType) {
-//        switch blockType {
-//        case .text:
-//            // Green tint for text blocks
-//            view.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.05)
-//        case .imageText:
-//            // Blue tint for image blocks
-//            view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.05)
-//        case .spacer:
-//            // Gray tint for spacer blocks (more visible for debug)
-//            view.backgroundColor = UIColor.systemGray.withAlphaComponent(0.25)
-//        }
-//    }
+    private func updateBlockBackgroundAppearance(_ view: UIView, for blockType: UnifiedTextContentStorage.BlockMetadata.BlockType) {
+        switch blockType {
+        case .text:
+            // Green tint for text blocks
+            view.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.05)
+        case .imageText:
+            // Blue tint for image blocks
+            view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.05)
+        case .spacer:
+            // Gray tint for spacer blocks (more visible for debug)
+            view.backgroundColor = UIColor.systemGray.withAlphaComponent(0.25)
+        }
+    }
 }
 
 class CalorieLabelView: UIView {
@@ -321,20 +338,16 @@ extension UnifiedTextView {
     /// Returns the rect (in view coordinates) for the last line of a paragraph range
     func lastLineRect(for paragraphRange: NSRange) -> CGRect? {
         guard paragraphRange.length > 0 else { return nil }
-        if let start = position(from: beginningOfDocument, offset: paragraphRange.location),
-           let end = position(from: start, offset: paragraphRange.length),
-           let range = textRange(from: start, to: end) {
-            let rects = selectionRects(for: range)
-            if let last = rects.last?.rect, !last.isEmpty { return last }
-        }
-        // Fallback: derive from boundingRect
-        let rect = boundingRect(for: paragraphRange)
-        return CGRect(
-            x: rect.origin.x + textContainerInset.left,
-            y: rect.origin.y + textContainerInset.top + max(0, rect.height - (self.font?.lineHeight ?? 16)),
-            width: rect.width,
-            height: self.font?.lineHeight ?? 16
-        )
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: paragraphRange, actualCharacterRange: nil)
+        guard glyphRange.length > 0 else { return nil }
+        let lastGlyphIndex = glyphRange.location + glyphRange.length - 1
+        var lineRange = NSRange(location: 0, length: 0)
+        let lineRect = layoutManager.lineFragmentRect(forGlyphAt: lastGlyphIndex, effectiveRange: &lineRange)
+        // Convert from text container to view coordinates
+        var rect = lineRect
+        rect.origin.x += textContainerInset.left
+        rect.origin.y += textContainerInset.top
+        return rect
     }
 }
 

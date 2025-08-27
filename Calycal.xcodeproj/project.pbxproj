@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DFF1C00A2E369F2400576B60 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0092E369F2400576B60 /* Auth */; };
-		DFF1C00C2E369F2400576B60 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00B2E369F2400576B60 /* Functions */; };
-		DFF1C00E2E369F2400576B60 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00D2E369F2400576B60 /* PostgREST */; };
-		DFF1C0102E369F2400576B60 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00F2E369F2400576B60 /* Realtime */; };
-		DFF1C0122E369F2400576B60 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0112E369F2400576B60 /* Storage */; };
-		DFF1C0142E369F2400576B60 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0132E369F2400576B60 /* Supabase */; };
+		DF5872322E5F1594005AD214 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0092E369F2400576B60 /* Auth */; };
+		DF5872332E5F1594005AD214 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00B2E369F2400576B60 /* Functions */; };
+		DF5872342E5F1594005AD214 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00D2E369F2400576B60 /* PostgREST */; };
+		DF5872352E5F1594005AD214 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00F2E369F2400576B60 /* Realtime */; };
+		DF5872362E5F1594005AD214 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0112E369F2400576B60 /* Storage */; };
+		DF5872372E5F1594005AD214 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0132E369F2400576B60 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,19 +34,21 @@
 
 /* Begin PBXFileReference section */
 		ACB9E5D62D594D7D00C37803 /* calycal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = calycal.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calcalcalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calcalcalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		ACB9E5E62D594D7E00C37803 /* CalycalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CalycalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		ACB9E5F02D594D7E00C37803 /* CalycalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CalycalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF0A57982E5D346500EF8210 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = SDKROOT; };
+		DF2A6E4D2E5E03ED0016DD61 /* supabase-swift */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = "supabase-swift"; path = "/Users/artemsavelev/Library/Developer/Xcode/DerivedData/Calycal-hdaygmejzkosrcctzcgmrlmjifov/SourcePackages/checkouts/supabase-swift"; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "calcalcal" target */ = {
+		DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "Calycal" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Editor/ARCHITECTURE.md,
 				Editor/README.md,
 				Info.plist,
 			);
-			target = ACB9E5D52D594D7D00C37803 /* calcalcal */;
+			target = ACB9E5D52D594D7D00C37803 /* Calycal */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -54,7 +56,7 @@
 		ACB9E5D82D594D7D00C37803 /* calcalcal */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "calcalcal" target */,
+				DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "Calycal" target */,
 			);
 			path = calcalcal;
 			sourceTree = "<group>";
@@ -72,17 +74,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		ACB9E5D32D594D7D00C37803 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			files = (
-				DFF1C00E2E369F2400576B60 /* PostgREST in Frameworks */,
-				DFF1C00C2E369F2400576B60 /* Functions in Frameworks */,
-				DFF1C0142E369F2400576B60 /* Supabase in Frameworks */,
-				DFF1C00A2E369F2400576B60 /* Auth in Frameworks */,
-				DFF1C0122E369F2400576B60 /* Storage in Frameworks */,
-				DFF1C0102E369F2400576B60 /* Realtime in Frameworks */,
-			);
-		};
 		ACB9E5E32D594D7E00C37803 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -91,6 +82,17 @@
 		ACB9E5ED2D594D7E00C37803 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+			);
+		};
+		DF2A6E4C2E5E03E40016DD61 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				DF5872372E5F1594005AD214 /* Supabase in Frameworks */,
+				DF5872362E5F1594005AD214 /* Storage in Frameworks */,
+				DF5872352E5F1594005AD214 /* Realtime in Frameworks */,
+				DF5872342E5F1594005AD214 /* PostgREST in Frameworks */,
+				DF5872332E5F1594005AD214 /* Functions in Frameworks */,
+				DF5872322E5F1594005AD214 /* Auth in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -102,6 +104,7 @@
 				ACB9E5D82D594D7D00C37803 /* calcalcal */,
 				ACB9E5E92D594D7E00C37803 /* calcalcalTests */,
 				ACB9E5F32D594D7E00C37803 /* calcalcalUITests */,
+				DF0A57962E5D2EE200EF8210 /* Frameworks */,
 				ACB9E5D72D594D7D00C37803 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -110,29 +113,38 @@
 			isa = PBXGroup;
 			children = (
 				ACB9E5D62D594D7D00C37803 /* calycal.app */,
-				ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */,
-				ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */,
+				ACB9E5E62D594D7E00C37803 /* CalycalTests.xctest */,
+				ACB9E5F02D594D7E00C37803 /* CalycalUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DF0A57962E5D2EE200EF8210 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				DF2A6E4D2E5E03ED0016DD61 /* supabase-swift */,
+				DF0A57982E5D346500EF8210 /* CoreAudioTypes.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		ACB9E5D52D594D7D00C37803 /* calcalcal */ = {
+		ACB9E5D52D594D7D00C37803 /* Calycal */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcal" */;
+			buildConfigurationList = ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "Calycal" */;
 			buildPhases = (
-				ACB9E5D32D594D7D00C37803 /* Frameworks */,
+				DF2A6E152E5E025A0016DD61 /* Sources */,
 				ACB9E5D42D594D7D00C37803 /* Resources */,
-				DF1633902E5CBEB9004C89FA /* Sources */,
+				DF2A6E4C2E5E03E40016DD61 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			fileSystemSynchronizedGroups = (
 				ACB9E5D82D594D7D00C37803 /* calcalcal */,
 			);
-			name = calcalcal;
+			name = Calycal;
 			packageProductDependencies = (
 				DFF1C0092E369F2400576B60 /* Auth */,
 				DFF1C00B2E369F2400576B60 /* Functions */,
@@ -145,9 +157,9 @@
 			productReference = ACB9E5D62D594D7D00C37803 /* calycal.app */;
 			productType = "com.apple.product-type.application";
 		};
-		ACB9E5E52D594D7E00C37803 /* calcalcalTests */ = {
+		ACB9E5E52D594D7E00C37803 /* CalycalTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = ACB9E5FD2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalTests" */;
+			buildConfigurationList = ACB9E5FD2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "CalycalTests" */;
 			buildPhases = (
 				ACB9E5E22D594D7E00C37803 /* Sources */,
 				ACB9E5E32D594D7E00C37803 /* Frameworks */,
@@ -161,14 +173,14 @@
 			fileSystemSynchronizedGroups = (
 				ACB9E5E92D594D7E00C37803 /* calcalcalTests */,
 			);
-			name = calcalcalTests;
+			name = CalycalTests;
 			productName = calcalcalTests;
-			productReference = ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */;
+			productReference = ACB9E5E62D594D7E00C37803 /* CalycalTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		ACB9E5EF2D594D7E00C37803 /* calcalcalUITests */ = {
+		ACB9E5EF2D594D7E00C37803 /* CalycalUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = ACB9E6002D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalUITests" */;
+			buildConfigurationList = ACB9E6002D594D7E00C37803 /* Build configuration list for PBXNativeTarget "CalycalUITests" */;
 			buildPhases = (
 				ACB9E5EC2D594D7E00C37803 /* Sources */,
 				ACB9E5ED2D594D7E00C37803 /* Frameworks */,
@@ -182,9 +194,9 @@
 			fileSystemSynchronizedGroups = (
 				ACB9E5F32D594D7E00C37803 /* calcalcalUITests */,
 			);
-			name = calcalcalUITests;
+			name = CalycalUITests;
 			productName = calcalcalUITests;
-			productReference = ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */;
+			productReference = ACB9E5F02D594D7E00C37803 /* CalycalUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -194,6 +206,9 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
+				KnownAssetTags = (
+					New,
+				);
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
@@ -210,7 +225,7 @@
 					};
 				};
 			};
-			buildConfigurationList = ACB9E5D12D594D7D00C37803 /* Build configuration list for PBXProject "calcalcal" */;
+			buildConfigurationList = ACB9E5D12D594D7D00C37803 /* Build configuration list for PBXProject "Calycal" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -227,9 +242,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				ACB9E5D52D594D7D00C37803 /* calcalcal */,
-				ACB9E5E52D594D7E00C37803 /* calcalcalTests */,
-				ACB9E5EF2D594D7E00C37803 /* calcalcalUITests */,
+				ACB9E5D52D594D7D00C37803 /* Calycal */,
+				ACB9E5E52D594D7E00C37803 /* CalycalTests */,
+				ACB9E5EF2D594D7E00C37803 /* CalycalUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -263,7 +278,7 @@
 			files = (
 			);
 		};
-		DF1633902E5CBEB9004C89FA /* Sources */ = {
+		DF2A6E152E5E025A0016DD61 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -273,18 +288,18 @@
 /* Begin PBXTargetDependency section */
 		ACB9E5E82D594D7E00C37803 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = ACB9E5D52D594D7D00C37803 /* calcalcal */;
+			target = ACB9E5D52D594D7D00C37803 /* Calycal */;
 			targetProxy = ACB9E5E72D594D7E00C37803 /* PBXContainerItemProxy */;
 		};
 		ACB9E5F22D594D7E00C37803 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = ACB9E5D52D594D7D00C37803 /* calcalcal */;
+			target = ACB9E5D52D594D7D00C37803 /* Calycal */;
 			targetProxy = ACB9E5F12D594D7E00C37803 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "calcalcal" */ = {
+		ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "Calycal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
@@ -317,10 +332,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
+				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
+				ENABLE_TESTABILITY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = "compiler-default";
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -338,6 +353,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACH_O_TYPE = mh_execute;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -347,7 +363,7 @@
 			};
 			name = Debug;
 		};
-		ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "calcalcal" */ = {
+		ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "Calycal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
@@ -380,7 +396,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
+				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -395,26 +411,30 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACH_O_TYPE = mh_execute;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
-		ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcal" */ = {
+		ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "Calycal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 0.1;
-				DEVELOPMENT_ASSET_PATHS = "\"calcalcal/\"";
+				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = calcalcal/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Okay;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
@@ -423,6 +443,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -430,24 +451,31 @@
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
 				PRODUCT_NAME = calycal;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
-		ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcal" */ = {
+		ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "Calycal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 0.1;
-				DEVELOPMENT_ASSET_PATHS = "\"calcalcal/\"";
+				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = calcalcal/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Okay;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
@@ -456,6 +484,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -463,13 +492,18 @@
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
 				PRODUCT_NAME = calycal;
+				SKIP_INSTALL = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
-		ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalTests" */ = {
+		ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "CalycalTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -484,11 +518,11 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/calcalcal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/calcalcal";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Calycal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Calycal";
 			};
 			name = Debug;
 		};
-		ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalTests" */ = {
+		ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "CalycalTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -503,11 +537,11 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/calcalcal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/calcalcal";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Calycal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Calycal";
 			};
 			name = Release;
 		};
-		ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalUITests" */ = {
+		ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "CalycalUITests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -524,7 +558,7 @@
 			};
 			name = Debug;
 		};
-		ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalUITests" */ = {
+		ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "CalycalUITests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -544,35 +578,35 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		ACB9E5D12D594D7D00C37803 /* Build configuration list for PBXProject "calcalcal" */ = {
+		ACB9E5D12D594D7D00C37803 /* Build configuration list for PBXProject "Calycal" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "calcalcal" */,
-				ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "calcalcal" */,
+				ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "Calycal" */,
+				ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "Calycal" */,
 			);
 			defaultConfigurationName = Release;
 		};
-		ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcal" */ = {
+		ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "Calycal" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcal" */,
-				ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcal" */,
+				ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "Calycal" */,
+				ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "Calycal" */,
 			);
 			defaultConfigurationName = Release;
 		};
-		ACB9E5FD2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalTests" */ = {
+		ACB9E5FD2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "CalycalTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalTests" */,
-				ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalTests" */,
+				ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "CalycalTests" */,
+				ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "CalycalTests" */,
 			);
 			defaultConfigurationName = Release;
 		};
-		ACB9E6002D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalUITests" */ = {
+		ACB9E6002D594D7E00C37803 /* Build configuration list for PBXNativeTarget "CalycalUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalUITests" */,
-				ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalUITests" */,
+				ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "CalycalUITests" */,
+				ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "CalycalUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};
@@ -583,8 +617,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
+				kind = exactVersion;
+				version = 2.5.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

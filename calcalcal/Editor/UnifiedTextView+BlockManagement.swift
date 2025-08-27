@@ -22,15 +22,9 @@ extension UnifiedTextView {
 
     /// Render the blocks array into the text storage and metadata
     func renderBlocks(restoreCaretTo caret: Int? = nil, affectedBlockIndices: [Int]? = nil) {
-        // Enter programmatic update to suppress delegate-driven loops
-        if isProgrammaticUpdate { return }
-        isProgrammaticUpdate = true
-        defer { isProgrammaticUpdate = false }
-        // Capture caret before making any mutations so we can restore reliably
-        let caretToRestoreGlobal = caret ?? self.selectedRange.location
         if let affectedIndices = affectedBlockIndices, !affectedIndices.isEmpty {
             // Implement partial update for affected blocks only
-            let caretToRestore = caretToRestoreGlobal
+            let caretToRestore = caret ?? self.selectedRange.location
             var caretRestored = false
             for index in affectedIndices {
                 guard let blockRange = rangeForBlock(at: index), index < blocks.count else { continue }
@@ -112,8 +106,7 @@ extension UnifiedTextView {
 
                 // Improved caret restoration: if caret was inside this block, restore to same offset
                 if !caretRestored && caretToRestore >= blockRange.location && caretToRestore <= blockRange.location + newAttributedText.length {
-                    // Restore using UTF-16 aware indices
-                    let offsetInBlock = max(0, min(caretToRestore - blockRange.location, newAttributedText.length))
+                    let offsetInBlock = caretToRestore - blockRange.location
                     let newCaret = min(blockRange.location + offsetInBlock, textStorage.length)
                     self.selectedRange = NSRange(location: newCaret, length: 0)
                     caretRestored = true
@@ -216,7 +209,7 @@ extension UnifiedTextView {
         setNeedsLayout()
         setNeedsDisplay()
         // Restore caret position if possible
-        let newCaret = min(caretToRestoreGlobal, textStorage.length)
+        let newCaret = min(caret ?? self.selectedRange.location, textStorage.length)
         self.selectedRange = NSRange(location: newCaret, length: 0)
     }
 
@@ -258,14 +251,12 @@ extension UnifiedTextView {
             let blockLength: Int
             switch block.type {
             case .text(let text):
-                // Use NSString length to match UTF-16 storage length
-                blockLength = (text as NSString).length + 1 // +1 for newline
+                blockLength = (text + "\n").count
             case .image:
                 // Assume image blocks are 2 chars (attachment + newline)
                 blockLength = 2
             case .imageText(_, _, let text):
-                // 1 for attachment + text length (UTF-16) + 1 for newline
-                blockLength = 1 + (text as NSString).length + 1
+                blockLength = (text + "\n").count + 1 // image attachment + text + newline
             case .spacer:
                 blockLength = 1 // newline
             }
@@ -286,58 +277,21 @@ private struct AssociatedKeys {
 
 // MARK: - Metadata-only updates
 extension UnifiedTextView {
-    /// Update only calorie/nutrition metadata for a given block index, without touching text content
+    /// Updates calorie/nutrition metadata for a specific block without re-rendering text content
     func updateBlockMetadata(at index: Int, calorieData: String?, nutrition: NutritionData?) {
-        if isProgrammaticUpdate { return }
-        isProgrammaticUpdate = true
-        defer { isProgrammaticUpdate = false }
         guard let range = rangeForBlock(at: index) else { return }
-        // Get existing metadata if present to preserve blockType, spacing and imageReference
-        var existing = unifiedContentStorage.blockMetadata(for: range)
-        // If no metadata yet (e.g., freshly typed), derive a minimal one from current block type
-        if existing == nil, index < blocks.count {
-            let block = blocks[index]
-            switch block.type {
-            case .text:
-                existing = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: .text,
-                    blockSpacing: defaultBlockSpacing,
-                    imageReference: nil,
-                    calorieData: nil,
-                    nutritionJSON: nil
-                )
-            case .image(let data, let imageRef):
-                _ = data // unused here, but keep pattern exhaustive
-                existing = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: .imageText,
-                    blockSpacing: defaultBlockSpacing * 2,
-                    imageReference: imageRef,
-                    calorieData: nil,
-                    nutritionJSON: nil
-                )
-            case .imageText(_, let imageRef, _):
-                existing = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: .imageText,
-                    blockSpacing: defaultBlockSpacing * 2,
-                    imageReference: imageRef,
-                    calorieData: nil,
-                    nutritionJSON: nil
-                )
-            case .spacer:
-                existing = UnifiedTextContentStorage.BlockMetadata(
-                    blockType: .spacer,
-                    blockSpacing: defaultSpacerHeight,
-                    imageReference: nil,
-                    calorieData: nil,
-                    nutritionJSON: nil
-                )
-            }
-        }
-        guard var meta = existing else { return }
+
+        // Read existing metadata at the start of the block range
+        guard var meta = unifiedContentStorage.blockMetadata(at: range.location) else { return }
+
+        // Update fields
         meta.calorieData = calorieData
         meta.nutritionJSON = try? JSONEncoder().encode(nutrition)
+
+        // Persist back for the same range
         unifiedContentStorage.setBlockMetadata(meta, for: range)
-        // Refresh visuals for calorie label/background only
+
+        // Refresh visuals that depend on metadata only
         updateBlockBackgroundViews()
         setNeedsDisplay()
     }

@@ -62,7 +62,7 @@ serve(async (req) => {
     }
 
     // Model and temperature from env with safe defaults
-    const model = Deno.env.get("AI_MODEL") || "gpt-4o-mini"
+    const model = Deno.env.get("AI_MODEL") || "gpt-5-mini"
     const tempEnv = Number(Deno.env.get("AI_TEMPERATURE") || "0.2")
     const temperature = Math.max(0, Math.min(0.3, isNaN(tempEnv) ? 0.2 : tempEnv))
     const maxBlocksEnv = Number(Deno.env.get("AI_MAX_BLOCKS") || "50")

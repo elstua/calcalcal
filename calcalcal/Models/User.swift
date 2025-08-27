@@ -16,8 +16,8 @@ struct User: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case id
-        case email
-        case name
+        case email = "email"
+        case name = "name"
         case appleId = "apple_id"
         case dailyCalorieGoal = "daily_calorie_goal"
         case dailyProteinGoal = "daily_protein_goal"

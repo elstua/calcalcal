@@ -1,1 +1,40 @@
+### macOS
+.DS_Store
+
+### Xcode
+build/
+Derived/
+DerivedData/
 *.xcuserstate
+xcuserdata/
+
+### Swift Package Manager
+.swiftpm/
+**/.build/
+
+### Tuist
+Tuist/.build/
+Calycal-Tuist.xcodeproj/
+Calycal-Tuist.xcworkspace/
+
+### CocoaPods (not used, safe to ignore if present)
+Pods/
+
+### Carthage (not used, safe to ignore if present)
+Carthage/
+Carthage/Build/
+
+### Node/JS (for backend tooling)
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.next/
+.turbo/
+.vercel/
+npm-debug.log*
+yarn-error.log*
+
+### Environment files
+.env
+.env.*

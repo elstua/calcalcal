@@ -1,10 +1,12 @@
 import SwiftUI
 
 @main
-struct calcalcalApp: App {
+struct CalycalApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
     }
-} 
+}
+
+

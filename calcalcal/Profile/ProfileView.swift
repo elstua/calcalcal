@@ -38,9 +38,6 @@ struct ProfileView: View {
             }
             .padding()
             .navigationTitle("Profile")
-            .sheet(isPresented: $showingSettings) {
-                SettingsView()
-            }
         }
     }
 }
