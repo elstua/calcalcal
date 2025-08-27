@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 90;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -33,7 +33,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		ACB9E5D62D594D7D00C37803 /* calcalcal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = calcalcal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ACB9E5D62D594D7D00C37803 /* calycal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = calycal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calcalcalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = calcalcalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -42,6 +42,8 @@
 		DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "calcalcal" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Editor/ARCHITECTURE.md,
+				Editor/README.md,
 				Info.plist,
 			);
 			target = ACB9E5D52D594D7D00C37803 /* calcalcal */;
@@ -72,7 +74,6 @@
 /* Begin PBXFrameworksBuildPhase section */
 		ACB9E5D32D594D7D00C37803 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				DFF1C00E2E369F2400576B60 /* PostgREST in Frameworks */,
 				DFF1C00C2E369F2400576B60 /* Functions in Frameworks */,
@@ -81,21 +82,16 @@
 				DFF1C0122E369F2400576B60 /* Storage in Frameworks */,
 				DFF1C0102E369F2400576B60 /* Realtime in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		ACB9E5E32D594D7E00C37803 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		ACB9E5ED2D594D7E00C37803 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -113,7 +109,7 @@
 		ACB9E5D72D594D7D00C37803 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				ACB9E5D62D594D7D00C37803 /* calcalcal.app */,
+				ACB9E5D62D594D7D00C37803 /* calycal.app */,
 				ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */,
 				ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */,
 			);
@@ -127,13 +123,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcal" */;
 			buildPhases = (
-				ACB9E5D22D594D7D00C37803 /* Sources */,
 				ACB9E5D32D594D7D00C37803 /* Frameworks */,
 				ACB9E5D42D594D7D00C37803 /* Resources */,
+				DF1633902E5CBEB9004C89FA /* Sources */,
 			);
 			buildRules = (
-			);
-			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
 				ACB9E5D82D594D7D00C37803 /* calcalcal */,
@@ -148,7 +142,7 @@
 				DFF1C0132E369F2400576B60 /* Supabase */,
 			);
 			productName = calcalcal;
-			productReference = ACB9E5D62D594D7D00C37803 /* calcalcal.app */;
+			productReference = ACB9E5D62D594D7D00C37803 /* calycal.app */;
 			productType = "com.apple.product-type.application";
 		};
 		ACB9E5E52D594D7E00C37803 /* calcalcalTests */ = {
@@ -168,8 +162,6 @@
 				ACB9E5E92D594D7E00C37803 /* calcalcalTests */,
 			);
 			name = calcalcalTests;
-			packageProductDependencies = (
-			);
 			productName = calcalcalTests;
 			productReference = ACB9E5E62D594D7E00C37803 /* calcalcalTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -191,8 +183,6 @@
 				ACB9E5F32D594D7E00C37803 /* calcalcalUITests */,
 			);
 			name = calcalcalUITests;
-			packageProductDependencies = (
-			);
 			productName = calcalcalUITests;
 			productReference = ACB9E5F02D594D7E00C37803 /* calcalcalUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -232,7 +222,7 @@
 			packageReferences = (
 				DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
-			preferredProjectObjectVersion = 77;
+			preferredProjectObjectVersion = 90;
 			productRefGroup = ACB9E5D72D594D7D00C37803 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -247,48 +237,36 @@
 /* Begin PBXResourcesBuildPhase section */
 		ACB9E5D42D594D7D00C37803 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		ACB9E5E42D594D7E00C37803 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		ACB9E5EE2D594D7E00C37803 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		ACB9E5D22D594D7D00C37803 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		ACB9E5E22D594D7E00C37803 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		ACB9E5EC2D594D7E00C37803 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF1633902E5CBEB9004C89FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
 		};
 /* End PBXSourcesBuildPhase section */
 
@@ -306,14 +284,14 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		ACB9E5F82D594D7E00C37803 /* Debug */ = {
+		ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "calcalcal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -340,11 +318,11 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_C_LANGUAGE_STANDARD = "compiler-default";
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -369,14 +347,14 @@
 			};
 			name = Debug;
 		};
-		ACB9E5F92D594D7E00C37803 /* Release */ = {
+		ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "calcalcal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "compiler-default";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -407,7 +385,7 @@
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_C_LANGUAGE_STANDARD = "compiler-default";
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -425,18 +403,20 @@
 			};
 			name = Release;
 		};
-		ACB9E5FB2D594D7E00C37803 /* Debug */ = {
+		ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 0.1;
 				DEVELOPMENT_ASSET_PATHS = "\"calcalcal/\"";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Okay;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -447,27 +427,29 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = calycal;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
-		ACB9E5FC2D594D7E00C37803 /* Release */ = {
+		ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcal" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 0.1;
 				DEVELOPMENT_ASSET_PATHS = "\"calcalcal/\"";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Okay;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Need to get the images for calorie tracking.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -478,16 +460,16 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = calycal;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
-		ACB9E5FE2D594D7E00C37803 /* Debug */ = {
+		ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -506,7 +488,7 @@
 			};
 			name = Debug;
 		};
-		ACB9E5FF2D594D7E00C37803 /* Release */ = {
+		ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
@@ -525,7 +507,7 @@
 			};
 			name = Release;
 		};
-		ACB9E6012D594D7E00C37803 /* Debug */ = {
+		ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalUITests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -542,7 +524,7 @@
 			};
 			name = Debug;
 		};
-		ACB9E6022D594D7E00C37803 /* Release */ = {
+		ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalUITests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -565,37 +547,33 @@
 		ACB9E5D12D594D7D00C37803 /* Build configuration list for PBXProject "calcalcal" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5F82D594D7E00C37803 /* Debug */,
-				ACB9E5F92D594D7E00C37803 /* Release */,
+				ACB9E5F82D594D7E00C37803 /* Debug configuration for PBXProject "calcalcal" */,
+				ACB9E5F92D594D7E00C37803 /* Release configuration for PBXProject "calcalcal" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		ACB9E5FA2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcal" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5FB2D594D7E00C37803 /* Debug */,
-				ACB9E5FC2D594D7E00C37803 /* Release */,
+				ACB9E5FB2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcal" */,
+				ACB9E5FC2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcal" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		ACB9E5FD2D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E5FE2D594D7E00C37803 /* Debug */,
-				ACB9E5FF2D594D7E00C37803 /* Release */,
+				ACB9E5FE2D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalTests" */,
+				ACB9E5FF2D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalTests" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		ACB9E6002D594D7E00C37803 /* Build configuration list for PBXNativeTarget "calcalcalUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACB9E6012D594D7E00C37803 /* Debug */,
-				ACB9E6022D594D7E00C37803 /* Release */,
+				ACB9E6012D594D7E00C37803 /* Debug configuration for PBXNativeTarget "calcalcalUITests" */,
+				ACB9E6022D594D7E00C37803 /* Release configuration for PBXNativeTarget "calcalcalUITests" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
