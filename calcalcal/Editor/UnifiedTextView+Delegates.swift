@@ -8,10 +8,16 @@ extension UnifiedTextView {
     
     func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorage.EditActions, range editedRange: NSRange, changeInLength delta: Int) {
         if isProgrammaticUpdate { return }
+        // Skip updates while the user is composing text (IME)
+        if self.markedTextRange != nil { return }
+        // Mark last user edit time for external-sync suppression
+        lastUserEditAt = CACurrentMediaTime()
         // Respond to ALL content changes immediately, not just deletions
         guard editedMask.contains(.editedCharacters) else { return }
         
+        #if DEBUG
         print("🔄 Text storage changed: range=\(editedRange), delta=\(delta)")
+        #endif
         
         // Check if the edit affects an image block
         var affectsImageBlock = false
@@ -21,7 +27,9 @@ extension UnifiedTextView {
             // Check if the edited range intersects with this image block
             if NSIntersectionRange(editedRange, paragraphRange).length > 0 {
                 affectsImageBlock = true
+                #if DEBUG
                 print("📐 Edit affects image block at range \(paragraphRange)")
+                #endif
             }
         }
         
@@ -46,13 +54,10 @@ extension UnifiedTextView {
                 self.updateExclusionPaths()
                 self.updateImageViews()
                 self.updateBlockBackgroundViews()
-                self.layoutIfNeeded()
                 self.needsExclusionPathUpdate = false
             } else {
-                // Force immediate visual updates for other blocks
-                self.setNeedsLayout()
-                self.setNeedsDisplay()
-                
+                // Throttle visual updates for other blocks
+                self.scheduleThrottledLayoutUpdate()
                 // Mark exclusion paths for update
                 self.needsExclusionPathUpdate = true
             }
@@ -71,8 +76,12 @@ extension UnifiedTextView {
     
     func textViewDidChange(_ textView: UITextView) {
         if isProgrammaticUpdate { return }
+        // Skip updates while the user is composing text (IME)
+        if textView.markedTextRange != nil { return }
+        #if DEBUG
         print("📝 textViewDidChange called")
         print("Current textStorage: \(textStorage.string)")
+        #endif
         // Parse the text storage into blocks and update the model
         let string = textStorage.string as NSString
         var newBlocks: [Block] = []
@@ -83,8 +92,13 @@ extension UnifiedTextView {
             var contentsEnd = 0
             string.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
             let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
-            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
+            var paragraphText = string.substring(with: paragraphRange)
+            if paragraphText.hasSuffix("\n") {
+                paragraphText.removeLast()
+            }
+            #if DEBUG
             print("Detected paragraph: '", paragraphText, "' at range: ", paragraphRange)
+            #endif
             if let metadata = unifiedContentStorage.blockMetadata(at: paragraphStart) {
                 switch metadata.blockType {
                 case .text:
@@ -111,22 +125,17 @@ extension UnifiedTextView {
             }
             location = paragraphEnd
         }
+        // Only update local blocks snapshot; rendering is centralized via SwiftUI's updateUIView
         if newBlocks != self.blocks {
-            print("Updating blocks array. New blocks: \(newBlocks)")
-            let changedIndices = diffChangedBlockIndices(old: self.blocks, new: newBlocks)
+            #if DEBUG
+            print("Updating blocks array (no immediate render). New blocks: \(newBlocks)")
+            #endif
+            // Update both local and SwiftUI snapshots to keep them aligned and prevent external diff from forcing re-render
             self.blocks = newBlocks
-            if changedIndices.count == 0 {
-                print("No block indices changed, skipping render.")
-                return
-            } else if changedIndices.count <= 2 {
-                print("Partial update for block indices: \(changedIndices)")
-                renderBlocks(affectedBlockIndices: changedIndices)
-            } else {
-                print("Full rebuild, too many blocks changed.")
-                renderBlocks()
-            }
         } else {
+            #if DEBUG
             print("No change to blocks array.")
+            #endif
         }
     }
     
@@ -134,102 +143,8 @@ extension UnifiedTextView {
         if isProgrammaticUpdate { return false }
         isUserEditing = true
         print("🎯 Text will change: range=\(range), text='\(text)'")
-        // Handle Enter key press in a model-driven way
-        if text == "\n" {
-            let cursorLocation = range.location
-            // Find the block index and offset
-            let string = textStorage.string as NSString
-            var blockIndex: Int? = nil
-            var blockStart = 0
-            var blockEnd = 0
-            var runningLocation = 0
-            for (i, block) in blocks.enumerated() {
-                switch block.type {
-                case .text(let blockText):
-                    let blockLength = (blockText as NSString).length + 1
-                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
-                        blockIndex = i
-                        blockStart = runningLocation
-                        blockEnd = runningLocation + blockLength
-                        break
-                    }
-                    runningLocation += blockLength
-                case .image(let data, let uuid):
-                    // Image blocks are 1 char (attachment) + newline
-                    let blockLength = 2
-                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
-                        blockIndex = i
-                        blockStart = runningLocation
-                        blockEnd = runningLocation + blockLength
-                        break
-                    }
-                    runningLocation += blockLength
-                case .imageText(let data, let uuid, let text):
-                    // Treat as a single block (1 char + text + newline)
-                    let blockLength = 1 + (text as NSString).length + 1
-                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
-                        blockIndex = i
-                        blockStart = runningLocation
-                        blockEnd = runningLocation + blockLength
-                        break
-                    }
-                    runningLocation += blockLength
-                case .spacer:
-                    let blockLength = 1 // newline
-                    if cursorLocation >= runningLocation && cursorLocation <= runningLocation + blockLength {
-                        blockIndex = i
-                        blockStart = runningLocation
-                        blockEnd = runningLocation + blockLength
-                        break
-                    }
-                    runningLocation += blockLength
-                }
-                if blockIndex != nil { break }
-            }
-            guard let idx = blockIndex else { return true }
-            var newBlocks = blocks
-            var affectedIndices: [Int] = []
-            switch blocks[idx].type {
-            case .text(let blockText):
-                // Split the text at the cursor offset
-                let offsetInBlock = cursorLocation - blockStart
-                let nsBlockText = blockText as NSString
-                let left = nsBlockText.substring(to: max(0, min(offsetInBlock, nsBlockText.length)))
-                let right = nsBlockText.substring(from: max(0, min(offsetInBlock, nsBlockText.length)))
-                // Replace current block with left, insert new block with right
-                newBlocks[idx] = makeTextBlock(left)
-                newBlocks.insert(makeTextBlock(right), at: idx + 1)
-                affectedIndices = [idx, idx + 1]
-                self.blocks = newBlocks
-                let caretLocation = blockStart + (left as NSString).length + 1 // +1 for newline
-                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
-                return false
-            case .image(let data, let uuid):
-                // Insert a new empty text block after the image
-                newBlocks.insert(makeTextBlock(""), at: idx + 1)
-                affectedIndices = [idx + 1]
-                self.blocks = newBlocks
-                let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
-                return false
-            case .imageText(let data, let uuid, let text):
-                // Insert a new empty text block after the imageText block
-                newBlocks.insert(makeTextBlock(""), at: idx + 1)
-                affectedIndices = [idx + 1]
-                self.blocks = newBlocks
-                let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
-                return false
-            case .spacer:
-                // Insert a new empty text block after the spacer
-                newBlocks.insert(makeTextBlock(""), at: idx + 1)
-                affectedIndices = [idx + 1]
-                self.blocks = newBlocks
-                let caretLocation = blockEnd + 1
-                renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: affectedIndices)
-                return false
-            }
-        }
+        // Let the system handle Enter/newline insertion to prevent forced newlines and caret jumps
+        if text == "\n" { return true }
         
         // Handle deletion that might affect image blocks
         if text.isEmpty && range.length > 0 {
@@ -243,7 +158,9 @@ extension UnifiedTextView {
                 
                 // Check if this image block intersects with the deletion range
                 if NSIntersectionRange(paragraphRange, deletionRange).length > 0 {
+                    #if DEBUG
                     print("⚠️ Deleting image block at range \(paragraphRange)")
+                    #endif
                     // The image will be deleted with the text, let the system handle it
                     // The text storage delegate will clean up the metadata
                 }
@@ -251,6 +168,11 @@ extension UnifiedTextView {
         }
         
         return true
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        // Attempt to apply any pending external updates once the user stops editing
+        applyPendingExternalBlocksIfIdle(idleGrace: 0)
     }
     
     func textViewDidChangeSelection(_ textView: UITextView) {

@@ -98,11 +98,8 @@ extension UnifiedTextView {
             }
         }
         textContainer.exclusionPaths = exclusionPaths
-        layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length), actualCharacterRange: nil)
-        layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: textStorage.length))
-        layoutManager.ensureLayout(forCharacterRange: NSRange(location: 0, length: textStorage.length))
-        setNeedsLayout()
-        setNeedsDisplay()
+        // Prefer throttled refresh instead of immediate full layout invalidation
+        scheduleThrottledLayoutUpdate()
     }
     
     // MARK: - Image View Management
@@ -203,61 +200,62 @@ extension UnifiedTextView {
     internal func updateBlockBackgroundViews() {
         // Remove block background views that no longer exist
         var currentBlockKeys = Set<String>()
-        
-        // Only process paragraphs that have actual content
+
         let string = textStorage.string as NSString
         guard string.length > 0 else {
-            // Remove all background views if no content
-            for (_, backgroundView) in blockBackgroundViews {
-                backgroundView.removeFromSuperview()
-            }
+            for (_, backgroundView) in blockBackgroundViews { backgroundView.removeFromSuperview() }
             blockBackgroundViews.removeAll()
             return
         }
-        
-        // First, collect all current block keys (based on paragraph range) from valid paragraphs
+
+        // We will iterate paragraphs in order and map to blocks by index
+        var blockIndex = 0
+        var paragraphInfos: [(NSRange, UnifiedTextContentStorage.BlockMetadata?, Int)] = []
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata,
-                  paragraphRange.location < string.length else { return }
-            
-            // Verify the paragraph actually contains text
+            guard paragraphRange.location < string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !paragraphText.isEmpty else { return }
-            
-            let blockKey = "\(paragraphRange.location):\(paragraphRange.length)"
-            currentBlockKeys.insert(blockKey)
+            paragraphInfos.append((paragraphRange, metadata, blockIndex))
+            blockIndex += 1
         }
-        
+
+        // Track existing keys from current paragraphs
+        for (paragraphRange, _, _) in paragraphInfos {
+            let key = "\(paragraphRange.location):\(paragraphRange.length)"
+            currentBlockKeys.insert(key)
+        }
+
         // Remove views for blocks that no longer exist
         for (blockKey, backgroundView) in blockBackgroundViews {
-            if !currentBlockKeys.contains(blockKey) && !blockKey.contains("_separator") {
+            if !currentBlockKeys.contains(blockKey) {
                 backgroundView.removeFromSuperview()
                 blockBackgroundViews.removeValue(forKey: blockKey)
-                
-                // Also remove associated separator
-                let separatorKey = blockKey + "_separator"
-                if let separatorView = blockBackgroundViews[separatorKey] {
-                    separatorView.removeFromSuperview()
-                    blockBackgroundViews.removeValue(forKey: separatorKey)
-                }
             }
         }
-        
-        // Update positions for existing blocks and create new ones
-        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
-            guard let metadata = metadata,
-                  paragraphRange.location < string.length else { return }
-            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else { return }
+
+        // Create/update views and calorie labels using current blocks snapshot
+        for (paragraphRange, metadata, index) in paragraphInfos {
             let blockKey = "\(paragraphRange.location):\(paragraphRange.length)"
             let boundingRect = self.boundingRect(for: paragraphRange)
             var blockFrame = boundingRect
             blockFrame.origin.x += self.textContainerInset.left
             blockFrame.origin.y += self.textContainerInset.top
             let totalBlockWidth = self.bounds.width - self.textContainerInset.left - self.textContainerInset.right
-            // Use provider for block-specific sizing
-            let provider = layoutProvider(for: metadata.blockType)
-            if metadata.blockType == .imageText {
+
+            // Determine blockType and calories from model when possible
+            let modelBlock: Block? = index < self.blocks.count ? self.blocks[index] : nil
+            let blockTypeFromModel: UnifiedTextContentStorage.BlockMetadata.BlockType? = {
+                guard let b = modelBlock else { return nil }
+                switch b.type {
+                case .text: return .text
+                case .imageText: return .imageText
+                case .image: return .imageText // treat as image region for layout
+                case .spacer: return .spacer
+                }
+            }()
+            let blockType = metadata?.blockType ?? blockTypeFromModel ?? .text
+            let provider = layoutProvider(for: blockType)
+            if blockType == .imageText {
                 blockFrame.size.height = max(100, blockFrame.height)
                 blockFrame.size.width = totalBlockWidth
                 blockFrame.origin.x = self.textContainerInset.left
@@ -265,25 +263,42 @@ extension UnifiedTextView {
                 blockFrame.size.width = totalBlockWidth
             }
             blockFrame = blockFrame.insetBy(dx: 0, dy: 3)
+
             let backgroundView: UIView
             if let existingView = blockBackgroundViews[blockKey] {
                 backgroundView = existingView
             } else {
-                backgroundView = createBlockBackgroundView(for: metadata.blockType)
+                backgroundView = createBlockBackgroundView(for: blockType)
                 blockBackgroundViews[blockKey] = backgroundView
                 insertSubview(backgroundView, at: 0)
             }
             backgroundView.frame = blockFrame
-            updateBlockBackgroundAppearance(backgroundView, for: metadata.blockType)
+            updateBlockBackgroundAppearance(backgroundView, for: blockType)
+
+            // Update or add calorie label
             backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
-            // Show placeholder when no backend calories yet
-            let caloriesText = metadata.calorieData ?? "…"
-            let calorieLabel = CalorieLabelView()
-            calorieLabel.setCalories(caloriesText)
-            if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata, blockFrame: blockFrame) {
-                calorieLabel.frame = calorieLabelFrame
+            let caloriesText: String = {
+                if let mb = modelBlock {
+                    return mb.calorieData ?? "…"
+                }
+                return metadata?.calorieData ?? "…"
+            }()
+            // Only show for text-bearing blocks
+            switch blockType {
+            case .text, .imageText:
+                let calorieLabel = CalorieLabelView()
+                calorieLabel.setCalories(caloriesText)
+                if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata ?? UnifiedTextContentStorage.BlockMetadata(blockType: blockType, blockSpacing: defaultBlockSpacing, imageReference: nil, calorieData: nil, nutritionJSON: nil), blockFrame: blockFrame) {
+                    calorieLabel.frame = calorieLabelFrame
+                } else {
+                    // fallback: right-align inside block
+                    let labelW: CGFloat = 80
+                    calorieLabel.frame = CGRect(x: blockFrame.width - labelW - 8, y: 0, width: labelW, height: 20)
+                }
+                backgroundView.addSubview(calorieLabel)
+            case .spacer:
+                break
             }
-            backgroundView.addSubview(calorieLabel)
         }
     }
     
@@ -297,17 +312,8 @@ extension UnifiedTextView {
     
     /// Update block background view appearance
     private func updateBlockBackgroundAppearance(_ view: UIView, for blockType: UnifiedTextContentStorage.BlockMetadata.BlockType) {
-        switch blockType {
-        case .text:
-            // Green tint for text blocks
-            view.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.05)
-        case .imageText:
-            // Blue tint for image blocks
-            view.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.05)
-        case .spacer:
-            // Gray tint for spacer blocks (more visible for debug)
-            view.backgroundColor = UIColor.systemGray.withAlphaComponent(0.25)
-        }
+        // Make backgrounds transparent (hide debug tint), but keep container for label layout
+        view.backgroundColor = UIColor.clear
     }
 }
 

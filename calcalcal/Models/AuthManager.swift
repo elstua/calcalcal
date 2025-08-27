@@ -205,10 +205,51 @@ class AuthManager: NSObject, ObservableObject {
                 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
-                guard let httpResponse = response as? HTTPURLResponse,
-                      httpResponse.statusCode == 200 else {
-                    // Session is invalid, clear it
-                    try KeychainManager.shared.deleteTokens()
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                    // If unauthorized, try refreshing the session once
+                    if httpResponse.statusCode == 401 {
+                        print("🔁 Access token invalid/expired. Attempting refresh...")
+                        do {
+                            let refreshed = try await self.refreshSession(using: session.refreshToken)
+                            // Persist and apply refreshed session
+                            try KeychainManager.shared.saveTokens(refreshed)
+                            APIClient.shared.updateSession(refreshed)
+                            print("✅ Token refresh succeeded. Revalidating session...")
+                            
+                            // Revalidate with refreshed access token
+                            var revalidate = URLRequest(url: url)
+                            revalidate.httpMethod = "GET"
+                            revalidate.setValue("Bearer \(refreshed.accessToken)", forHTTPHeaderField: "Authorization")
+                            let (vData, vResp) = try await URLSession.shared.data(for: revalidate)
+                            guard let vHttp = vResp as? HTTPURLResponse, vHttp.statusCode == 200 else {
+                                // Revalidation failed after refresh
+                                try? KeychainManager.shared.deleteTokens()
+                                DispatchQueue.main.async {
+                                    self.isAuthenticated = false
+                                    self.currentUser = nil
+                                }
+                                return
+                            }
+                            let decoder = AuthManager.makeJSONDecoder()
+                            let authResponse = try decoder.decode(AuthResponse.self, from: vData)
+                            DispatchQueue.main.async {
+                                if authResponse.success, let user = authResponse.user {
+                                    self.currentUser = user
+                                    self.isAuthenticated = true
+                                    UserDefaults.standard.set(user.id, forKey: "current_user_id")
+                                } else {
+                                    self.isAuthenticated = false
+                                    self.currentUser = nil
+                                }
+                            }
+                            return
+                        } catch {
+                            print("❌ Token refresh failed: \(error)")
+                            // Fall through to clearing tokens below
+                        }
+                    }
+                    // Session is invalid and refresh either not attempted or failed; clear it
+                    try? KeychainManager.shared.deleteTokens()
                     DispatchQueue.main.async {
                         self.isAuthenticated = false
                         self.currentUser = nil
@@ -238,6 +279,29 @@ class AuthManager: NSObject, ObservableObject {
                 }
             }
         }
+    }
+    
+    private func refreshSession(using refreshToken: String) async throws -> Session {
+        let urlString = "\(Configuration.supabaseURL)/auth/v1/token?grant_type=refresh_token"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid refresh URL"])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(Configuration.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(Configuration.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = ["refresh_token": refreshToken]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let responseText = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "AuthManager", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Refresh failed: \(responseText)"])
+        }
+        let decoder = JSONDecoder()
+        let newSession = try decoder.decode(Session.self, from: data)
+        return newSession
     }
     
 

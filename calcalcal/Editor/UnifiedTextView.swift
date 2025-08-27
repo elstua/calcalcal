@@ -46,6 +46,30 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     /// Indicates active user typing/editing session
     internal var isUserEditing: Bool = false
     
+    /// Debounced/throttled layout update work item
+    internal var layoutUpdateWorkItem: DispatchWorkItem?
+
+    /// Last time the user edited text (used to suppress external content updates)
+    internal var lastUserEditAt: TimeInterval = 0
+
+    /// Pending external blocks to apply when idle
+    internal var pendingExternalBlocks: [Block]? = nil
+    internal var externalBlocksApplyWorkItem: DispatchWorkItem?
+
+    /// Attempt to apply any pending external content changes when idle
+    internal func applyPendingExternalBlocksIfIdle(idleGrace: TimeInterval = 0.6) {
+        guard let pending = pendingExternalBlocks else { return }
+        // Do not apply if composing or recently typed
+        let now = CACurrentMediaTime()
+        if self.markedTextRange != nil { return }
+        if now - lastUserEditAt < idleGrace { return }
+        isProgrammaticUpdate = true
+        self.blocks = pending
+        renderBlocks()
+        isProgrammaticUpdate = false
+        pendingExternalBlocks = nil
+    }
+    
     // MARK: - Configuration
     
     /// Default block spacing for new blocks
@@ -97,6 +121,18 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
         
         // Set up text storage delegate to monitor changes
         self.textStorage.delegate = self
+    }
+    
+    /// Schedule a throttled layout/display refresh to coalesce rapid updates
+    internal func scheduleThrottledLayoutUpdate() {
+        layoutUpdateWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.setNeedsLayout()
+            self.setNeedsDisplay()
+        }
+        layoutUpdateWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + updateThrottleInterval, execute: work)
     }
     
     private func setupView() {

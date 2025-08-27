@@ -337,7 +337,7 @@ struct DiaryEntryPopupView: View {
                 .cornerRadius(24)
                 .shadow(radius: 10)
                 .onChange(of: entry.blocks) { newBlocks in
-                    scheduleAutosave(blocks: newBlocks)
+                    scheduleAutosaveIfTextChanged(blocks: newBlocks)
                 }
             Spacer()
         }
@@ -366,6 +366,16 @@ struct DiaryEntryPopupView: View {
     }
 
     // MARK: - Autosave helpers
+    private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
+        let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+        struct Static { static var lastSavedContent: String? }
+        if content == Static.lastSavedContent {
+            print("⏭️ Autosave skipped (text unchanged)")
+            return
+        }
+        scheduleAutosave(blocks: blocks)
+    }
+
     private func scheduleAutosave(blocks: [Block]) {
         debounceWorkItem?.cancel()
         print("🕐 Autosave scheduled in 1s…")
@@ -423,6 +433,8 @@ struct DiaryEntryPopupView: View {
                 print("⚠️ Missing user id; deferring insert until available")
             }
             lastSavedAt = Date()
+            struct Static { static var lastSavedContent: String? }
+            Static.lastSavedContent = trimmed
             print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
         } catch {
             // For v1, ignore errors silently; could add retry/indicator later.

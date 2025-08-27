@@ -51,7 +51,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         textView.imageMap = imageMap
         textView.isEditable = isEditable
 
-        // Only update content if the change is external
+        // Only update content if the change is external; if user recently edited, queue external update
         guard textView.blocks != blocks else {
             if shouldBecomeFirstResponder {
                 DispatchQueue.main.async {
@@ -62,22 +62,9 @@ struct UnifiedTextEditor: UIViewRepresentable {
             return
         }
 
-        // Compute fine-grained diffs to avoid full re-render when only metadata changed
+        // Compute fine-grained diffs to avoid unnecessary full re-render
         let oldBlocks = textView.blocks
         let newBlocks = blocks
-
-        // If count changed, prefer full rebuild to ensure storage matches
-        if oldBlocks.count != newBlocks.count {
-            textView.blocks = newBlocks
-            textView.renderBlocks()
-            if shouldBecomeFirstResponder {
-                DispatchQueue.main.async {
-                    textView.becomeFirstResponder()
-                    self.shouldBecomeFirstResponder = false
-                }
-            }
-            return
-        }
         let count = max(oldBlocks.count, newBlocks.count)
         var contentChangeIndices: [Int] = []
         var metadataChangeIndices: [Int] = []
@@ -93,7 +80,8 @@ struct UnifiedTextEditor: UIViewRepresentable {
         for i in 0..<count {
             let old: Block? = i < oldBlocks.count ? oldBlocks[i] : nil
             let new: Block? = i < newBlocks.count ? newBlocks[i] : nil
-            if old == new { continue }
+            // Prefer stable identity first
+            if let o = old, let n = new, o.id == n.id, o == n { continue }
             guard let old = old, let new = new else {
                 // insertion/deletion => content change
                 contentChangeIndices.append(i)
@@ -137,6 +125,9 @@ struct UnifiedTextEditor: UIViewRepresentable {
             }
             textView.blocks = newBlocks
             textView.isProgrammaticUpdate = false
+            // Force visuals to refresh so calorie labels update immediately
+            textView.updateBlockBackgroundViews()
+            textView.setNeedsDisplay()
             if shouldBecomeFirstResponder {
                 DispatchQueue.main.async {
                     textView.becomeFirstResponder()
@@ -147,16 +138,39 @@ struct UnifiedTextEditor: UIViewRepresentable {
         }
 
         // Apply content changes - partial if small, full otherwise
+        #if DEBUG
         print("[updateUIView] Applying content changes; indices=\(contentChangeIndices)")
+        #endif
+        // Defer external updates during active typing/composition
+        let now2 = CACurrentMediaTime()
+        if now2 - textView.lastUserEditAt < 0.6 || textView.markedTextRange != nil {
+            textView.pendingExternalBlocks = newBlocks
+            textView.externalBlocksApplyWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak textView] in
+                // When applying, preserve caret to prevent jump-to-zero
+                let caret = textView?.selectedRange.location ?? 0
+                textView?.isProgrammaticUpdate = true
+                textView?.blocks = newBlocks
+                textView?.renderBlocks(restoreCaretTo: caret)
+                textView?.isProgrammaticUpdate = false
+                textView?.pendingExternalBlocks = nil
+            }
+            textView.externalBlocksApplyWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+            return
+        }
         textView.isProgrammaticUpdate = true
         textView.blocks = newBlocks
+        let caretLocation = textView.selectedRange.location
         if !contentChangeIndices.isEmpty && contentChangeIndices.count <= 2 {
-            textView.renderBlocks(affectedBlockIndices: contentChangeIndices)
+            textView.renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: contentChangeIndices)
         } else {
-            textView.renderBlocks()
+            textView.renderBlocks(restoreCaretTo: caretLocation)
         }
         textView.isProgrammaticUpdate = false
+        #if DEBUG
         print("[updateUIView] Called renderBlocks()")
+        #endif
         if shouldBecomeFirstResponder {
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
@@ -181,7 +195,11 @@ struct UnifiedTextEditor: UIViewRepresentable {
             var contentsEnd = 0
             nsString.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
             let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
-            let paragraphText = nsString.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
+            // Preserve user-entered spaces; only strip a single trailing newline if present
+            var paragraphText = nsString.substring(with: paragraphRange)
+            if paragraphText.hasSuffix("\n") {
+                paragraphText.removeLast()
+            }
 
             if let metadata = textView.unifiedContentStorage.blockMetadata(at: paragraphStart) {
                 switch metadata.blockType {
@@ -213,6 +231,8 @@ struct UnifiedTextEditor: UIViewRepresentable {
         }
 
         if reconstructed != blocks {
+            // Keep the UITextView's local snapshot in sync to avoid re-render churn
+            textView.blocks = reconstructed
             DispatchQueue.main.async {
                 self.blocks = reconstructed
                 self.onBlocksChange?(reconstructed)
@@ -222,6 +242,8 @@ struct UnifiedTextEditor: UIViewRepresentable {
     
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: UnifiedTextEditor
+        private var debounceWorkItem: DispatchWorkItem?
+        private let debounceInterval: TimeInterval = 0.12
         
         init(_ parent: UnifiedTextEditor) {
             self.parent = parent
@@ -229,8 +251,17 @@ struct UnifiedTextEditor: UIViewRepresentable {
         
         func textViewDidChange(_ textView: UITextView) {
             guard let unifiedTextView = textView as? UnifiedTextView else { return }
-            unifiedTextView.textViewDidChange(textView)
-            parent.updateBlocksFromTextStorage(unifiedTextView)
+            // Skip updates while the user is composing text (IME)
+            if textView.markedTextRange != nil { return }
+            // Debounce parsing and model updates to reduce churn
+            debounceWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self, weak tv = textView] in
+                guard let self = self, let tv = tv as? UnifiedTextView else { return }
+                if tv.markedTextRange != nil { return }
+                self.parent.updateBlocksFromTextStorage(tv)
+            }
+            debounceWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
         }
     }
 }

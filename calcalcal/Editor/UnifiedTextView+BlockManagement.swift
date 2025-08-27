@@ -24,8 +24,7 @@ extension UnifiedTextView {
     func renderBlocks(restoreCaretTo caret: Int? = nil, affectedBlockIndices: [Int]? = nil) {
         if let affectedIndices = affectedBlockIndices, !affectedIndices.isEmpty {
             // Implement partial update for affected blocks only
-            let caretToRestore = caret ?? self.selectedRange.location
-            var caretRestored = false
+            var didChangeAnyText = false
             for index in affectedIndices {
                 guard let blockRange = rangeForBlock(at: index), index < blocks.count else { continue }
                 let block = blocks[index]
@@ -93,39 +92,45 @@ extension UnifiedTextView {
                     )
                     metadata = metadataTemp
                 }
-                // Replace the text in textStorage for this block
-                if blockRange.location + blockRange.length <= textStorage.length {
-                    textStorage.replaceCharacters(in: blockRange, with: newAttributedText)
-                } else if blockRange.location <= textStorage.length {
-                    // If the range is at the end, just append
-                    textStorage.replaceCharacters(in: NSRange(location: blockRange.location, length: textStorage.length - blockRange.location), with: newAttributedText)
+                // Replace the text in textStorage for this block only if content changed
+                let safeLength = min(blockRange.length, max(0, textStorage.length - blockRange.location))
+                let safeRange = NSRange(location: blockRange.location, length: max(0, safeLength))
+                let existingString: String = safeRange.length > 0 && NSMaxRange(safeRange) <= textStorage.length
+                    ? textStorage.attributedSubstring(from: safeRange).string
+                    : ""
+                if existingString != newAttributedText.string {
+                    if blockRange.location + blockRange.length <= textStorage.length {
+                        textStorage.replaceCharacters(in: blockRange, with: newAttributedText)
+                    } else if blockRange.location <= textStorage.length {
+                        // If the range is at the end, just append
+                        let tailLength = max(0, textStorage.length - blockRange.location)
+                        textStorage.replaceCharacters(in: NSRange(location: blockRange.location, length: tailLength), with: newAttributedText)
+                    }
+                    didChangeAnyText = true
                 }
                 // Update metadata for this block
                 let newRange = NSRange(location: blockRange.location, length: newAttributedText.length)
                 unifiedContentStorage.setBlockMetadata(metadata, for: newRange)
-
-                // Improved caret restoration: if caret was inside this block, restore to same offset
-                if !caretRestored && caretToRestore >= blockRange.location && caretToRestore <= blockRange.location + newAttributedText.length {
-                    let offsetInBlock = caretToRestore - blockRange.location
-                    let newCaret = min(blockRange.location + offsetInBlock, textStorage.length)
-                    self.selectedRange = NSRange(location: newCaret, length: 0)
-                    caretRestored = true
-                }
             }
-            // Always update exclusion paths, image views, and block backgrounds after partial update
-            updateExclusionPaths()
-            updateImageViews()
-            updateBlockBackgroundViews()
-            setNeedsLayout()
-            setNeedsDisplay()
-            // If caret wasn't restored in a block, restore to previous logic
-            if !caretRestored {
-                let newCaret = min(caretToRestore, textStorage.length)
-                self.selectedRange = NSRange(location: newCaret, length: 0)
+            // Update visuals; if no text changed, still refresh lightweight visuals
+            if didChangeAnyText {
+                updateExclusionPaths()
+                updateImageViews()
+                updateBlockBackgroundViews()
+            }
+            scheduleThrottledLayoutUpdate()
+            // Selection: only adjust when an explicit caret is provided
+            if let caretToRestore = caret {
+                let clamped = min(max(0, caretToRestore), textStorage.length)
+                if self.selectedRange.location != clamped || self.selectedRange.length != 0 {
+                    self.selectedRange = NSRange(location: clamped, length: 0)
+                }
             }
             return
         }
-        // Clear the text storage (full rebuild)
+        // Full rebuild path
+        // Preserve selection before rebuilding to avoid jump to 0
+        let previousSelection = self.selectedRange
         textStorage.setAttributedString(NSAttributedString(string: ""))
         
         // Track the current insertion point
@@ -205,12 +210,20 @@ extension UnifiedTextView {
                 currentLocation += blockText.count
             }
         }
-        // After rendering, force layout and display update
-        setNeedsLayout()
-        setNeedsDisplay()
-        // Restore caret position if possible
-        let newCaret = min(caret ?? self.selectedRange.location, textStorage.length)
-        self.selectedRange = NSRange(location: newCaret, length: 0)
+        // After rendering, prefer throttled layout/display update
+        scheduleThrottledLayoutUpdate()
+        // Selection: restore to caret if provided, else restore previous selection clamped to bounds
+        if let caretToRestore = caret {
+            let clamped = min(max(0, caretToRestore), textStorage.length)
+            if self.selectedRange.location != clamped || self.selectedRange.length != 0 {
+                self.selectedRange = NSRange(location: clamped, length: 0)
+            }
+        } else {
+            let clampedLocation = min(previousSelection.location, textStorage.length)
+            if self.selectedRange.location != clampedLocation || self.selectedRange.length != previousSelection.length {
+                self.selectedRange = NSRange(location: clampedLocation, length: 0)
+            }
+        }
     }
 
     /// Add a new text block to the model and re-render

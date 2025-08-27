@@ -15,12 +15,20 @@ enum BlockType: Equatable {
 }
 
 /// Struct representing a block in the editor
-struct Block: Equatable {
+struct Block: Equatable, Identifiable {
+    var id: UUID = UUID()
     var type: BlockType
     var calorieData: String?
     var nutrition: NutritionData?
     // Add more metadata as needed
-} 
+}
+
+// Equality ignores identity to prevent unnecessary rebuilds when ids differ but content is the same
+extension Block {
+    static func == (lhs: Block, rhs: Block) -> Bool {
+        return lhs.type == rhs.type && lhs.calorieData == rhs.calorieData && lhs.nutrition == rhs.nutrition
+    }
+}
 
 // MARK: - Text-only serialization utilities
 extension Array where Element == Block {
@@ -55,7 +63,7 @@ extension Array where Element == Block {
                 if !trimmed.isEmpty {
                     position += 1
                     result.append([
-                        "id": UUID().uuidString,
+                        "id": block.id.uuidString,
                         "position": position,
                         "type": "text",
                         "content": trimmed
@@ -66,7 +74,7 @@ extension Array where Element == Block {
                 if !trimmed.isEmpty {
                     position += 1
                     result.append([
-                        "id": UUID().uuidString,
+                        "id": block.id.uuidString,
                         "position": position,
                         "type": "text",
                         "content": trimmed

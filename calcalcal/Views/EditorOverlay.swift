@@ -15,7 +15,10 @@ struct EditorOverlay: View {
     @State private var useMatchedGeometry: Bool = true
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
+    @State private var lastSavedContent: String? = nil
     @State private var liveTotalCalories: Int? = nil
+    @State private var suppressRemoteBlockUpdates: Bool = false
+    @State private var pendingRemoteBlocks: [Block]? = nil
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -56,7 +59,7 @@ struct EditorOverlay: View {
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .onChange(of: blocks) { newValue in
-                                scheduleAutosave(blocks: newValue)
+                                scheduleAutosaveIfTextChanged(blocks: newValue)
                             }
                         }
                         .background(
@@ -94,7 +97,7 @@ struct EditorOverlay: View {
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .onChange(of: blocks) { newValue in
-                                scheduleAutosave(blocks: newValue)
+                                scheduleAutosaveIfTextChanged(blocks: newValue)
                             }
                         }
                         .background(
@@ -217,15 +220,25 @@ struct EditorOverlay: View {
                                 break
                             }
                         }
+                        // Apply per-block metadata (calories, nutrition) live; content remains user source of truth
                         self.blocks = updated
                     }
                 } catch {
                     // Best-effort; ignore if blocks not available yet
                 }
             }
+            // Initialize lastSavedContent to current textual content to avoid initial autosave loop
+            let initial = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+            lastSavedContent = initial
         }
         .onDisappear {
             flushSave()
+            // Apply any queued remote updates only after editor closes
+            if let pending = pendingRemoteBlocks {
+                blocks = pending
+                pendingRemoteBlocks = nil
+            }
+            suppressRemoteBlockUpdates = false
         }
     }
 }
@@ -277,6 +290,15 @@ extension EditorOverlay {
 
 // MARK: - Autosave helpers
 extension EditorOverlay {
+    private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
+        let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+        if content == lastSavedContent {
+            print("⏭️ Autosave skipped (text unchanged)")
+            return
+        }
+        scheduleAutosave(blocks: blocks)
+    }
+
     private func scheduleAutosave(blocks: [Block]) {
         debounceWorkItem?.cancel()
         print("🕐 Autosave scheduled in 1s…")
@@ -385,6 +407,7 @@ extension EditorOverlay {
                                                 break
                                             }
                                         }
+                                        // Apply metadata updates live to show calorie labels updating
                                         self.blocks = updated
                                     }
                                 }
@@ -409,6 +432,7 @@ extension EditorOverlay {
                 print("⚠️ Missing user id; deferring insert until available")
             }
             lastSavedAt = Date()
+            lastSavedContent = trimmed
             print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
         } catch {
             print("❌ Autosave error: \(error)")
