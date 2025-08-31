@@ -50,7 +50,7 @@ struct BigEntryBlock: View {
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
-        _blocks = State(initialValue: entry.blocks)
+        _blocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
     }
     
     var body: some View {
@@ -91,8 +91,10 @@ struct BigEntryBlock: View {
         .onTapGesture { onTap?() }
         // Keep internal editor blocks in sync with external model
         .onChange(of: entry.blocks) { newValue in
-            self.blocks = newValue
+            self.blocks = newValue.withStableIdsAndChangeTracking()
         }
+        // Do not force full refresh; rely on stableId-aware diffs to prevent state bleed
+        .id(entry.id)
     }
     
     private func formattedDate(_ date: Date) -> String {

@@ -123,9 +123,15 @@ serve(async (req) => {
 
     const updatedBlocks = [] as any[]
     for (const block of blocks as Array<any>) {
-      const contentText = typeof block?.content === "string" ? String(block.content).trim() : ""
+      // Normalize/namespace client-provided block ids to be unique per entry
+      const originalId = typeof (block as any)?.id === "string" ? String((block as any).id) : String((block as any)?.id ?? "")
+      const safeId = originalId
+        ? (originalId.startsWith(`${entryId}:`) ? originalId : `${entryId}:${originalId}`)
+        : crypto.randomUUID()
+      const normalizedBlock = { ...block, id: safeId }
+      const contentText = typeof (normalizedBlock as any)?.content === "string" ? String((normalizedBlock as any).content).trim() : ""
       if (!contentText) {
-        updatedBlocks.push(block)
+        updatedBlocks.push(normalizedBlock)
         continue
       }
       const contentHash = await sha256(contentText)
@@ -142,7 +148,7 @@ serve(async (req) => {
         const analysis = cached.analysis_result as any
         cacheHits++
         updatedBlocks.push({
-          ...block,
+          ...normalizedBlock,
           calories: analysis?.calories ?? 0,
           protein: analysis?.protein ?? 0,
           fat: analysis?.fat ?? 0,
@@ -304,7 +310,7 @@ serve(async (req) => {
       }
 
       updatedBlocks.push({
-        ...block,
+        ...normalizedBlock,
         calories: analysis?.calories ?? 0,
         protein: analysis?.protein ?? 0,
         fat: analysis?.fat ?? 0,

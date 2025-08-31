@@ -12,7 +12,7 @@ extension UnifiedTextView {
         if self.markedTextRange != nil { return }
         // Mark last user edit time for external-sync suppression
         lastUserEditAt = CACurrentMediaTime()
-        // Respond to ALL content changes immediately, not just deletions
+        // Respond to character changes only
         guard editedMask.contains(.editedCharacters) else { return }
         
         #if DEBUG
@@ -33,8 +33,7 @@ extension UnifiedTextView {
             }
         }
         
-        // Update blocks immediately on EVERY character change
-        // This prevents bugs caused by delayed updates
+        // Update blocks on character changes
         DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.isProgrammaticUpdate else { return }
 
@@ -127,11 +126,22 @@ extension UnifiedTextView {
         }
         // Only update local blocks snapshot; rendering is centralized via SwiftUI's updateUIView
         if newBlocks != self.blocks {
+            // Detect if user edited any previously saved (analyzed) paragraph
+            let changed = diffChangedBlockIndices(old: self.blocks, new: newBlocks)
+            let editedPreviouslySaved = changed.contains { idx in
+                guard idx < self.blocks.count else { return false }
+                return self.blocks[idx].nutrition != nil || (self.blocks[idx].calorieData != nil)
+            }
             #if DEBUG
             print("Updating blocks array (no immediate render). New blocks: \(newBlocks)")
+            if editedPreviouslySaved { print("✏️ Edited a previously saved paragraph") }
             #endif
             // Update both local and SwiftUI snapshots to keep them aligned and prevent external diff from forcing re-render
             self.blocks = newBlocks
+            if editedPreviouslySaved {
+                // Notify listeners (e.g., overlay) to trigger a debounced autosave
+                NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
+            }
         } else {
             #if DEBUG
             print("No change to blocks array.")
@@ -144,7 +154,19 @@ extension UnifiedTextView {
         isUserEditing = true
         print("🎯 Text will change: range=\(range), text='\(text)'")
         // Let the system handle Enter/newline insertion to prevent forced newlines and caret jumps
-        if text == "\n" { return true }
+        if text == "\n" {
+            #if DEBUG
+            print("↩️ Enter pressed – committing paragraph")
+            #endif
+            // Defer notification to after system commits the newline
+            DispatchQueue.main.async {
+                #if DEBUG
+                print("📣 Posting editorParagraphCommitted notification")
+                #endif
+                NotificationCenter.default.post(name: .editorParagraphCommitted, object: nil)
+            }
+            return true
+        }
         
         // Handle deletion that might affect image blocks
         if text.isEmpty && range.length > 0 {
@@ -173,6 +195,8 @@ extension UnifiedTextView {
     func textViewDidEndEditing(_ textView: UITextView) {
         // Attempt to apply any pending external updates once the user stops editing
         applyPendingExternalBlocksIfIdle(idleGrace: 0)
+        // Final autosave when editing session ends
+        NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
     }
     
     func textViewDidChangeSelection(_ textView: UITextView) {

@@ -20,13 +20,16 @@ struct Block: Equatable, Identifiable {
     var type: BlockType
     var calorieData: String?
     var nutrition: NutritionData?
+    // Stable identifier used for change tracking within editor sessions
+    var stableId: UUID? = nil
     // Add more metadata as needed
 }
 
 // Equality ignores identity to prevent unnecessary rebuilds when ids differ but content is the same
 extension Block {
     static func == (lhs: Block, rhs: Block) -> Bool {
-        return lhs.type == rhs.type && lhs.calorieData == rhs.calorieData && lhs.nutrition == rhs.nutrition
+        // Include stableId to avoid treating blocks from different entries as equal when content matches
+        return lhs.type == rhs.type && lhs.calorieData == rhs.calorieData && lhs.nutrition == rhs.nutrition && lhs.stableId == rhs.stableId
     }
 }
 
@@ -86,6 +89,15 @@ extension Array where Element == Block {
         }
         return result
     }
+
+    /// Ensure every block has a stable identifier and return updated copy
+    func withStableIdsAndChangeTracking() -> [Block] {
+        return self.map { block in
+            var updated = block
+            if updated.stableId == nil { updated.stableId = UUID() }
+            return updated
+        }
+    }
 }
 
 extension String {
@@ -94,6 +106,16 @@ extension String {
     func toTextBlocks() -> [Block] {
         let parts = self.components(separatedBy: "\n\n")
         return parts.map { Block(type: .text($0), calorieData: nil, nutrition: nil) }
+    }
+}
+
+// MARK: - Change tracking helpers
+extension Block {
+    /// Returns a copy of the block with initialized stable id for change tracking
+    func withUpdatedChangeTracking() -> Block {
+        var updated = self
+        if updated.stableId == nil { updated.stableId = UUID() }
+        return updated
     }
 }
 

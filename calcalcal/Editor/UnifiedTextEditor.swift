@@ -263,6 +263,29 @@ struct UnifiedTextEditor: UIViewRepresentable {
             debounceWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
         }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            if text == "\n" {
+                #if DEBUG
+                print("↩️ [Coordinator] Enter pressed – committing paragraph")
+                #endif
+                DispatchQueue.main.async {
+                    #if DEBUG
+                    print("📣 [Coordinator] Posting editorParagraphCommitted notification")
+                    #endif
+                    NotificationCenter.default.post(name: .editorParagraphCommitted, object: nil)
+                }
+                return true
+            }
+            return true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            #if DEBUG
+            print("✅ [Coordinator] textViewDidEndEditing -> saved paragraph edited notification")
+            #endif
+            NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
+        }
     }
 }
 
