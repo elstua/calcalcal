@@ -17,6 +17,7 @@ struct MainTabView: View {
                     onRequestOpen: { entry in
                         // Prepare focus and blocks, then present within a single animated transaction
                         shouldFocusEditor = false
+                        print("🐛 DEBUG: Opening entry \(entry.id.uuidString) with blocks: \(entry.blocks.map { $0.type })")
                         presentedBlocks = entry.blocks
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
                             presentedEntry = entry

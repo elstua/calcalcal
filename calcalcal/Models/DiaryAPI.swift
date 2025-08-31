@@ -138,6 +138,7 @@ struct DiaryAPI {
     static func getBlocksById(_ id: String) async throws -> [DBBlock] {
         let base = Configuration.supabaseURL
         let urlString = "\(base)/rest/v1/diary_entries?select=blocks&id=eq.\(id)&limit=1"
+        print("🐛 DEBUG: getBlocksById URL: \(urlString)")
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let request = try makeRequest(url: url)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -146,7 +147,9 @@ struct DiaryAPI {
         }
         let decoder = JSONDecoder()
         let rows = try decoder.decode([BlocksRow].self, from: data)
-        return rows.first?.blocks ?? []
+        let blocks = rows.first?.blocks ?? []
+        print("🐛 DEBUG: getBlocksById(\(id)) found \(rows.count) entries, returning \(blocks.count) blocks: \(blocks.map { $0.content ?? "nil" })")
+        return blocks
     }
 
     /// Get analyzed blocks as AnalyzedBlock structs for change detection
@@ -345,6 +348,7 @@ struct DiaryAPI {
 extension DiaryAPI.Row {
     func toDiaryEntry() -> DiaryEntry {
         let uuid = UUID(uuidString: id) ?? UUID()
+        print("🐛 DEBUG: toDiaryEntry - db_id=\(id), db_date=\(date), local_id=\(uuid.uuidString)")
         // Robustly parse server `date` which may arrive as "YYYY-MM-DD" or ISO8601
         let dateFormatter = DateFormatter()
         dateFormatter.calendar = Calendar(identifier: .gregorian)

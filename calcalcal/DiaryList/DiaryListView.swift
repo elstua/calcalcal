@@ -61,10 +61,16 @@ struct DiaryListView: View {
             guard let userInfo = notification.userInfo,
                   let entryId = userInfo["entryId"] as? UUID,
                   let blocks = userInfo["blocks"] as? [Block] else { return }
+            print("🐛 DEBUG: editorOverlayDidCommit - entryId=\(entryId.uuidString), blocks=\(blocks.map { $0.type })")
+            print("🐛 DEBUG: Current entries in DiaryListView: \(entries.map { "ID: \($0.id.uuidString.prefix(8)), blocks: \($0.blocks.map { $0.type })" })")
             if let index = entries.firstIndex(where: { $0.id == entryId }) {
+                print("🐛 DEBUG: Found entry at index \(index), ID=\(entries[index].id.uuidString), was: \(entries[index].blocks.map { $0.type })")
                 entries[index].blocks = blocks
                 entries[index].lastModified = Date()
+                print("🐛 DEBUG: Updated entry at index \(index), now: \(entries[index].blocks.map { $0.type })")
                 recalcTimeline()
+            } else {
+                print("🐛 DEBUG: WARNING - entryId \(entryId.uuidString) not found in entries array!")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryTotalsUpdated)) { notification in
@@ -312,6 +318,7 @@ struct DiaryEntryPopupView: View {
     @State private var shouldFocusEditor = false
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
+    @State private var lastSavedContent: String? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -357,6 +364,9 @@ struct DiaryEntryPopupView: View {
         .animation(.spring(), value: dragOffset)
         .onAppear {
             shouldFocusEditor = true
+            // Initialize lastSavedContent to current content to avoid initial autosave loop
+            let initial = entry.blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+            lastSavedContent = initial
         }
         .onChange(of: isPresented) { presented in
             if !presented {
@@ -368,8 +378,7 @@ struct DiaryEntryPopupView: View {
     // MARK: - Autosave helpers
     private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
         let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
-        struct Static { static var lastSavedContent: String? }
-        if content == Static.lastSavedContent {
+        if content == lastSavedContent {
             print("⏭️ Autosave skipped (text unchanged)")
             return
         }
@@ -389,7 +398,7 @@ struct DiaryEntryPopupView: View {
 
     private func flushSave() {
         if let work = debounceWorkItem {
-            work.cancel()
+            work.cancel()   
             debounceWorkItem = nil
         }
         print("🔚 Flushing autosave on close…")
@@ -433,8 +442,7 @@ struct DiaryEntryPopupView: View {
                 print("⚠️ Missing user id; deferring insert until available")
             }
             lastSavedAt = Date()
-            struct Static { static var lastSavedContent: String? }
-            Static.lastSavedContent = trimmed
+            lastSavedContent = trimmed
             print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
         } catch {
             // For v1, ignore errors silently; could add retry/indicator later.

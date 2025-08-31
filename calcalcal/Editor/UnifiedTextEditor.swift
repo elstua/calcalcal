@@ -35,6 +35,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         textView.delegate = context.coordinator
         textView.isEditable = isEditable
         print("[makeUIView] Initial blocks: \(blocks)")
+        print("[makeUIView] DEBUG: textView=\(textView), entry context unknown at this level")
         textView.renderBlocks()
         print("[makeUIView] Called renderBlocks()")
         if shouldBecomeFirstResponder {
