@@ -132,4 +132,82 @@ To see the editor in action, run `UnifiedEditorDemoView`. The demo showcases:
 - **New Block Types:** Add support for checklists, tables, and rich text formatting.
 - **Performance:** Ongoing optimization for large documents and complex layouts.
 - **Block Interactions:** Tap/long-press gestures for block-level actions.
-- **Deeper Calorie Integration:** Connect with calorie calculation systems and external data sources. 
+- **Deeper Calorie Integration:** Connect with calorie calculation systems and external data sources.
+
+---
+
+## Metadata-Only Updates (Device-Text-as-Source-of-Truth)
+
+### Overview
+The metadata-only updates feature enables server analysis results to update paragraph nutrition/calorie data **without ever touching the actual text content**. The device text (`UITextView.textStorage`) is always the canonical source of truth, and server results only fill in metadata fields (calories, nutrition).
+
+### Problem Solved
+Previously, when server analysis returned results, they could trigger `blocks` mutations that would re-render the editor and disrupt the user's editing flow (e.g., caret jumps, freshly typed text loss). This design eliminates that issue by:
+- Removing timing-based guards and debounces
+- Using notification-based, immediate metadata application
+- Never allowing server data to overwrite text content
+- Matching analyzed blocks by device-text as the key, skipping unmatched results
+
+### Implementation Details
+
+#### 1. **Entry ID Tracking**
+Each `UnifiedTextView` instance has an `entryId: UUID` property set by `UnifiedTextEditor`. This allows the view to filter incoming notifications and only process updates intended for that specific diary entry.
+
+#### 2. **Notification-Based Flow**
+- **Sender:** `EditorOverlay` or other server-sync components post `.editorApplyPerBlockMetadata` with `{ entryId: UUID, analyzedBlocks: [AnalyzedBlock] }`.
+- **Receiver:** `UnifiedTextView` listens for the notification and calls `applyNutritionMetadata(analyzedBlocks:)` immediately.
+- **No delays:** Updates are applied as soon as received; no guards or debounces interfere.
+
+#### 3. **Matching Strategy (Device-Wins Semantics)**
+
+**Pass 1: Exact Match by Text**
+- Enumerate all non-empty text paragraphs in the current text storage.
+- For each analyzed block, search for a paragraph with matching trimmed text.
+- If found, apply metadata to that paragraph and mark the block as matched.
+- If paragraph text changed after being saved, the exact match fails silently (device-wins policy).
+
+**Pass 2: Positional Fallback**
+- For any remaining unmatched analyzed blocks, pair them with unmatched paragraphs in order.
+- This is a best-effort fallback; since only metadata changes, mistakes are low-impact and self-correct on the next analysis.
+
+#### 4. **Metadata Application**
+Once a match is found (by text or position), the function:
+- Reads the paragraph's current metadata via `unifiedContentStorage.blockMetadata(at:)`.
+- Updates only the `calorieData` and `nutritionJSON` fields.
+- Persists the updated metadata back to storage via `setBlockMetadata(for:)`.
+- Never touches the paragraph's text content.
+
+#### 5. **Visual Refresh & Sync**
+After metadata updates:
+- Refresh visuals by calling `updateBlockBackgroundViews()` and `setNeedsDisplay()` (metadata-driven display updates only).
+- Reconstruct the `blocks` array from the updated text storage via `updateBlocksFromTextStorage()` to keep SwiftUI state in sync.
+- The local `blocks` snapshot is updated but not used for rendering; it serves as a pass-through to SwiftUI for state synchronization.
+
+### API
+
+#### `UnifiedTextView.applyNutritionMetadata(analyzedBlocks: [AnalyzedBlock])`
+Main entry point. Performs two-pass matching and applies metadata to matching paragraphs. Called automatically when `.editorApplyPerBlockMetadata` notification is received.
+
+#### `UnifiedTextView.updateBlockMetadata(at: Int, calorieData: String?, nutrition: NutritionData?)`
+Lower-level API for updating a single block by index. Used for one-off metadata updates.
+
+#### Notification: `.editorApplyPerBlockMetadata`
+Post with `userInfo: { "entryId": UUID, "analyzedBlocks": [AnalyzedBlock] }` to apply metadata updates.
+
+### Conflict & Edge Cases
+
+- **Text edited after save, before analysis arrives:** Exact match fails for that paragraph; analyzed block is skipped or matched to the next unmatched paragraph (positional fallback). Device text is preserved.
+- **Duplicate identical paragraphs:** First pass pairs by exact match in order; remaining duplicates use positional fallback. Only metadata changes, so low-impact.
+- **Image blocks with captions:** Metadata is applied to the paragraph containing the image+caption. Image-only blocks (no text) are skipped.
+- **Empty paragraphs:** Ignored; only non-empty paragraphs are considered for matching.
+
+### Future Extensibility
+
+For server-proposed **content changes** (e.g., "add description to photo"), a separate API `proposeContentChanges(_)` will be added. These are explicit, user-visible changes with undo/accept, and never piggyback on the metadata channel.
+
+### Benefits
+
+- **Instant feedback:** No debounces or guards; metadata updates feel immediate.
+- **Device text preservation:** User edits are never overwritten by server data.
+- **Reduced re-renders:** Only metadata and visuals update; text structure is stable.
+- **Conflict-free:** Device-wins semantics mean server data adapts to device state, not vice versa. 

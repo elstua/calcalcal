@@ -56,6 +56,9 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     internal var pendingExternalBlocks: [Block]? = nil
     internal var externalBlocksApplyWorkItem: DispatchWorkItem?
 
+    /// Entry ID for notification filtering in metadata-only updates
+    internal var entryId: UUID?
+    
     /// Attempt to apply any pending external content changes when idle
     internal func applyPendingExternalBlocksIfIdle(idleGrace: TimeInterval = 0.6) {
         guard let pending = pendingExternalBlocks else { return }
@@ -98,6 +101,9 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     }
     
     deinit {
+        // Remove notification observer
+        NotificationCenter.default.removeObserver(self)
+        
         // Clean up image views
         for (_, imageView) in imageViews {
             imageView.removeFromSuperview()
@@ -154,6 +160,14 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
         
         // Set up delegate
         delegate = self
+        
+        // Register for metadata-only update notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleApplyPerBlockMetadata(_:)),
+            name: .editorApplyPerBlockMetadata,
+            object: nil
+        )
     }
     
     // MARK: - Layout

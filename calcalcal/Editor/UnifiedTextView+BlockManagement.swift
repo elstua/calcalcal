@@ -308,4 +308,173 @@ extension UnifiedTextView {
         updateBlockBackgroundViews()
         setNeedsDisplay()
     }
+    
+    /// Handle incoming metadata-only update notification
+    @objc func handleApplyPerBlockMetadata(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
+        
+        // Extract entryId and analyzedBlocks from notification
+        guard let notificationEntryId = userInfo["entryId"] as? UUID else { return }
+        guard let analyzedBlocks = userInfo["analyzedBlocks"] as? [AnalyzedBlock] else { return }
+        
+        // Filter by entryId to ensure we only process notifications for this editor instance
+        guard self.entryId == notificationEntryId else { return }
+        
+        #if DEBUG
+        print("📲 Applying metadata updates for \(analyzedBlocks.count) analyzed blocks")
+        #endif
+        
+        applyNutritionMetadata(analyzedBlocks: analyzedBlocks)
+    }
+    
+    /// Apply nutrition/calorie metadata to paragraphs without changing text content
+    /// Matches analyzed blocks by exact text first, then falls back to positional matching
+    /// Device text is always the source of truth; unmatched analyzed blocks are skipped
+    func applyNutritionMetadata(analyzedBlocks: [AnalyzedBlock]) {
+        guard !analyzedBlocks.isEmpty else { return }
+        
+        // Build list of non-empty textual paragraphs with their ranges and content
+        var paragraphsList: [(range: NSRange, text: String, metadata: UnifiedTextContentStorage.BlockMetadata?)] = []
+        let string = textStorage.string as NSString
+        
+        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
+            guard paragraphRange.location < string.length else { return }
+            let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !paragraphText.isEmpty else { return }
+            paragraphsList.append((range: paragraphRange, text: paragraphText, metadata: metadata))
+        }
+        
+        // Track which analyzed blocks have been matched
+        var matchedBlockIndices = Set<Int>()
+        
+        // PASS 1: Exact match by trimmed text equality (device-wins semantics)
+        for (paraIdx, paragraph) in paragraphsList.enumerated() {
+            for (blockIdx, block) in analyzedBlocks.enumerated() {
+                guard !matchedBlockIndices.contains(blockIdx) else { continue }
+                
+                let deviceText = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let serverText = block.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if deviceText == serverText {
+                    // Match found: apply metadata to this paragraph
+                    applyBlockMetadataToRange(paragraph.range, analyzedBlock: block)
+                    matchedBlockIndices.insert(blockIdx)
+                    
+                    #if DEBUG
+                    print("✅ Exact-matched paragraph at range \(paragraph.range) with analyzed block '\(serverText)'")
+                    #endif
+                    break
+                }
+            }
+        }
+        
+        // PASS 2: Positional fallback for remaining unmatched blocks (best-effort)
+        var nextParagraphIdx = 0
+        for (blockIdx, block) in analyzedBlocks.enumerated() {
+            guard !matchedBlockIndices.contains(blockIdx) else { continue }
+            guard nextParagraphIdx < paragraphsList.count else { break }
+            
+            let paragraph = paragraphsList[nextParagraphIdx]
+            applyBlockMetadataToRange(paragraph.range, analyzedBlock: block)
+            matchedBlockIndices.insert(blockIdx)
+            nextParagraphIdx += 1
+            
+            #if DEBUG
+            print("⚠️ Positional-matched paragraph at range \(paragraph.range) (fallback)")
+            #endif
+        }
+        
+        // Refresh visuals to display updated metadata
+        updateBlockBackgroundViews()
+        setNeedsDisplay()
+        
+        // Reconstruct blocks from updated text storage and sync SwiftUI state
+        updateBlocksFromTextStorage()
+        
+        #if DEBUG
+        print("🎉 Metadata update complete: \(matchedBlockIndices.count)/\(analyzedBlocks.count) blocks applied")
+        #endif
+    }
+    
+    /// Apply an analyzed block's metadata to a specific paragraph range
+    private func applyBlockMetadataToRange(_ paragraphRange: NSRange, analyzedBlock: AnalyzedBlock) {
+        guard var metadata = unifiedContentStorage.blockMetadata(at: paragraphRange.location) else { return }
+        
+        // Update calorie data
+        if let calories = analyzedBlock.calories {
+            metadata.calorieData = String(calories)
+        }
+        
+        // Build nutrition data from analyzed block fields
+        if analyzedBlock.protein != nil || analyzedBlock.fat != nil || 
+           analyzedBlock.carbs != nil || analyzedBlock.fiber != nil || 
+           analyzedBlock.sugar != nil || analyzedBlock.sodium != nil ||
+           analyzedBlock.calories != nil {
+            
+            let nutritionData = NutritionData(
+                calories: analyzedBlock.calories,
+                protein: analyzedBlock.protein,
+                fat: analyzedBlock.fat,
+                carbs: analyzedBlock.carbs,
+                fiber: analyzedBlock.fiber,
+                sugar: analyzedBlock.sugar,
+                sodium: analyzedBlock.sodium,
+                confidence: analyzedBlock.confidence
+            )
+            metadata.nutritionJSON = try? JSONEncoder().encode(nutritionData)
+        }
+        
+        // Persist updated metadata back to storage
+        unifiedContentStorage.setBlockMetadata(metadata, for: paragraphRange)
+    }
+    
+    /// Reconstruct the blocks array from current text storage state
+    /// This syncs the SwiftUI model with the latest metadata from text storage
+    private func updateBlocksFromTextStorage() {
+        let string = textStorage.string as NSString
+        var newBlocks: [Block] = []
+        
+        unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
+            guard paragraphRange.location < string.length else { return }
+            
+            var paragraphText = string.substring(with: paragraphRange)
+            if paragraphText.hasSuffix("\n") {
+                paragraphText.removeLast()
+            }
+            
+            let paragraphText_trimmed = paragraphText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !paragraphText_trimmed.isEmpty else { return }
+            
+            guard let metadata = metadata else {
+                newBlocks.append(Block(type: .text(paragraphText), calorieData: nil))
+                return
+            }
+            
+            switch metadata.blockType {
+            case .text:
+                var nutrition: NutritionData? = nil
+                if let data = metadata.nutritionJSON {
+                    nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                }
+                newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                
+            case .imageText:
+                if let imageRef = metadata.imageReference, let image = imageMap[imageRef], let imageData = image.pngData() {
+                    var nutrition: NutritionData? = nil
+                    if let d = metadata.nutritionJSON {
+                        nutrition = try? JSONDecoder().decode(NutritionData.self, from: d)
+                    }
+                    newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                }
+                
+            case .spacer:
+                newBlocks.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
+            }
+        }
+        
+        // Update blocks array to keep SwiftUI state in sync
+        if newBlocks != self.blocks {
+            self.blocks = newBlocks
+        }
+    }
 }

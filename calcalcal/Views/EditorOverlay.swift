@@ -249,6 +249,7 @@ extension Notification.Name {
     static let editorOverlayDidCommit = Notification.Name("editorOverlayDidCommit")
     static let editorParagraphCommitted = Notification.Name("editorParagraphCommitted")
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
+    static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
 }
 
 // MARK: - Utilities
