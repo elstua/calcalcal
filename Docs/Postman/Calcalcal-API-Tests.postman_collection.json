@@ -1,0 +1,378 @@
+{
+  "info": {
+    "name": "CalCalCal API Tests",
+    "description": "Complete API testing collection for CalCalCal backend migration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{BASE_URL}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Authentication",
+      "item": [
+        {
+          "name": "Apple Sign-In (Test)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.session) {",
+                  "        pm.environment.set('ACCESS_TOKEN', response.session.access_token);",
+                  "        pm.environment.set('REFRESH_TOKEN', response.session.refresh_token);",
+                  "        console.log('✅ Tokens saved to environment');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identityToken\": \"test-token\",\n  \"user\": {\n    \"id\": \"com.apple.user.test123\",\n    \"email\": \"test@example.com\",\n    \"name\": \"Test User\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signin-apple",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "signin-apple"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.session) {",
+                  "        pm.environment.set('ACCESS_TOKEN', response.session.access_token);",
+                  "        pm.environment.set('REFRESH_TOKEN', response.session.refresh_token);",
+                  "        console.log('✅ Tokens refreshed');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{REFRESH_TOKEN}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Diary Entries",
+      "item": [
+        {
+          "name": "Create Diary Entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('ENTRY_ID', response.id);",
+                  "    console.log('✅ Entry created with ID:', response.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"{{TEST_DATE}}\",\n  \"content\": \"Had two eggs and toast for breakfast. Also had a banana and coffee.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Entry by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries/{{ENTRY_ID}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries", "{{ENTRY_ID}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Entries by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries?dateFrom={{TEST_DATE_FROM}}&dateTo={{TEST_DATE_TO}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries"],
+              "query": [
+                {
+                  "key": "dateFrom",
+                  "value": "{{TEST_DATE_FROM}}"
+                },
+                {
+                  "key": "dateTo",
+                  "value": "{{TEST_DATE_TO}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Entry Content",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Updated: Had two eggs and toast for breakfast. Also had a banana, coffee, and some yogurt.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries/{{ENTRY_ID}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries", "{{ENTRY_ID}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Entry",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries/{{ENTRY_ID}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries", "{{ENTRY_ID}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. AI Analysis",
+      "item": [
+        {
+          "name": "Analyze Food Blocks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    console.log('✅ AI Analysis completed:', response.updatedBlocksCount, 'blocks processed');",
+                  "} else {",
+                  "    console.log('❌ AI Analysis failed:', pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entryId\": \"{{ENTRY_ID}}\",\n  \"blocks\": [\n    {\n      \"id\": \"block-1\",\n      \"content\": \"Two eggs and toast\",\n      \"position\": 1\n    },\n    {\n      \"id\": \"block-2\",\n      \"content\": \"Banana and coffee\",\n      \"position\": 2\n    },\n    {\n      \"id\": \"block-3\",\n      \"content\": \"Some yogurt\",\n      \"position\": 3\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/analyze",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "analyze"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Error Testing",
+      "item": [
+        {
+          "name": "Unauthorized Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid-token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Missing date field\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/diary/entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "diary", "entries"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

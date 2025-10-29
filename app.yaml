@@ -1,0 +1,27 @@
+name: calycal-api
+services:
+- name: api
+  github:
+    repo: your-github-username/calycal-backend
+    branch: main
+  build_command: npm install && npm run build
+  run_command: npm start
+  envs:
+  - key: NODE_ENV
+    value: production
+  - key: DATABASE_URL
+    value: ${db.connection_string}
+  - key: JWT_SECRET
+    scope: RUN_AND_BUILD_TIME
+  - key: OPENAI_API_KEY
+    scope: RUN_AND_BUILD_TIME
+  http_port: 3000
+  health_check:
+    http:
+      path: /health
+
+databases:
+- name: db
+  engine: PG
+  production: true
+  version: "15"

@@ -87,12 +87,12 @@
 		DF2A6E4C2E5E03E40016DD61 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				DF5872372E5F1594005AD214 /* Supabase in Frameworks */,
 				DF5872362E5F1594005AD214 /* Storage in Frameworks */,
 				DF5872352E5F1594005AD214 /* Realtime in Frameworks */,
 				DF5872342E5F1594005AD214 /* PostgREST in Frameworks */,
 				DF5872332E5F1594005AD214 /* Functions in Frameworks */,
 				DF5872322E5F1594005AD214 /* Auth in Frameworks */,
+				DF5872372E5F1594005AD214 /* Supabase in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
