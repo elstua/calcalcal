@@ -2,7 +2,7 @@ name: calycal-api
 services:
 - name: api
   github:
-    repo: your-github-username/calycal-backend
+    repo: elstua/calcalcal
     branch: main
   source_dir: apps/backend/node
   build_command: npm install && npm run build
