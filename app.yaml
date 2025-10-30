@@ -4,6 +4,7 @@ services:
   github:
     repo: your-github-username/calycal-backend
     branch: main
+  source_dir: apps/backend/node
   build_command: npm install && npm run build
   run_command: npm start
   envs:
