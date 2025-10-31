@@ -11,6 +11,31 @@ if (fs.existsSync('.env.local')) {
 
 const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/calcalcal_dev';
 
+// Validate DATABASE_URL format
+if (!connectionString || !connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://')) {
+  console.error('❌ ERROR: DATABASE_URL must start with postgresql:// or postgres://');
+  console.error('Current value:', connectionString ? `"${connectionString}"` : 'NOT SET');
+  throw new Error('Invalid DATABASE_URL format. Must be a PostgreSQL connection string.');
+}
+
+// Log connection string (without password) for debugging
+const maskedUrl = connectionString.replace(/:([^:@]+)@/, ':***@');
+console.log('Database connection string:', maskedUrl);
+
+// Extract and validate hostname
+try {
+  const url = new URL(connectionString);
+  if (!url.hostname || url.hostname === 'base' || url.hostname.length < 3) {
+    console.error('❌ ERROR: Invalid database hostname:', url.hostname);
+    console.error('Full connection string (masked):', maskedUrl);
+    throw new Error(`Invalid database hostname: ${url.hostname}. Check DATABASE_URL environment variable.`);
+  }
+} catch (urlError) {
+  console.error('❌ ERROR: Failed to parse DATABASE_URL:', urlError);
+  console.error('Connection string (masked):', maskedUrl);
+  throw new Error('Failed to parse DATABASE_URL. Ensure it is a valid PostgreSQL connection string.');
+}
+
 // Optimize connection pool for low-memory environments (512MB VPS)
 // Default pg pool size is 10, reduce to 5 for better memory usage
 const pool = new Pool({
@@ -18,6 +43,18 @@ const pool = new Pool({
   max: parseInt(process.env.DB_POOL_MAX || '5', 10), // Default 5, can override with DB_POOL_MAX env var
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+});
+
+// Test connection on startup
+pool.on('error', (err) => {
+  console.error('Unexpected database pool error:', err);
+});
+
+pool.query('SELECT NOW()').then(() => {
+  console.log('✅ Database connection successful');
+}).catch((err) => {
+  console.error('❌ Database connection failed:', err.message);
+  console.error('Connection string (masked):', connectionString ? connectionString.replace(/:([^:@]+)@/, ':***@') : 'NOT SET');
 });
 
 export default class Database {

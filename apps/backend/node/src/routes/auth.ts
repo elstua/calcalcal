@@ -71,6 +71,8 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('Sign-in error:', { message, stack, error });
     return res.status(500).json({ error: 'Authentication failed', message });
   }
 });
