@@ -56,16 +56,13 @@ struct DiaryAPI {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         } else {
             if isWrite {
-                // Writes require authenticated session to satisfy RLS
+                // Writes require authenticated session
                 throw NSError(domain: "DiaryAPI", code: -10, userInfo: [NSLocalizedDescriptionKey: "Missing session; cannot perform write operation. Please sign in again."])
             }
-            // Fallback to anon for read-only endpoints that may not require auth
-            request.setValue("Bearer \(Configuration.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+            // Reads also require auth in new backend
+            throw NSError(domain: "DiaryAPI", code: -10, userInfo: [NSLocalizedDescriptionKey: "Missing session; please sign in."])
         }
-        request.setValue(Configuration.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        if method == "POST" || method == "PATCH" || method == "PUT" {
-            request.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        }
+        // No apikey header needed - backend uses JWT token for auth
         request.httpBody = body
         return request
     }
@@ -82,63 +79,47 @@ struct DiaryAPI {
     }
 
     static func listEntries(dateFrom: String, dateTo: String) async throws -> [Row] {
-        let base = Configuration.supabaseURL
-        let select = "id,user_id,date,content,images,total_calories,updated_at"
-        let userId = UserDefaults.standard.string(forKey: "current_user_id")
-        let urlString: String
-        if let userId = userId, !userId.isEmpty {
-            urlString = "\(base)/rest/v1/diary_entries?select=\(select)&user_id=eq.\(userId)&date=gte.\(dateFrom)&date=lte.\(dateTo)&order=date.desc"
-        } else {
-            urlString = "\(base)/rest/v1/diary_entries?select=\(select)&date=gte.\(dateFrom)&date=lte.\(dateTo)&order=date.desc"
-        }
+        let base = Configuration.apiURL
+        // Backend automatically filters by user_id from JWT token
+        let urlString = "\(base)/api/diary/entries?dateFrom=\(dateFrom)&dateTo=\(dateTo)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let request = try makeRequest(url: url)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
+        // Backend returns array directly
         return try decodeRows(data)
     }
 
     static func getByDate(_ date: String) async throws -> Row? {
-        let base = Configuration.supabaseURL
-        let select = "id,user_id,date,content,images,total_calories,updated_at"
-        // Scope by current user_id when available to avoid cross-user matches
-        let userId = UserDefaults.standard.string(forKey: "current_user_id")
-        let urlString: String
-        if let userId = userId, !userId.isEmpty {
-            urlString = "\(base)/rest/v1/diary_entries?select=\(select)&date=eq.\(date)&user_id=eq.\(userId)&limit=1"
-        } else {
-            urlString = "\(base)/rest/v1/diary_entries?select=\(select)&date=eq.\(date)&limit=1"
-        }
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        let request = try makeRequest(url: url)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-        let rows = try decodeRows(data)
-        return rows.first
+        // Use listEntries with same date for both from/to
+        let entries = try await listEntries(dateFrom: date, dateTo: date)
+        return entries.first
     }
 
     static func getById(_ id: String) async throws -> Row? {
-        let base = Configuration.supabaseURL
-        let select = "id,user_id,date,content,images,total_calories,updated_at"
-        let urlString = "\(base)/rest/v1/diary_entries?select=\(select)&id=eq.\(id)&limit=1"
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(id)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let request = try makeRequest(url: url)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        let rows = try decodeRows(data)
-        return rows.first
+        // Backend returns single object, not array
+        let decoder = JSONDecoder()
+        return try decoder.decode(Row.self, from: data)
     }
 
     static func getBlocksById(_ id: String) async throws -> [DBBlock] {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/rest/v1/diary_entries?select=blocks&id=eq.\(id)&limit=1"
-        print("🐛 DEBUG: getBlocksById URL: \(urlString)")
+        // Get full entry via getById, then extract blocks
+        let entry = try await getById(id)
+        // Entry should have blocks field - need to decode it
+        // For now, we'll need to fetch the full entry with blocks
+        // Let's create a helper that gets the full entry including blocks
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(id)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let request = try makeRequest(url: url)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -146,10 +127,12 @@ struct DiaryAPI {
             throw URLError(.badServerResponse)
         }
         let decoder = JSONDecoder()
-        let rows = try decoder.decode([BlocksRow].self, from: data)
-        let blocks = rows.first?.blocks ?? []
-        print("🐛 DEBUG: getBlocksById(\(id)) found \(rows.count) entries, returning \(blocks.count) blocks: \(blocks.map { $0.content ?? "nil" })")
-        return blocks
+        struct FullEntry: Codable {
+            let blocks: [DBBlock]?
+        }
+        let fullEntry = try decoder.decode(FullEntry.self, from: data)
+        print("🐛 DEBUG: getBlocksById(\(id)) returning \(fullEntry.blocks?.count ?? 0) blocks")
+        return fullEntry.blocks ?? []
     }
 
     /// Get analyzed blocks as AnalyzedBlock structs for change detection
@@ -159,38 +142,23 @@ struct DiaryAPI {
     }
 
     static func insert(date: String, content: String) async throws -> Row {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/rest/v1/diary_entries"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        guard let userId = try? KeychainManager.shared.loadTokens(), userId != nil else {
-            // We still need the user_id for RLS insert; get it from current user via AuthManager if available.
-            throw NSError(domain: "DiaryAPI", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing session; cannot insert diary entry."])
-        }
-        // Try to fetch user id from stored user profile endpoint is out of scope here; require caller to provide user id if needed.
-        // For now, we expect an authenticated session and resolve user id via /auth-profile beforehand at app start.
-        // As a practical workaround, pass a placeholder; server RLS will reject if mismatched.
-
-        // To obtain user id, we rely on a cached AuthManager.currentUser persisted elsewhere.
-        // As this module is static, read from UserDefaults if set by app when auth loads (optional in future).
-
-        // Placeholder to avoid compiler warnings; actual value is provided by caller through overload below.
+        // This overload requires userId - use insert(date:content:userId:) instead
         throw NSError(domain: "DiaryAPI", code: -3, userInfo: [NSLocalizedDescriptionKey: "Use insert(date:content:userId:) overload to insert."])
     }
 
     static func insert(date: String, content: String, userId: String) async throws -> Row {
-        let base = Configuration.supabaseURL
-        // Use on_conflict to upsert on (user_id, date)
-        let urlString = "\(base)/rest/v1/diary_entries?on_conflict=user_id,date"
+        let base = Configuration.apiURL
+        // Backend upserts automatically on (user_id, date) - user_id comes from JWT token
+        let urlString = "\(base)/api/diary/entries"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let payload: [String: Any] = [
-            "user_id": userId,
             "date": date,
-            "content": content,
-            "images": [] as [String]
+            "content": content
+            // user_id comes from JWT token automatically
+            // images can be added later if needed
         ]
-        let body = try JSONSerialization.data(withJSONObject: [payload]) // PostgREST expects array for bulk insert
-        var request = try makeRequest(url: url, method: "POST", body: body)
-        request.setValue("resolution=merge-duplicates, return=representation", forHTTPHeaderField: "Prefer")
+        let body = try JSONSerialization.data(withJSONObject: payload) // Single object, not array
+        let request = try makeRequest(url: url, method: "POST", body: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -198,12 +166,14 @@ struct DiaryAPI {
             print("❌ Insert failed HTTP=\(status) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: status, userInfo: [NSLocalizedDescriptionKey: "Insert failed (HTTP \(status)): \(bodyText)"])
         }
-        return try decodeSingleRow(data)
+        // Backend returns single object, not array
+        let decoder = JSONDecoder()
+        return try decoder.decode(Row.self, from: data)
     }
 
     static func updateContent(id: String, content: String) async throws -> Row {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/rest/v1/diary_entries?id=eq.\(id)"
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(id)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let payload: [String: Any] = ["content": content]
         let body = try JSONSerialization.data(withJSONObject: payload)
@@ -215,7 +185,9 @@ struct DiaryAPI {
             print("❌ Update failed HTTP=\(status) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: status, userInfo: [NSLocalizedDescriptionKey: "Update failed (HTTP \(status)): \(bodyText)"])
         }
-        return try decodeSingleRow(data)
+        // Backend returns single object, not array
+        let decoder = JSONDecoder()
+        return try decoder.decode(Row.self, from: data)
     }
 
     static func upsertContent(date: String, userId: String, content: String) async throws -> Row {
@@ -227,25 +199,26 @@ struct DiaryAPI {
     }
 
     static func analyze(entryId: String, blocksPayload: [[String: Any]]) async throws -> AnalyzeResponse {
-        let base = Configuration.supabaseURL
-        // Function is served as single-segment name: ai-analyze
-        let urlString = "\(base)/functions/v1/ai-analyze"
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/ai/analyze"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         let body = try JSONSerialization.data(withJSONObject: [
             "entryId": entryId,
             "blocks": blocksPayload
         ])
-        var request = try makeRequest(url: url, method: "POST", body: body)
+        let request = try makeRequest(url: url, method: "POST", body: body)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             // Try to decode structured error for debugging
-            if let apiErr = try? JSONDecoder().decode(AnalyzeError.self, from: data) {
-                print("❌ Analyze HTTP \(http.statusCode): code=\(apiErr.code ?? "-") step=\(apiErr.ai_step ?? "-") error=\(apiErr.error)")
+            struct ErrorResponse: Codable {
+                let error: String
+                let message: String?
+            }
+            if let apiErr = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                print("❌ Analyze HTTP \(http.statusCode): error=\(apiErr.error) message=\(apiErr.message ?? "-")")
                 throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
-                    NSLocalizedDescriptionKey: apiErr.error,
-                    "code": apiErr.code ?? "",
-                    "ai_step": apiErr.ai_step ?? ""
+                    NSLocalizedDescriptionKey: apiErr.message ?? apiErr.error
                 ])
             } else if let body = String(data: data, encoding: .utf8) {
                 print("❌ Analyze HTTP \(http.statusCode) raw body: \(body)")
@@ -257,61 +230,21 @@ struct DiaryAPI {
     }
 
     /// Analyze only changed blocks and merge with existing results
+    /// Note: Backend doesn't support incremental flag yet, so we'll merge client-side
     static func analyzeIncremental(entryId: String, blocksPayload: [[String: Any]], existingBlocks: [AnalyzedBlock]) async throws -> AnalyzeResponse {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/functions/v1/ai-analyze"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-
-        // Prepare payload with incremental analysis request
-        let body = try JSONSerialization.data(withJSONObject: [
-            "entryId": entryId,
-            "blocks": blocksPayload,
-            "incremental": true,
-            "existingBlocks": existingBlocks.map { block in
-                [
-                    "id": block.id,
-                    "position": block.position,
-                    "calories": block.calories ?? 0,
-                    "protein": block.protein ?? 0.0,
-                    "fat": block.fat ?? 0.0,
-                    "carbs": block.carbs ?? 0.0,
-                    "fiber": block.fiber ?? 0.0,
-                    "sugar": block.sugar ?? 0.0,
-                    "sodium": block.sodium ?? 0.0,
-                    "confidence": block.confidence ?? 0.0
-                ]
-            }
-        ])
-
-        var request = try makeRequest(url: url, method: "POST", body: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if !(200..<300).contains(http.statusCode) {
-            // Try to decode structured error for debugging
-            if let apiErr = try? JSONDecoder().decode(AnalyzeError.self, from: data) {
-                print("❌ Incremental Analyze HTTP \(http.statusCode): code=\(apiErr.code ?? "-") step=\(apiErr.ai_step ?? "-") error=\(apiErr.error)")
-                throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
-                    NSLocalizedDescriptionKey: apiErr.error,
-                    "code": apiErr.code ?? "",
-                    "ai_step": apiErr.ai_step ?? ""
-                ])
-            } else if let body = String(data: data, encoding: .utf8) {
-                print("❌ Incremental Analyze HTTP \(http.statusCode) raw body: \(body)")
-            }
-            throw URLError(.badServerResponse)
-        }
-        let decoder = JSONDecoder()
-        return try decoder.decode(AnalyzeResponse.self, from: data)
+        // For now, just call regular analyze - backend will analyze all blocks
+        // TODO: Add incremental support to backend if needed
+        return try await analyze(entryId: entryId, blocksPayload: blocksPayload)
     }
 
     /// Clear all nutrition data for an empty diary entry
     static func clearEntryNutrition(entryId: String) async throws {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/rest/v1/diary_entries?id=eq.\(entryId)"
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(entryId)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
 
         let clearData: [String: Any] = [
-            "blocks": "[]" as Any, // Clear all blocks
+            "blocks": [] as [Any], // Empty array, not string
             "total_calories": 0,
             "total_protein": 0.0,
             "total_fat": 0.0,
@@ -332,8 +265,8 @@ struct DiaryAPI {
 
     /// Delete a diary entry completely
     static func deleteEntry(entryId: String) async throws {
-        let base = Configuration.supabaseURL
-        let urlString = "\(base)/rest/v1/diary_entries?id=eq.\(entryId)"
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(entryId)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
 
         let request = try makeRequest(url: url, method: "DELETE")

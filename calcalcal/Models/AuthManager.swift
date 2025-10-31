@@ -1,7 +1,6 @@
 import Foundation
 import AuthenticationServices
 import Combine
-import Supabase
 
 class AuthManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
@@ -191,7 +190,7 @@ class AuthManager: NSObject, ObservableObject {
                 print("🔄 Loaded existing session and updated APIClient")
                 
                 // Validate session with backend
-                guard let url = URL(string: "\(Configuration.supabaseURL)/functions/v1/auth-profile") else {
+                guard let url = URL(string: "\(Configuration.apiURL)/api/auth/profile") else {
                     DispatchQueue.main.async {
                         self.isAuthenticated = false
                         self.currentUser = nil
@@ -231,9 +230,14 @@ class AuthManager: NSObject, ObservableObject {
                                 return
                             }
                             let decoder = AuthManager.makeJSONDecoder()
-                            let authResponse = try decoder.decode(AuthResponse.self, from: vData)
+                            // Backend returns { success: true, profile: {...} }
+                            struct ProfileResponse: Codable {
+                                let success: Bool
+                                let profile: User?
+                            }
+                            let profileResponse = try decoder.decode(ProfileResponse.self, from: vData)
                             DispatchQueue.main.async {
-                                if authResponse.success, let user = authResponse.user {
+                                if profileResponse.success, let user = profileResponse.profile {
                                     self.currentUser = user
                                     self.isAuthenticated = true
                                     UserDefaults.standard.set(user.id, forKey: "current_user_id")
@@ -258,10 +262,15 @@ class AuthManager: NSObject, ObservableObject {
                 }
                 
                 let decoder = AuthManager.makeJSONDecoder()
-                let authResponse = try decoder.decode(AuthResponse.self, from: data)
+                // Backend returns { success: true, profile: {...} }
+                struct ProfileResponse: Codable {
+                    let success: Bool
+                    let profile: User?
+                }
+                let profileResponse = try decoder.decode(ProfileResponse.self, from: data)
                 
                 DispatchQueue.main.async {
-                    if authResponse.success, let user = authResponse.user {
+                    if profileResponse.success, let user = profileResponse.profile {
                         self.currentUser = user
                         self.isAuthenticated = true
                         // Persist user id for DiaryAPI inserts
@@ -282,15 +291,14 @@ class AuthManager: NSObject, ObservableObject {
     }
     
     private func refreshSession(using refreshToken: String) async throws -> Session {
-        let urlString = "\(Configuration.supabaseURL)/auth/v1/token?grant_type=refresh_token"
+        let urlString = "\(Configuration.apiURL)/api/auth/refresh"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid refresh URL"])
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(Configuration.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(Configuration.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        // No apikey or anon key needed - backend validates refresh token directly
         let body: [String: Any] = ["refresh_token": refreshToken]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
@@ -299,9 +307,14 @@ class AuthManager: NSObject, ObservableObject {
             let responseText = String(data: data, encoding: .utf8) ?? ""
             throw NSError(domain: "AuthManager", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Refresh failed: \(responseText)"])
         }
+        // Backend returns { success: true, session: { access_token, refresh_token, expires_in } }
+        struct RefreshResponse: Codable {
+            let success: Bool
+            let session: Session
+        }
         let decoder = JSONDecoder()
-        let newSession = try decoder.decode(Session.self, from: data)
-        return newSession
+        let refreshResponse = try decoder.decode(RefreshResponse.self, from: data)
+        return refreshResponse.session
     }
     
 
@@ -314,11 +327,9 @@ class AuthManager: NSObject, ObservableObject {
         
         Task {
             do {
-                // Test 1: Basic connectivity
-                let urlString = "\(Configuration.supabaseURL)/rest/v1/"
+                // Test backend health endpoint
+                let urlString = "\(Configuration.apiURL)/health"
                 print("Testing connection to: \(urlString)")
-                print("Using auth key: \(String(Configuration.supabaseAnonKey.prefix(20)))...")
-                print("Full JWT payload: \(Configuration.supabaseAnonKey)")
                 
                 guard let url = URL(string: urlString) else {
                     print("Invalid URL")
@@ -327,8 +338,6 @@ class AuthManager: NSObject, ObservableObject {
                 
                 var request = URLRequest(url: url)
                 request.httpMethod = "GET"
-                request.setValue("Bearer \(Configuration.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-                request.setValue(Configuration.supabaseAnonKey, forHTTPHeaderField: "apikey")
                 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
@@ -342,42 +351,9 @@ class AuthManager: NSObject, ObservableObject {
                 } else {
                     print("Network test failed - Invalid response")
                 }
-                
-                // Test 2: Functions endpoint
-                await testFunctionsEndpoint()
-                
             } catch {
                 print("Network test failed: \(error)")
             }
-        }
-    }
-    
-    private func testFunctionsEndpoint() async {
-        do {
-            let urlString = "\(Configuration.supabaseURL)/functions/v1/"
-            print("Testing functions endpoint: \(urlString)")
-            
-            guard let url = URL(string: urlString) else {
-                print("Invalid functions URL")
-                return
-            }
-            
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(Configuration.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                print("Functions test - Status: \(httpResponse.statusCode)")
-                if httpResponse.statusCode != 200 {
-                    print("Functions response: \(String(data: data, encoding: .utf8) ?? "No data")")
-                } else {
-                    print("Functions endpoint accessible!")
-                }
-            }
-        } catch {
-            print("Functions test failed: \(error)")
         }
     }
     
@@ -386,7 +362,7 @@ class AuthManager: NSObject, ObservableObject {
     private func authenticateWithBackend(identityToken: String, user: ASAuthorizationAppleIDCredential) {
         Task {
             do {
-                let urlString = "\(Configuration.supabaseURL)/functions/v1/apple-signin"
+                let urlString = "\(Configuration.apiURL)/api/auth/signin-apple"
                 print("🔍 === APPLE SIGN-IN DEBUG ===")
                 print("Attempting to connect to: \(urlString)")
                 
@@ -411,26 +387,7 @@ class AuthManager: NSObject, ObservableObject {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 
-                // Log exactly what we're sending
-                let authHeader = "Bearer \(Configuration.supabaseAnonKey)"
-                print("🔑 Authorization Header being sent:")
-                print("   - Full header: \(authHeader)")
-                print("   - Token prefix: \(String(Configuration.supabaseAnonKey.prefix(20)))...")
-                print("   - Token length: \(Configuration.supabaseAnonKey.count) characters")
-                
-                // Decode and verify the JWT structure
-                let jwtParts = Configuration.supabaseAnonKey.components(separatedBy: ".")
-                print("🔐 JWT Structure Analysis:")
-                print("   - Parts count: \(jwtParts.count)")
-                if jwtParts.count == 3 {
-                    print("   - Header: \(jwtParts[0])")
-                    print("   - Payload: \(jwtParts[1])")
-                    print("   - Signature: \(String(jwtParts[2].prefix(10)))...")
-                } else {
-                    print("   - ⚠️ Invalid JWT structure (expected 3 parts)")
-                }
-                
-                request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+                // No authorization header needed for sign-in - backend validates Apple token directly
                 
                 let authRequest = [
                     "identityToken": identityToken,

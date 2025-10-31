@@ -45,9 +45,7 @@
 			<array/>
 		</dict>
 	</dict>
-	<key>SUPABASE_URL</key>
-	<string>https://lospxwasburnwmlqducq.supabase.co</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvc3B4d2FzYnVybndtbHFkdWNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1NDQyNjEsImV4cCI6MjA2OTEyMDI2MX0.1Nyeo2k0uctrIUqNpm2w22fYzgDSBnXxkzPlzQgFcKg</string>
+	<key>API_URL</key>
+	<string>https://calycal-app-egy2b.ondigitalocean.app</string>
 </dict>
 </plist>

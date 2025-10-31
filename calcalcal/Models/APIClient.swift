@@ -4,7 +4,7 @@ import Combine
 class APIClient {
     static let shared = APIClient()
     
-    private let baseURL = Configuration.supabaseURL
+    private let baseURL = Configuration.apiURL
     private var session: Session?
     
     private init() {

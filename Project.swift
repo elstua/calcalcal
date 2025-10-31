@@ -25,7 +25,6 @@ let project = Project(
             ],
             entitlements: .file(path: "calcalcal/calcalcal.entitlements"),
             dependencies: [
-                .external(name: "Supabase")
             ],
             settings: .settings(
                 configurations: [
