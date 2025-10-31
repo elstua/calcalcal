@@ -9,10 +9,24 @@ if (fs.existsSync('.env.local')) {
   dotenv.config({ path: 'ENV.example' });
 }
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/calcalcal_dev';
+let connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/calcalcal_dev';
+
+// Handle DigitalOcean variable references that weren't resolved
+// ${db.connection_string} gets passed as literal string, so we need to handle it
+if (connectionString.includes('${') || connectionString.includes('connection_string')) {
+  console.error('❌ ERROR: DATABASE_URL contains unresolved variable reference');
+  console.error('Current value:', `"${connectionString}"`);
+  console.error('');
+  console.error('SOLUTION: Set DATABASE_URL manually in DigitalOcean:');
+  console.error('1. Go to Components → Database → Connection Details');
+  console.error('2. Copy the connection string');
+  console.error('3. Go to Settings → Environment Variables');
+  console.error('4. Set DATABASE_URL to the actual connection string (not ${db.connection_string})');
+  throw new Error('DATABASE_URL contains unresolved variable reference. Please set it manually in DigitalOcean dashboard.');
+}
 
 // Validate DATABASE_URL format
-if (!connectionString || !connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://')) {
+if (!connectionString || (!connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://'))) {
   console.error('❌ ERROR: DATABASE_URL must start with postgresql:// or postgres://');
   console.error('Current value:', connectionString ? `"${connectionString}"` : 'NOT SET');
   throw new Error('Invalid DATABASE_URL format. Must be a PostgreSQL connection string.');
