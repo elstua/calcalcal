@@ -50,14 +50,28 @@ try {
   throw new Error('Failed to parse DATABASE_URL. Ensure it is a valid PostgreSQL connection string.');
 }
 
+// Parse connection string to extract SSL config
+const connectionUrl = new URL(connectionString);
+const hasSSL = connectionUrl.searchParams.get('sslmode') === 'require' || 
+               connectionUrl.searchParams.get('sslmode') === 'prefer';
+
 // Optimize connection pool for low-memory environments (512MB VPS)
 // Default pg pool size is 10, reduce to 5 for better memory usage
-const pool = new Pool({
+const poolConfig: any = {
   connectionString,
   max: parseInt(process.env.DB_POOL_MAX || '5', 10), // Default 5, can override with DB_POOL_MAX env var
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-});
+};
+
+// Configure SSL for DigitalOcean managed databases
+if (hasSSL) {
+  poolConfig.ssl = {
+    rejectUnauthorized: false, // DigitalOcean uses self-signed certs in chain
+  };
+}
+
+const pool = new Pool(poolConfig);
 
 // Test connection on startup
 pool.on('error', (err) => {
