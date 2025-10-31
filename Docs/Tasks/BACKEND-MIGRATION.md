@@ -1636,6 +1636,74 @@ git push origin main
 
 Your API will be live at: `https://calcalcal-api-xxx.ondigitalocean.app`
 
+**Production API URL (Actual):**
+- **Live API URL**: `https://calycal-app-egy2b.ondigitalocean.app`
+- **Health Check**: `https://calycal-app-egy2b.ondigitalocean.app/health`
+- Use this URL when updating the iOS app configuration (see Part 7)
+
+### Resource Requirements & Cost Optimization
+
+**DigitalOcean App Platform Pricing:**
+- **Basic Plan**: $12/month (512MB RAM, 1 vCPU) - **Tight but workable for MVP**
+- **Professional Plan**: $25/month (1GB RAM, 1 vCPU) - **Recommended for growth**
+- **Database**: Included but shares resources with app
+
+**Is 512MB RAM / 1 vCPU enough?**
+- ✅ **Yes for MVP** - Simple Express API with low traffic (<1000 requests/day)
+- ⚠️ **Tight** - Node.js needs ~150-200MB, PostgreSQL connections use memory
+- 📈 **Monitor** - Watch memory usage, upgrade if you see OOM errors
+- 💡 **Optimization**: Limit PostgreSQL connection pool size (default 10, reduce to 5)
+
+**Cost Comparison:**
+- **DigitalOcean App Platform**: $12-25/month (managed, easy)
+- **VPS + Docker** (Hetzner/DigitalOcean Droplet): $5-10/month (you manage)
+- **Railway/Render**: $5-20/month (variable pricing)
+
+**Recommendation**: Start with 512MB/1vCPU, monitor, upgrade to 1GB when needed.
+
+---
+
+## Option B: Docker Setup (For Future VPS Migration)
+
+If you want to migrate to a cheaper VPS later, Docker makes it easy. Docker files are already created in `apps/backend/node/`.
+
+### Docker Files Created:
+- `Dockerfile` - Production-ready multi-stage build
+- `docker-compose.yml` - For local development/testing
+- `.dockerignore` - Excludes unnecessary files
+
+### Quick Start with Docker:
+
+```bash
+cd apps/backend/node
+
+# Build the image
+docker build -t calcalcal-api .
+
+# Run locally (needs DATABASE_URL env var)
+docker run -p 3000:3000 \
+  -e DATABASE_URL="postgresql://..." \
+  -e JWT_SECRET="your-secret" \
+  -e OPENAI_API_KEY="sk-..." \
+  calcalcal-api
+
+# Or use docker-compose (easier)
+docker-compose up
+```
+
+### Migrating to VPS Later:
+
+When ready to move to a cheaper VPS ($5-10/month):
+
+1. **Choose VPS**: Hetzner, DigitalOcean Droplet, or Linode
+2. **Install Docker**: `curl -fsSL https://get.docker.com | sh`
+3. **Clone repo** and build: `docker build -t calcalcal-api .`
+4. **Set up PostgreSQL**: Use managed DB (Supabase free tier) or Docker PostgreSQL
+5. **Run**: `docker run -d -p 80:3000 --env-file .env.production calcalcal-api`
+6. **Add reverse proxy**: Nginx or Caddy for SSL
+
+**Estimated savings**: $7-15/month vs DigitalOcean App Platform
+
 ---
 
 # Part 7: iOS App Migration
@@ -1644,10 +1712,12 @@ Your API will be live at: `https://calcalcal-api-xxx.ondigitalocean.app`
 
 Edit `calcalcal/Models/Configuration.swift`:
 
+**Production API URL**: `https://calycal-app-egy2b.ondigitalocean.app`
+
 ```swift
 struct Configuration {
-    static let supabaseURL = "https://your-api-domain.com" // Change this!
-    static let supabaseAnonKey = "" // No longer needed
+    static let supabaseURL = "https://calycal-app-egy2b.ondigitalocean.app" // DigitalOcean API
+    static let supabaseAnonKey = "" // No longer needed (not used with custom backend)
 }
 ```
 
