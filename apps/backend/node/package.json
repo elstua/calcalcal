@@ -8,7 +8,8 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "migrate": "ts-node src/scripts/runMigrations.ts"
+    "migrate": "ts-node src/scripts/runMigrations.ts",
+    "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts"
   },
   "dependencies": {
     "axios": "^1.7.7",
