@@ -50,10 +50,18 @@ try {
   throw new Error('Failed to parse DATABASE_URL. Ensure it is a valid PostgreSQL connection string.');
 }
 
-// Parse connection string to extract SSL config
+// Parse connection string to extract SSL config and clean it
 const connectionUrl = new URL(connectionString);
-const hasSSL = connectionUrl.searchParams.get('sslmode') === 'require' || 
-               connectionUrl.searchParams.get('sslmode') === 'prefer';
+const sslMode = connectionUrl.searchParams.get('sslmode');
+const isDigitalOcean = connectionUrl.hostname.includes('ondigitalocean.com');
+const hasSSL = sslMode === 'require' || sslMode === 'prefer' || isDigitalOcean;
+
+// Remove sslmode from connection string - we'll handle SSL via config object
+// This ensures our SSL config (rejectUnauthorized: false) takes precedence
+if (sslMode) {
+  connectionUrl.searchParams.delete('sslmode');
+  connectionString = connectionUrl.toString();
+}
 
 // Optimize connection pool for low-memory environments (512MB VPS)
 // Default pg pool size is 10, reduce to 5 for better memory usage
@@ -64,7 +72,9 @@ const poolConfig: any = {
   connectionTimeoutMillis: 2000,
 };
 
-// Configure SSL for DigitalOcean managed databases
+// Configure SSL for DigitalOcean managed databases and any connection requiring SSL
+// IMPORTANT: Remove sslmode from connection string and handle SSL via config object
+// to properly handle self-signed certificates
 if (hasSSL) {
   poolConfig.ssl = {
     rejectUnauthorized: false, // DigitalOcean uses self-signed certs in chain
