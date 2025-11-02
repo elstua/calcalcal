@@ -11,10 +11,12 @@ async function startServer() {
     console.log('Running database migrations...');
     try {
       await runMigrations();
+      console.log('✅ Migrations completed successfully');
     } catch (error: any) {
-      console.error('⚠️  Migration failed, but continuing server startup:', error.message);
-      // In production, you might want to exit here instead
-      // process.exit(1);
+      console.error('❌ Migration failed:', error.message);
+      console.error('Server startup aborted. Please fix migration issues before starting the server.');
+      // In production, fail fast - don't start server with broken database
+      process.exit(1);
     }
   }
 

@@ -2,11 +2,39 @@ import Database from '../services/database';
 import fs from 'fs';
 import path from 'path';
 
-const migrationsDir = path.resolve(process.cwd(), 'migrations');
+// Find migrations directory - check multiple possible locations
+// 1. Relative to current working directory (production: /app)
+// 2. Relative to script location (development: apps/backend/node)
+// 3. Relative to dist folder (if running from dist/)
+function findMigrationsDir(): string {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'migrations'),
+    path.resolve(__dirname, '../../migrations'),
+    path.resolve(process.cwd(), '../migrations'),
+  ];
+  
+  for (const dirPath of possiblePaths) {
+    if (fs.existsSync(dirPath)) {
+      return dirPath;
+    }
+  }
+  
+  // If none found, return the most likely path for better error message
+  return path.resolve(process.cwd(), 'migrations');
+}
+
+const migrationsDir = findMigrationsDir();
 if (!fs.existsSync(migrationsDir)) {
-  console.error(`ERROR: Migrations directory not found at ${migrationsDir}`);
+  console.error(`ERROR: Migrations directory not found. Checked:`);
+  console.error(`  - ${path.resolve(process.cwd(), 'migrations')}`);
+  console.error(`  - ${path.resolve(__dirname, '../../migrations')}`);
+  console.error(`  - ${path.resolve(process.cwd(), '../migrations')}`);
+  console.error(`Current working directory: ${process.cwd()}`);
+  console.error(`Script location: ${__dirname}`);
   process.exit(1);
 }
+
+console.log(`Using migrations directory: ${migrationsDir}`);
 
 // Create migrations tracking table if it doesn't exist
 async function ensureMigrationsTable() {
@@ -149,8 +177,30 @@ async function runMigrations() {
     }
     
     console.log('\n✅ All migrations applied successfully.');
+    
+    // Verify critical tables exist
+    console.log('\nVerifying critical tables exist...');
+    const tablesToCheck = ['user_profiles', 'diary_entries', 'schema_migrations'];
+    for (const tableName of tablesToCheck) {
+      try {
+        const result = await Database.query(
+          `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
+          [tableName]
+        );
+        if (result.rows.length > 0) {
+          console.log(`✅ Table '${tableName}' exists`);
+        } else {
+          console.error(`❌ Table '${tableName}' does NOT exist`);
+        }
+      } catch (error: any) {
+        console.error(`⚠️  Could not verify table '${tableName}':`, error.message);
+      }
+    }
   } catch (error: any) {
     console.error('\n❌ Migration process failed:', error.message);
+    if (error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
     process.exit(1);
   }
 }
