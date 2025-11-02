@@ -3,32 +3,15 @@
 -- and omits Supabase RLS policies, GRANTs to anon/authenticated/service_role,
 -- and foreign keys referencing auth.users.
 
-BEGIN;
-
 -- Try to create pgcrypto extension (may fail if user lacks permissions, but gen_random_uuid() 
 -- is available by default in PostgreSQL 13+, so this is optional)
-DO $$
-BEGIN
-  CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-EXCEPTION WHEN insufficient_privilege THEN
-  -- Extension creation failed, but gen_random_uuid() should still be available in PG13+
-  RAISE NOTICE 'pgcrypto extension creation skipped (insufficient privileges). gen_random_uuid() should be available by default.';
-EXCEPTION WHEN OTHERS THEN
-  -- Extension might already exist or other error - continue anyway
-  RAISE NOTICE 'pgcrypto extension: %', SQLERRM;
-END $$;
+-- Using IF NOT EXISTS to avoid errors if extension already exists
+-- If permission is denied, the error will be caught by the migration runner
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Schema (public exists by default, but try to create it safely)
-DO $$
-BEGIN
-  CREATE SCHEMA IF NOT EXISTS "public";
-EXCEPTION WHEN insufficient_privilege THEN
-  -- Schema creation failed, but public schema should already exist
-  RAISE NOTICE 'public schema creation skipped (insufficient privileges). Using existing schema.';
-EXCEPTION WHEN OTHERS THEN
-  -- Schema might already exist or other error - continue anyway
-  RAISE NOTICE 'public schema: %', SQLERRM;
-END $$;
+-- Schema (public exists by default, but ensure it exists)
+-- Using IF NOT EXISTS to avoid errors if schema already exists
+CREATE SCHEMA IF NOT EXISTS "public";
 
 -- Functions
 CREATE OR REPLACE FUNCTION "public"."calculate_diary_totals"("blocks_json" "jsonb") RETURNS "jsonb"
@@ -242,7 +225,5 @@ DROP TRIGGER IF EXISTS "diary_content_before_update" ON "public"."diary_entries"
 
 CREATE OR REPLACE TRIGGER "diary_content_before_insert" BEFORE INSERT ON "public"."diary_entries" FOR EACH ROW EXECUTE FUNCTION "public"."set_diary_entry_content_derived"();
 CREATE OR REPLACE TRIGGER "diary_content_before_update" BEFORE UPDATE ON "public"."diary_entries" FOR EACH ROW EXECUTE FUNCTION "public"."set_diary_entry_content_derived"();
-
-COMMIT;
 
 
