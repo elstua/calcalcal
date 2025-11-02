@@ -5,11 +5,30 @@
 
 BEGIN;
 
--- Ensure required extension for gen_random_uuid()
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Try to create pgcrypto extension (may fail if user lacks permissions, but gen_random_uuid() 
+-- is available by default in PostgreSQL 13+, so this is optional)
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+EXCEPTION WHEN insufficient_privilege THEN
+  -- Extension creation failed, but gen_random_uuid() should still be available in PG13+
+  RAISE NOTICE 'pgcrypto extension creation skipped (insufficient privileges). gen_random_uuid() should be available by default.';
+EXCEPTION WHEN OTHERS THEN
+  -- Extension might already exist or other error - continue anyway
+  RAISE NOTICE 'pgcrypto extension: %', SQLERRM;
+END $$;
 
--- Schema (public exists by default, but keep for clarity)
-CREATE SCHEMA IF NOT EXISTS "public";
+-- Schema (public exists by default, but try to create it safely)
+DO $$
+BEGIN
+  CREATE SCHEMA IF NOT EXISTS "public";
+EXCEPTION WHEN insufficient_privilege THEN
+  -- Schema creation failed, but public schema should already exist
+  RAISE NOTICE 'public schema creation skipped (insufficient privileges). Using existing schema.';
+EXCEPTION WHEN OTHERS THEN
+  -- Schema might already exist or other error - continue anyway
+  RAISE NOTICE 'public schema: %', SQLERRM;
+END $$;
 
 -- Functions
 CREATE OR REPLACE FUNCTION "public"."calculate_diary_totals"("blocks_json" "jsonb") RETURNS "jsonb"

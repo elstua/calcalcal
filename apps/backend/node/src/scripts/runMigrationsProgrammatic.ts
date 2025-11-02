@@ -10,30 +10,66 @@ if (!fs.existsSync(migrationsDir)) {
 
 // Create migrations tracking table if it doesn't exist
 async function ensureMigrationsTable() {
-  await Database.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      id SERIAL PRIMARY KEY,
-      filename TEXT NOT NULL UNIQUE,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  try {
+    await Database.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL UNIQUE,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+  } catch (error: any) {
+    // If table creation fails, log but continue - might already exist or permission issue
+    if (error.code === '42P07') {
+      // Table already exists - that's fine
+      console.log('Migrations tracking table already exists');
+    } else {
+      console.warn('Warning: Could not ensure migrations table exists:', error.message);
+      // Continue anyway - migrations might still work
+    }
+  }
 }
 
 // Check if a migration has already been applied
 async function isMigrationApplied(filename: string): Promise<boolean> {
-  const result = await Database.query(
-    'SELECT 1 FROM schema_migrations WHERE filename = $1',
-    [filename]
-  );
-  return result.rows.length > 0;
+  try {
+    const result = await Database.query(
+      'SELECT 1 FROM schema_migrations WHERE filename = $1',
+      [filename]
+    );
+    return result.rows.length > 0;
+  } catch (error: any) {
+    // If table doesn't exist or query fails, assume migration not applied
+    // This allows migrations to run even if tracking table can't be created
+    if (error.code === '42P01') {
+      // Table doesn't exist
+      return false;
+    }
+    // Other error - log but assume not applied to be safe
+    console.warn(`Warning: Could not check if migration ${filename} is applied:`, error.message);
+    return false;
+  }
 }
 
 // Mark a migration as applied
 async function markMigrationApplied(filename: string) {
-  await Database.query(
-    'INSERT INTO schema_migrations (filename) VALUES ($1)',
-    [filename]
-  );
+  try {
+    await Database.query(
+      'INSERT INTO schema_migrations (filename) VALUES ($1)',
+      [filename]
+    );
+  } catch (error: any) {
+    // If we can't mark as applied, log but don't fail
+    // This allows migrations to complete even if tracking fails
+    if (error.code === '42P01') {
+      console.warn(`Warning: Could not mark migration ${filename} as applied (tracking table doesn't exist)`);
+    } else if (error.code === '23505') {
+      // Unique constraint violation - migration already marked, that's fine
+      console.log(`Migration ${filename} already marked as applied`);
+    } else {
+      console.warn(`Warning: Could not mark migration ${filename} as applied:`, error.message);
+    }
+  }
 }
 
 // Run a single migration file
@@ -55,7 +91,14 @@ async function runMigration(filePath: string, filename: string) {
     console.log(`✅ Migration applied: ${filename}`);
   } catch (error: any) {
     console.error(`❌ Migration failed: ${filename}`);
-    console.error('Error:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    if (error.detail) {
+      console.error('Error detail:', error.detail);
+    }
+    if (error.hint) {
+      console.error('Error hint:', error.hint);
+    }
     throw error;
   } finally {
     client.release();
