@@ -10,10 +10,16 @@ const router = Router();
 // POST /api/auth/signin-apple
 router.post('/signin-apple', async (req: Request, res: Response) => {
   try {
+    console.log('📥 Received sign-in request');
+    console.log('Request body keys:', Object.keys(req.body || {}));
+    
     const { identityToken, user: userInfo } = req.body || {};
     if (!identityToken) {
-      return res.status(400).json({ error: 'identityToken is required' });
+      console.error('❌ Missing identityToken');
+      return res.status(400).json({ success: false, error: 'identityToken is required' });
     }
+    
+    console.log('✅ Identity token received, length:', identityToken.length);
 
     let applePayload: any;
     try {
@@ -29,8 +35,10 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     }
 
     // Find or create user
+    console.log('🔍 Looking up user with appleId:', appleId);
     let dbUser = await UserModel.findByAppleId(appleId);
     if (!dbUser) {
+      console.log('👤 User not found, creating new user');
       const userId = uuidv4();
       dbUser = await UserModel.upsertUser(
         userId,
@@ -38,7 +46,9 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
         userInfo?.email || applePayload?.email,
         userInfo?.name || applePayload?.name
       );
+      console.log('✅ User created:', dbUser.id);
     } else {
+      console.log('✅ User found:', dbUser.id);
       // Optional: fill missing fields on existing user
       if (userInfo?.email && !dbUser.email) {
         dbUser = await UserModel.update(dbUser.id, { email: userInfo.email });
@@ -60,20 +70,36 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
       ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || undefined,
     });
 
-    return res.json({
+    // Ensure dates are serialized as strings for JSON
+    const userResponse = {
+      ...dbUser,
+      created_at: dbUser.created_at instanceof Date ? dbUser.created_at.toISOString() : dbUser.created_at,
+      updated_at: dbUser.updated_at instanceof Date ? dbUser.updated_at.toISOString() : dbUser.updated_at,
+    };
+
+    const response = {
       success: true,
-      user: dbUser,
+      user: userResponse,
       session: {
         access_token: accessToken,
         refresh_token: refreshToken,
         expires_in: 7 * 24 * 60 * 60,
       },
-    });
+    };
+
+    console.log('✅ Sign-in successful, returning response:', JSON.stringify(response, null, 2));
+    return res.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const stack = error instanceof Error ? error.stack : undefined;
     console.error('Sign-in error:', { message, stack, error });
-    return res.status(500).json({ error: 'Authentication failed', message });
+    
+    // Always return JSON, even on error
+    return res.status(500).json({ 
+      success: false,
+      error: 'Authentication failed', 
+      message 
+    });
   }
 });
 
@@ -146,8 +172,6 @@ router.get('/profile', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
- 
 // POST /api/auth/logout - revoke current refresh token or all tokens
 router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -176,4 +200,4 @@ router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
-
+export default router;

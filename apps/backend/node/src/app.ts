@@ -18,6 +18,14 @@ const app: Express = express();
 app.use(cors());
 app.use(express.json());
 
+// Request logging middleware
+app.use((req: Request, res: Response, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -26,5 +34,23 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/diary', diaryRoutes);
 app.use('/api/ai', aiRoutes);
+
+// Error handling middleware - must be last
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('Unhandled error:', err);
+  // Always return JSON, never HTML
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Internal server error',
+  });
+});
+
+// 404 handler - must be after all routes
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Not found',
+  });
+});
 
 export default app;
