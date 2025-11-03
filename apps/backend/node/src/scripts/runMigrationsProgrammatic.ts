@@ -107,30 +107,13 @@ async function runMigration(filePath: string, filename: string) {
   const sql = fs.readFileSync(filePath, 'utf-8');
   
   // Execute the migration SQL
-  // Split by semicolons and execute statements that might fail gracefully
+  // Execute as a whole - migration file is designed to be idempotent with IF NOT EXISTS
   const client = await Database.getClient();
   try {
-    // Execute the migration SQL
-    // Handle extension creation errors gracefully - they're optional
-    try {
-      await client.query(sql);
-    } catch (error: any) {
-      // If it's a permission error on extension creation, try to continue
-      // by executing the rest of the migration (skip extension creation)
-      if (error.code === '42501' && sql.includes('CREATE EXTENSION')) {
-        console.warn('⚠️  Extension creation failed (permission denied), continuing without it...');
-        // Remove extension creation lines and retry
-        const lines = sql.split('\n');
-        const filteredLines = lines.filter(line => 
-          !line.trim().startsWith('CREATE EXTENSION') && 
-          !line.trim().startsWith('-- Try to create pgcrypto')
-        );
-        const sqlWithoutExtension = filteredLines.join('\n');
-        await client.query(sqlWithoutExtension);
-      } else {
-        throw error;
-      }
-    }
+    // Execute the migration SQL as-is
+    // The migration file has CREATE EXTENSION and CREATE SCHEMA commented out
+    // to avoid permission issues - they're optional anyway
+    await client.query(sql);
     
     // Mark as applied in a separate transaction
     await markMigrationApplied(filename);

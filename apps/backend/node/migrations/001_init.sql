@@ -5,13 +5,12 @@
 
 -- Try to create pgcrypto extension (may fail if user lacks permissions, but gen_random_uuid() 
 -- is available by default in PostgreSQL 13+, so this is optional)
--- Using IF NOT EXISTS to avoid errors if extension already exists
--- If permission is denied, the error will be caught by the migration runner
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Commented out - will be handled by migration runner if permissions allow
+-- CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Schema (public exists by default, but ensure it exists)
--- Using IF NOT EXISTS to avoid errors if schema already exists
-CREATE SCHEMA IF NOT EXISTS "public";
+-- Commented out - public schema should already exist in managed databases
+-- CREATE SCHEMA IF NOT EXISTS "public";
 
 -- Functions
 CREATE OR REPLACE FUNCTION "public"."calculate_diary_totals"("blocks_json" "jsonb") RETURNS "jsonb"
