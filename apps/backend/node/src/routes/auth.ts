@@ -71,10 +71,15 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     });
 
     // Ensure dates are serialized as strings for JSON
+    // PostgreSQL returns dates as strings, but handle Date objects if they occur
     const userResponse = {
       ...dbUser,
-      created_at: dbUser.created_at instanceof Date ? dbUser.created_at.toISOString() : dbUser.created_at,
-      updated_at: dbUser.updated_at instanceof Date ? dbUser.updated_at.toISOString() : dbUser.updated_at,
+      created_at: typeof dbUser.created_at === 'string' 
+        ? dbUser.created_at 
+        : (dbUser.created_at as any)?.toISOString?.() || String(dbUser.created_at),
+      updated_at: typeof dbUser.updated_at === 'string'
+        ? dbUser.updated_at
+        : (dbUser.updated_at as any)?.toISOString?.() || String(dbUser.updated_at),
     };
 
     const response = {
