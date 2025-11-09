@@ -420,18 +420,55 @@ GET /rest/v1/ai_analysis_cache?select=*&content_hash=eq.{hash}
 ```
 
 ### Images
-```typescript
-// Upload image (get presigned URL)
-POST /functions/v1/storage/upload-url
-Body: {
-  filename: string,
-  contentType: string,
-  entryId: string
-}
+Node backend (local/MVP implementation):
+```http
+POST /api/storage/upload        // multipart/form-data (preferred)
+  Auth: Bearer <access_token>
+  Form field: file=@path/to/photo.jpg;type=image/jpeg
+  → { publicUrl: "/uploads/<userId>/<date>/<uuid>.jpg", relativeUrl, objectKey, size, contentType }
 
-// Delete image
-DELETE /storage/v1/object/public/images/{filename}
+POST /api/storage/upload-base64 // JSON fallback for base64/data URLs
+  Auth: Bearer <access_token>
+  Body: { contentType: "image/jpeg", base64Data: "data:image/jpeg;base64,..." }
+  → same shape as multipart
+
+GET  /uploads/*                  // static serving of uploaded files
 ```
+
+Cloudflare R2 (production) — presigned upload:
+```http
+POST /api/storage/presign
+  Auth: Bearer <access_token>
+  Body: { contentType: "image/jpeg", filename?: "optional-name.jpg" }
+  → { uploadUrl, objectKey, publicUrl, headers: { "Content-Type": "image/jpeg" } }
+
+# Client then uploads the bytes:
+PUT <uploadUrl>
+  Headers: Content-Type: image/jpeg
+  Body: raw file bytes
+```
+Environment variables:
+```
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET=your-bucket
+R2_PUBLIC_BASE_URL=https://media.yourdomain.com
+```
+Notes:
+- `R2_PUBLIC_BASE_URL` should point to your R2 Custom Domain (preferred) or any public URL base for the bucket.
+- For dev, use the local `/api/storage/upload` + `/uploads/*` static serving.
+
+Image analysis (single pass → description + macros):
+```http
+POST /api/ai/analyze-image
+  Auth: Bearer <access_token>
+  Body: { imageUrl: "http://localhost:3000/uploads/.../file.jpg", entryId?: string, blockId?: string }
+  → { description, calories, macros: { protein,fat,carbs,fiber,sugar,sodium }, confidence }
+```
+Notes:
+- During local dev, the server detects `localhost` image URLs and inlines the image as a data URL so OpenAI can access it.
+- Body limits increased; detailed logs and a timeout are added around the AI call.
 
 ### Popular Food Items
 ```typescript
@@ -495,6 +532,15 @@ serve(async (req) => {
   return new Response(JSON.stringify({ token: token.data.properties.action_link }))
 })
 ```
+
+## Prompts (where they live and how they work)
+- Text-based nutrition analysis prompt:
+  - Code: `apps/backend/node/src/services/ai/providers/openai.ts` uses `loadPrompt('nutrition')`.
+  - Loader: `apps/backend/node/src/services/ai/prompt/index.ts` attempts to read `nutrition_<version>.txt` next to itself, where `<version>` comes from `AI_PROMPT_VERSION` (e.g., `v1`). If missing, it falls back to an inline v1 prompt.
+  - Change prompt by placing a file like `nutrition_v2.txt` in the same folder and setting `AI_PROMPT_VERSION=v2`.
+- Image-based analysis prompt:
+  - Code: `apps/backend/node/src/routes/ai.ts` defines a `systemPrompt` string inline for `POST /api/ai/analyze-image`, requesting a strict JSON response with description and macros.
+  - We can later unify this to use the same `loadPrompt` mechanism (e.g., `nutrition_image_v1.txt`) if we need easier iteration across environments.
 
 ### AI Analysis (Simplified)
 ```typescript

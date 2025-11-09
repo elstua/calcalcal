@@ -28,4 +28,30 @@ struct User: Codable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.email = try container.decodeIfPresent(String.self, forKey: .email)
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.appleId = try container.decodeIfPresent(String.self, forKey: .appleId)
+        self.dailyCalorieGoal = try container.decodeIfPresent(Int.self, forKey: .dailyCalorieGoal)
+        self.dailyProteinGoal = try User.decodeLenientDouble(container: container, forKey: .dailyProteinGoal)
+        self.dailyFatGoal = try User.decodeLenientDouble(container: container, forKey: .dailyFatGoal)
+        self.dailyCarbGoal = try User.decodeLenientDouble(container: container, forKey: .dailyCarbGoal)
+        self.units = try container.decodeIfPresent(String.self, forKey: .units)
+        self.timezoneOffset = try container.decodeIfPresent(Int.self, forKey: .timezoneOffset)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+    }
+
+    private static func decodeLenientDouble(container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Double? {
+        if let number = try? container.decode(Double.self, forKey: key) {
+            return number
+        }
+        if let stringValue = try? container.decode(String.self, forKey: key) {
+            return Double(stringValue)
+        }
+        return nil
+    }
 } 

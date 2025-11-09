@@ -6,15 +6,6 @@
 	objectVersion = 90;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		DF5872322E5F1594005AD214 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0092E369F2400576B60 /* Auth */; };
-		DF5872332E5F1594005AD214 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00B2E369F2400576B60 /* Functions */; };
-		DF5872342E5F1594005AD214 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00D2E369F2400576B60 /* PostgREST */; };
-		DF5872352E5F1594005AD214 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C00F2E369F2400576B60 /* Realtime */; };
-		DF5872362E5F1594005AD214 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0112E369F2400576B60 /* Storage */; };
-		DF5872372E5F1594005AD214 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DFF1C0132E369F2400576B60 /* Supabase */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		ACB9E5E72D594D7E00C37803 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -37,7 +28,6 @@
 		ACB9E5E62D594D7E00C37803 /* CalycalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CalycalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACB9E5F02D594D7E00C37803 /* CalycalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CalycalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF0A57982E5D346500EF8210 /* CoreAudioTypes.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudioTypes.framework; path = System/Library/Frameworks/CoreAudioTypes.framework; sourceTree = SDKROOT; };
-		DF2A6E4D2E5E03ED0016DD61 /* supabase-swift */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = "supabase-swift"; path = "/Users/artemsavelev/Library/Developer/Xcode/DerivedData/Calycal-hdaygmejzkosrcctzcgmrlmjifov/SourcePackages/checkouts/supabase-swift"; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -87,12 +77,6 @@
 		DF2A6E4C2E5E03E40016DD61 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				DF5872362E5F1594005AD214 /* Storage in Frameworks */,
-				DF5872352E5F1594005AD214 /* Realtime in Frameworks */,
-				DF5872342E5F1594005AD214 /* PostgREST in Frameworks */,
-				DF5872332E5F1594005AD214 /* Functions in Frameworks */,
-				DF5872322E5F1594005AD214 /* Auth in Frameworks */,
-				DF5872372E5F1594005AD214 /* Supabase in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -122,7 +106,6 @@
 		DF0A57962E5D2EE200EF8210 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				DF2A6E4D2E5E03ED0016DD61 /* supabase-swift */,
 				DF0A57982E5D346500EF8210 /* CoreAudioTypes.framework */,
 			);
 			name = Frameworks;
@@ -145,14 +128,6 @@
 				ACB9E5D82D594D7D00C37803 /* calcalcal */,
 			);
 			name = Calycal;
-			packageProductDependencies = (
-				DFF1C0092E369F2400576B60 /* Auth */,
-				DFF1C00B2E369F2400576B60 /* Functions */,
-				DFF1C00D2E369F2400576B60 /* PostgREST */,
-				DFF1C00F2E369F2400576B60 /* Realtime */,
-				DFF1C0112E369F2400576B60 /* Storage */,
-				DFF1C0132E369F2400576B60 /* Supabase */,
-			);
 			productName = calcalcal;
 			productReference = ACB9E5D62D594D7D00C37803 /* calycal.app */;
 			productType = "com.apple.product-type.application";
@@ -235,7 +210,6 @@
 			mainGroup = ACB9E5CD2D594D7D00C37803;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = ACB9E5D72D594D7D00C37803 /* Products */;
@@ -429,7 +403,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 0.1;
+				CURRENT_PROJECT_VERSION = 0.11;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
@@ -448,7 +422,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
 				PRODUCT_NAME = calycal;
 				SKIP_INSTALL = NO;
@@ -470,7 +444,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = calcalcal/calcalcal.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 0.1;
+				CURRENT_PROJECT_VERSION = 0.11;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 6WQZSHL3K5;
 				ENABLE_PREVIEWS = YES;
@@ -489,7 +463,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
+				MARKETING_VERSION = 0.11;
 				PRODUCT_BUNDLE_IDENTIFIER = stua.calcalcal;
 				PRODUCT_NAME = calycal;
 				SKIP_INSTALL = NO;
@@ -611,50 +585,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/supabase/supabase-swift";
-			requirement = {
-				kind = exactVersion;
-				version = 2.5.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		DFF1C0092E369F2400576B60 /* Auth */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Auth;
-		};
-		DFF1C00B2E369F2400576B60 /* Functions */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Functions;
-		};
-		DFF1C00D2E369F2400576B60 /* PostgREST */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = PostgREST;
-		};
-		DFF1C00F2E369F2400576B60 /* Realtime */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Realtime;
-		};
-		DFF1C0112E369F2400576B60 /* Storage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Storage;
-		};
-		DFF1C0132E369F2400576B60 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFF1C0082E369F2400576B60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = ACB9E5CE2D594D7D00C37803 /* Project object */;
 }

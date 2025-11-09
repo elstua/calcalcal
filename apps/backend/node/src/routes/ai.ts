@@ -3,6 +3,9 @@ import { AuthRequest, authenticateToken } from '../middleware/auth';
 import { DiaryEntryModel } from '../models/DiaryEntry';
 import { AIService } from '../services/ai/service';
 import Database from '../services/database';
+import { OpenAI } from 'openai';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -70,6 +73,149 @@ router.post('/analyze', async (req: AuthRequest, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/ai/analyze-image
+router.post('/analyze-image', async (req: AuthRequest, res) => {
+  try {
+    const { imageUrl, entryId, blockId } = req.body || {};
+    const userId = req.userId!;
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({ error: 'imageUrl is required' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('[analyze-image] Missing OPENAI_API_KEY');
+      return res.status(500).json({ error: 'AI provider not configured' });
+    }
+
+    // Optional: verify entry ownership if provided
+    if (entryId) {
+      const entry = await DiaryEntryModel.getById(entryId);
+      if (!entry || entry.user_id !== userId) {
+        return res.status(404).json({ error: 'Entry not found' });
+      }
+    }
+
+    // Analyze with OpenAI multimodal (one pass: description + macros)
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 45_000 });
+    const model = process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+    const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+
+    console.log(
+      `[analyze-image] user=${userId} model=${model} url=${imageUrl.slice(0, 120)}${
+        imageUrl.length > 120 ? '…' : ''
+      }`
+    );
+
+    const systemPrompt = `
+You are a nutrition expert. Look at the image and return ONLY a valid JSON object:
+{
+  "description": "<short food description>",
+  "calories": <number>,
+  "protein": <grams>,
+  "fat": <grams>,
+  "carbs": <grams>,
+  "fiber": <grams>,
+  "sugar": <grams>,
+  "sodium": <mg>,
+  "confidence": <0..1>
+}
+If uncertain, provide your best estimate. Always return valid JSON.
+`.trim();
+
+    console.time('[analyze-image] openai_call');
+    // If the image is hosted on localhost, OpenAI cannot fetch it.
+    // Inline it as a data URL by reading from the local uploads directory.
+    let imageForOpenAI: string = imageUrl;
+    try {
+      const u = new URL(imageUrl);
+      const isLocalHost =
+        u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      if (isLocalHost && u.pathname.startsWith('/uploads/')) {
+        const uploadsDir = path.resolve(process.cwd(), 'apps', 'backend', 'node', 'uploads');
+        const relative = u.pathname.replace(/^\/uploads\//, '');
+        const filePath = path.resolve(uploadsDir, relative);
+        if (fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mime =
+            ext === '.png' ? 'image/png' :
+            ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+          imageForOpenAI = dataUrl;
+          console.log('[analyze-image] Inlined local image as data URL');
+        } else {
+          console.warn('[analyze-image] Local file not found for', filePath);
+        }
+      }
+    } catch (_e) {
+      // Not a valid URL; ignore and use as-is
+    }
+
+    const completion = await client.chat.completions.create({
+      model,
+      temperature,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Analyze this food photo and return JSON as specified.' },
+            { type: 'image_url', image_url: { url: imageForOpenAI } },
+          ] as any,
+        },
+      ],
+    });
+    console.timeEnd('[analyze-image] openai_call');
+
+    const responseText = completion.choices[0]?.message?.content?.trim();
+    if (!responseText) {
+      console.error('[analyze-image] Empty response from AI provider');
+      return res.status(500).json({ error: 'Empty response from AI provider' });
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // If not pure JSON, try to extract JSON block (best-effort)
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { parsed = undefined; }
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      console.error('[analyze-image] Failed to parse AI response:', responseText);
+      return res.status(500).json({ error: 'Failed to parse AI response', message: responseText });
+    }
+
+    // Normalize and coerce to numbers
+    const result = {
+      description: String(parsed.description ?? '').slice(0, 200),
+      calories: Number(parsed.calories ?? 0),
+      macros: {
+        protein: Number(parsed.protein ?? 0),
+        fat: Number(parsed.fat ?? 0),
+        carbs: Number(parsed.carbs ?? 0),
+        fiber: Number(parsed.fiber ?? 0),
+        sugar: Number(parsed.sugar ?? 0),
+        sodium: Number(parsed.sodium ?? 0),
+      },
+      confidence: Number(parsed.confidence ?? 0.5),
+    };
+
+    console.log(
+      `[analyze-image] success calories=${result.calories} protein=${result.macros.protein} fat=${result.macros.fat} carbs=${result.macros.carbs}`
+    );
+    // v1: client merges into the block and totals
+    // (optional future: server-side merge into db when entryId/blockId are provided)
+    res.json(result);
+  } catch (error: any) {
+    console.error('/analyze-image error', error?.response?.data || error?.message || error);
+    res.status(500).json({ error: 'Internal server error', message: error?.message });
   }
 });
 
