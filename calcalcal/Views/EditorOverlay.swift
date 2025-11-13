@@ -21,6 +21,7 @@ struct EditorOverlay: View {
     @State private var pendingRemoteBlocks: [Block]? = nil
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var autosaveTask: Task<Void, Error>? = nil
+    @State private var imageMap: [UUID: UIImage] = [:]
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -85,10 +86,96 @@ struct EditorOverlay: View {
                 .onDisappear {
                     guard let image = pickedImage else { return }
                     let uuid = UUID()
-                    // image map can be passed down later if needed
-                    if let data = image.pngData() {
-                        // Append as imageText block with empty text to encourage typing
-                        blocks.append(Block(type: .imageText(data, uuid, ""), calorieData: nil))
+                    // Downscale for local display and future upload
+                    let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
+                    // Use resized image in the UI
+                    imageMap[uuid] = compressed.resizedImage
+                    // Store PNG data of resized image in the model for stable internal rendering
+                    if let resizedPNG = compressed.resizedImage.pngData() {
+                        let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
+                        blocks.append(newBlock)
+                        
+                        // Kick off upload + analyze pipeline
+                        let capturedUUID = uuid
+                        let blockId = newBlock.id
+                        let entryIdString: String? = nil // optional for backend
+                        Task.detached(priority: .userInitiated) {
+                            do {
+                                #if DEBUG
+                                print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok")
+                                #endif
+                                
+                                let publicUrl: String
+                                if ImageAPI.isLocalBaseURL() {
+                                    #if DEBUG
+                                    print("📤 Dev upload -> /api/storage/upload")
+                                    #endif
+                                    let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
+                                    publicUrl = upload.publicUrl
+                                } else {
+                                    #if DEBUG
+                                    print("🪪 Prod presign -> /api/storage/presign")
+                                    #endif
+                                    let presign = try await ImageAPI.presignJPEG(filename: "photo.jpg", contentType: "image/jpeg")
+                                    try await ImageAPI.putToPresignedURL(uploadUrl: presign.uploadUrl, headers: presign.headers, data: compressed.data)
+                                    publicUrl = presign.publicUrl
+                                }
+                                
+                                #if DEBUG
+                                print("📸 Pipeline: uploaded -> \(publicUrl), analyzing…")
+                                #endif
+                                let analysis = try await ImageAPI.analyzeImage(imageUrl: publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+                                
+                                #if DEBUG
+                                print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
+                                #endif
+                                
+                                // Build nutrition model
+                                var nutrition = NutritionData(
+                                    calories: analysis.calories,
+                                    protein: analysis.macros?.protein,
+                                    fat: analysis.macros?.fat,
+                                    carbs: analysis.macros?.carbs,
+                                    fiber: analysis.macros?.fiber,
+                                    sugar: analysis.macros?.sugar,
+                                    sodium: analysis.macros?.sodium,
+                                    confidence: analysis.confidence
+                                )
+                                
+                                // Apply to the inserted block (by imageRef match)
+                                await MainActor.run {
+                                    if let idx = blocks.firstIndex(where: { block in
+                                        if case let .imageText(_, ref, _) = block.type {
+                                            return ref == capturedUUID
+                                        }
+                                        return false
+                                    }) {
+                                        var updated = blocks[idx]
+                                        // Update text with description
+                                        if case let .imageText(data, ref, _) = updated.type {
+                                            updated.type = .imageText(data, ref, analysis.description)
+                                        }
+                                        // Update nutrition & calorieData for UI
+                                        updated.nutrition = nutrition
+                                        if let cals = analysis.calories, cals > 0 {
+                                            updated.calorieData = String(cals)
+                                        }
+                                        blocks[idx] = updated
+                                        #if DEBUG
+                                        print("📸 Pipeline: block \(idx) updated with analysis")
+                                        #endif
+                                    } else {
+                                        #if DEBUG
+                                        print("⚠️ Pipeline: could not find block by imageRef=\(capturedUUID)")
+                                        #endif
+                                    }
+                                }
+                            } catch {
+                                #if DEBUG
+                                print("❌ Pipeline error: \(error)")
+                                #endif
+                            }
+                        }
                     }
                     // Ensure keyboard focuses after insert
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -272,7 +359,7 @@ extension EditorOverlay {
                 useExternalDecoration: true,
                 onAddImage: { showImagePicker = true },
                 onTap: nil,
-                imageMap: [:],
+                imageMap: imageMap,
                 isEditable: true,
                 shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
                 forceExpanded: true,
