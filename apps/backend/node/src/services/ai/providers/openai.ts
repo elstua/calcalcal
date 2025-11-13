@@ -15,17 +15,49 @@ export class OpenAINutritionProvider implements NutritionProvider {
     const systemPrompt = options?.prompt || loaded.text;
     const promptVersion = options?.promptVersion || loaded.version;
 
-    const completion = await client.chat.completions.create({
-      model,
-      temperature,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze this food: ${content}` },
-      ],
-    });
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
+        model,
+        temperature,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Analyze this food: ${content}` },
+        ],
+      });
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status;
+      const errData = err?.response?.data ?? err?.data ?? null;
+      const safeData =
+        typeof errData === 'string'
+          ? errData
+          : errData
+          ? (() => {
+              try {
+                return JSON.stringify(errData);
+              } catch {
+                return '[unserializable error data]';
+              }
+            })()
+          : null;
+      console.error('[OpenAI] chat.completions.create failed', {
+        model,
+        temperature,
+        status,
+        message: err?.message,
+        data: safeData,
+      });
+      throw new Error(err?.message || 'OpenAI chat.completions error');
+    }
 
     const responseText = completion.choices[0]?.message?.content?.trim();
     if (!responseText) {
+      console.error('[OpenAI] Empty response', {
+        model,
+        temperature,
+        choices: completion.choices?.length,
+        usage: completion.usage,
+      });
       throw new Error('Empty response from OpenAI');
     }
 
