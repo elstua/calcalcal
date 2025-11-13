@@ -232,6 +232,13 @@ extension UnifiedTextView {
                 blockBackgroundViews.removeValue(forKey: blockKey)
             }
         }
+        // Remove calorie labels for blocks that no longer exist
+        for (blockKey, labelView) in calorieLabelViews {
+            if !currentBlockKeys.contains(blockKey) {
+                labelView.removeFromSuperview()
+                calorieLabelViews.removeValue(forKey: blockKey)
+            }
+        }
 
         // Create/update views and calorie labels using current blocks snapshot
         for (paragraphRange, metadata, index) in paragraphInfos {
@@ -275,19 +282,55 @@ extension UnifiedTextView {
             backgroundView.frame = blockFrame
             updateBlockBackgroundAppearance(backgroundView, for: blockType)
 
-            // Update or add calorie label
-            backgroundView.subviews.filter { $0 is CalorieLabelView }.forEach { $0.removeFromSuperview() }
+            // Compute calories text from metadata only (avoid leaking other blocks' values)
             let caloriesText: String = {
-                if let mb = modelBlock {
-                    return mb.calorieData ?? "…"
+                if let m = metadata {
+                    #if DEBUG
+                    if let cd = m.calorieData {
+                        print("🧪 Metadata at \(blockKey) calorieData='\(cd)'")
+                    } else {
+                        print("🧪 Metadata at \(blockKey) has no calorieData")
+                    }
+                    #endif
+                    if let cd = m.calorieData, !cd.isEmpty {
+                        return CalorieFormatter.format(cd)
+                    }
+                    if let data = m.nutritionJSON, let nutrition = try? JSONDecoder().decode(NutritionData.self, from: data) {
+                        if let cal = nutrition.calories {
+                            #if DEBUG
+                            print("🧪 Metadata at \(blockKey) nutrition.calories=\(cal)")
+                            #endif
+                            return CalorieFormatter.format(cal)
+                        } else {
+                            // Derive from macros
+                            if let p = nutrition.protein, let f = nutrition.fat, let c = nutrition.carbs {
+                                let estimate = Int(((p * 4.0) + (f * 9.0) + (c * 4.0)).rounded())
+                                #if DEBUG
+                                print("🧪 Metadata at \(blockKey) derived from macros=\(estimate)")
+                                #endif
+                                return CalorieFormatter.format(estimate)
+                            }
+                        }
+                    }
                 }
-                return metadata?.calorieData ?? "…"
+                return CalorieFormatter.format(nil as String?)
             }()
             // Only show for text-bearing blocks
             switch blockType {
             case .text, .imageText:
-                let calorieLabel = CalorieLabelView()
-                calorieLabel.setCalories(caloriesText)
+                let calorieLabel: CalorieBlockView
+                if let existing = calorieLabelViews[blockKey] {
+                    calorieLabel = existing
+                } else {
+                    let newView = CalorieBlockView()
+                    calorieLabelViews[blockKey] = newView
+                    backgroundView.addSubview(newView)
+                    calorieLabel = newView
+                }
+                calorieLabel.setCaloriesAnimated(caloriesText)
+                #if DEBUG
+                print("🏷️ Calorie label \(blockKey) text='\(caloriesText)'")
+                #endif
                 if let calorieLabelFrame = provider.calorieLabelFrame(for: paragraphRange, in: self, metadata: metadata ?? UnifiedTextContentStorage.BlockMetadata(blockType: blockType, blockSpacing: defaultBlockSpacing, imageReference: nil, calorieData: nil, nutritionJSON: nil), blockFrame: blockFrame) {
                     calorieLabel.frame = calorieLabelFrame
                 } else {
@@ -295,7 +338,6 @@ extension UnifiedTextView {
                     let labelW: CGFloat = 80
                     calorieLabel.frame = CGRect(x: blockFrame.width - labelW - 8, y: 0, width: labelW, height: 20)
                 }
-                backgroundView.addSubview(calorieLabel)
             case .spacer:
                 break
             }
@@ -317,27 +359,7 @@ extension UnifiedTextView {
     }
 }
 
-class CalorieLabelView: UIView {
-    private let label = UILabel()
-    init() {
-        super.init(frame: .zero)
-        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
-        label.textColor = .systemGray
-        label.textAlignment = .right
-        label.isUserInteractionEnabled = false
-        label.numberOfLines = 1
-        label.lineBreakMode = .byClipping
-        addSubview(label)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func setCalories(_ calories: String) {
-        label.text = calories
-    }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        label.frame = bounds
-    }
-}
+// CalorieLabelView replaced by CalorieBlockView
 
 // --- Helper to get last line rect for a paragraph ---
 extension UnifiedTextView {

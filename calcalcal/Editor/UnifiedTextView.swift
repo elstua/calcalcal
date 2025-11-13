@@ -34,6 +34,9 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
     /// Dictionary to store block background views by paragraph range
     internal var blockBackgroundViews: [String: UIView] = [:]
     
+    /// Dictionary to store calorie label views by paragraph range
+    internal var calorieLabelViews: [String: CalorieBlockView] = [:]
+    
     /// Track last update time to throttle rapid updates
     internal var lastUpdateTime: TimeInterval = 0
     
@@ -115,6 +118,12 @@ class UnifiedTextView: UITextView, NSTextStorageDelegate, UITextViewDelegate {
             backgroundView.removeFromSuperview()
         }
         blockBackgroundViews.removeAll()
+        
+        // Clean up calorie label views
+        for (_, labelView) in calorieLabelViews {
+            labelView.removeFromSuperview()
+        }
+        calorieLabelViews.removeAll()
     }
     
     private func setupComponents() {

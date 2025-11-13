@@ -118,56 +118,30 @@ struct EditorOverlay: View {
                     }
                     
                     await MainActor.run {
-                        var updated = blocks
-                        var i = 0
-                        for idx in updated.indices {
-                            switch updated[idx].type {
-                            case .text(let t):
-                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if !trimmed.isEmpty {
-                                    if i < dbBlocks.count {
-                                        let kcal = dbBlocks[i].calories ?? 0
-                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
-                                        updated[idx].nutrition = NutritionData(
-                                            calories: dbBlocks[i].calories,
-                                            protein: dbBlocks[i].protein,
-                                            fat: dbBlocks[i].fat,
-                                            carbs: dbBlocks[i].carbs,
-                                            fiber: dbBlocks[i].fiber,
-                                            sugar: dbBlocks[i].sugar,
-                                            sodium: dbBlocks[i].sodium,
-                                            confidence: dbBlocks[i].confidence
-                                        )
-                                    }
-                                    i += 1
-                                }
-                            case .imageText(_, _, let t):
-                                let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if !trimmed.isEmpty {
-                                    if i < dbBlocks.count {
-                                        let kcal = dbBlocks[i].calories ?? 0
-                                        updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
-                                        updated[idx].nutrition = NutritionData(
-                                            calories: dbBlocks[i].calories,
-                                            protein: dbBlocks[i].protein,
-                                            fat: dbBlocks[i].fat,
-                                            carbs: dbBlocks[i].carbs,
-                                            fiber: dbBlocks[i].fiber,
-                                            sugar: dbBlocks[i].sugar,
-                                            sodium: dbBlocks[i].sodium,
-                                            confidence: dbBlocks[i].confidence
-                                        )
-                                    }
-                                    i += 1
-                                }
-                            default:
-                                break
-                            }
+                        // Post per-block metadata for this entry using NSDictionary-friendly payload
+                        let payload: [[String: Any]] = dbBlocks.map { block in
+                            return [
+                                "id": block.id ?? "",
+                                "position": block.position ?? 0,
+                                "content": block.content ?? "",
+                                    "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
+                                    "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
+                                    "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
+                                    "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
+                                    "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
+                                    "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
+                                    "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                    "confidence": (block.confidence as Any?) ?? NSNull()
+                            ]
                         }
-                        // Apply per-block metadata (calories, nutrition) live; content remains user source of truth
-                        print("🐛 DEBUG: About to update blocks - before: \(blocks.map { $0.type })")
-                        print("🐛 DEBUG: About to update blocks - after: \(updated.map { $0.type })")
-                        self.blocks = updated
+                        NotificationCenter.default.post(
+                            name: .editorApplyPerBlockMetadata,
+                            object: nil,
+                            userInfo: [
+                                "entryId": entry.id,
+                                "analyzedBlocks": payload
+                            ]
+                        )
                     }
                 } catch {
                     // Best-effort; ignore if blocks not available yet
@@ -289,40 +263,27 @@ extension EditorOverlay {
     /// Core BigEntryBlock view with shared modifiers.
     @ViewBuilder
     private func coreBigEntryView(entry: DiaryEntry) -> some View {
-        VStack(spacing: 0) {
-            // Header with date
-            HStack {
-                Text(formattedDate(entry.date))
-                    .font(.title3.bold())
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding([.top, .horizontal])
-
-            // Inlined unified editor
-            UnifiedTextEditor(
-                blocks: $blocks,
+            // Unified editable block with shared binding for perfect sync
+            BigEntryBlock(
+                entry: entry,
+                height: 550,
+                cornerRadius: 24,
+                showShadow: false,
+                useExternalDecoration: true,
+                onAddImage: { showImagePicker = true },
+                onTap: nil,
                 imageMap: [:],
                 isEditable: true,
-                shouldBecomeFirstResponder: $shouldBecomeFirstResponder
+                shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                forceExpanded: true,
+                onBlocksChange: { updated in
+                    blocks = updated
+                    scheduleAutosaveIfTextChanged(blocks: updated)
+                },
+                overrideTotalCalories: liveTotalCalories,
+                externalBlocks: $blocks
             )
-            .blockSpacing(20)
-            .onBlocksChange { updated in
-                blocks = updated
-            }
-            .id(entry.id)
-            .frame(maxHeight: .infinity)
             .padding(.horizontal)
-
-            Spacer(minLength: 0)
-
-            // Footer with add-image and live totals
-            EntryFooterView(
-                calorieSummary: "\((liveTotalCalories ?? entry.totalCalories).map { String($0) } ?? "…") kcal",
-                onAddImage: { showImagePicker = true }
-            )
-            .padding(.bottom, 8)
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onChange(of: blocks) { newValue in
             // Update change tracking for modified blocks
@@ -499,9 +460,11 @@ extension EditorOverlay {
                                 print("🤖 Full analyze triggered for entry \(row.id) with \(payload.count) blocks")
                             }
 
-                            // Poll for updated totals and per-block calories after analysis completes (simple backoff up to ~6s)
+                            // Poll for updated totals and per-block calories after analysis completes
+                            // Extend window to tolerate slower analysis completion
                             var hasReceivedNutritionData = false
-                            for delay in [0.8, 1.2, 2.0, 2.8] {
+                            let delays: [Double] = [0.8, 1.2, 2.0, 2.8, 4.0, 5.5, 7.5, 10.0, 13.0, 16.0]
+                            for delay in delays {
                                 if hasReceivedNutritionData {
                                     break
                                 }
@@ -542,59 +505,29 @@ extension EditorOverlay {
 
                                         if nowHasNutritionData {
                                             hasReceivedNutritionData = true
-                                            var updated = blocks
-                                            var i = 0
-                                            for idx in updated.indices {
-                                                switch updated[idx].type {
-                                                case .text(let t):
-                                                    let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                                                    if !trimmed.isEmpty {
-                                                        if i < dbBlocks.count {
-                                                            let dbBlock = dbBlocks[i]
-                                                            let kcal = dbBlock.calories ?? 0
-                                                            updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
-                                                            updated[idx].nutrition = NutritionData(
-                                                                calories: dbBlock.calories,
-                                                                protein: dbBlock.protein,
-                                                                fat: dbBlock.fat,
-                                                                carbs: dbBlock.carbs,
-                                                                fiber: dbBlock.fiber,
-                                                                sugar: dbBlock.sugar,
-                                                                sodium: dbBlock.sodium,
-                                                                confidence: dbBlock.confidence
-                                                            )
-                                                        }
-                                                        i += 1
-                                                    }
-                                                case .imageText(_, _, let t):
-                                                    let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                                                    if !trimmed.isEmpty {
-                                                        if i < dbBlocks.count {
-                                                            let dbBlock = dbBlocks[i]
-                                                            let kcal = dbBlock.calories ?? 0
-                                                            updated[idx].calorieData = kcal > 0 ? "\(kcal)" : nil
-                                                            updated[idx].nutrition = NutritionData(
-                                                                calories: dbBlock.calories,
-                                                                protein: dbBlock.protein,
-                                                                fat: dbBlock.fat,
-                                                                carbs: dbBlock.carbs,
-                                                                fiber: dbBlock.fiber,
-                                                                sugar: dbBlock.sugar,
-                                                                sodium: dbBlock.sodium,
-                                                                confidence: dbBlock.confidence
-                                                            )
-                                                        }
-                                                        i += 1
-                                                    }
-                                                default:
-                                                    break
-                                                }
+                                            let payload: [[String: Any]] = dbBlocks.map { block in
+                                                return [
+                                                    "id": block.id ?? "",
+                                                    "position": block.position ?? 0,
+                                                    "content": block.content ?? "",
+                                                    "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
+                                                    "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
+                                                    "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
+                                                    "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
+                                                    "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
+                                                    "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
+                                                    "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                                    "confidence": (block.confidence as Any?) ?? NSNull()
+                                                ]
                                             }
-                                            // Apply final metadata updates while briefly suppressing autosave
-                                            let wasSuppressed = self.suppressRemoteBlockUpdates
-                                            self.suppressRemoteBlockUpdates = true
-                                            self.blocks = updated
-                                            self.suppressRemoteBlockUpdates = wasSuppressed
+                                            NotificationCenter.default.post(
+                                                name: .editorApplyPerBlockMetadata,
+                                                object: nil,
+                                                userInfo: [
+                                                    "entryId": entry.id,
+                                                    "analyzedBlocks": payload
+                                                ]
+                                            )
                                         }
                                     }
                                 }

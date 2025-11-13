@@ -26,6 +26,54 @@ struct DiaryAPI {
         let sodium: Double?
         let confidence: Double?
 
+        enum CodingKeys: String, CodingKey {
+            case id, position, content, calories, protein, fat, carbs, fiber, sugar, sodium, confidence
+        }
+
+        init(id: String?, position: Int?, content: String?, calories: Int?, protein: Double?, fat: Double?, carbs: Double?, fiber: Double?, sugar: Double?, sodium: Double?, confidence: Double?) {
+            self.id = id
+            self.position = position
+            self.content = content
+            self.calories = calories
+            self.protein = protein
+            self.fat = fat
+            self.carbs = carbs
+            self.fiber = fiber
+            self.sugar = sugar
+            self.sodium = sodium
+            self.confidence = confidence
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try? c.decode(String.self, forKey: .id)
+            self.position = c.decodeIntForgiving(forKey: .position)
+            self.content = try? c.decode(String.self, forKey: .content)
+            self.calories = c.decodeIntForgiving(forKey: .calories)
+            self.protein = c.decodeDoubleForgiving(forKey: .protein)
+            self.fat = c.decodeDoubleForgiving(forKey: .fat)
+            self.carbs = c.decodeDoubleForgiving(forKey: .carbs)
+            self.fiber = c.decodeDoubleForgiving(forKey: .fiber)
+            self.sugar = c.decodeDoubleForgiving(forKey: .sugar)
+            self.sodium = c.decodeDoubleForgiving(forKey: .sodium)
+            self.confidence = c.decodeDoubleForgiving(forKey: .confidence)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(id, forKey: .id)
+            try c.encodeIfPresent(position, forKey: .position)
+            try c.encodeIfPresent(content, forKey: .content)
+            try c.encodeIfPresent(calories, forKey: .calories)
+            try c.encodeIfPresent(protein, forKey: .protein)
+            try c.encodeIfPresent(fat, forKey: .fat)
+            try c.encodeIfPresent(carbs, forKey: .carbs)
+            try c.encodeIfPresent(fiber, forKey: .fiber)
+            try c.encodeIfPresent(sugar, forKey: .sugar)
+            try c.encodeIfPresent(sodium, forKey: .sodium)
+            try c.encodeIfPresent(confidence, forKey: .confidence)
+        }
+
         /// Convert to AnalyzedBlock for comparison
         func toAnalyzedBlock() -> AnalyzedBlock? {
             guard let id = id, let content = content else { return nil }
@@ -277,6 +325,26 @@ struct DiaryAPI {
     }
 }
 
+private extension KeyedDecodingContainer {
+    func decodeIntForgiving(forKey key: K) -> Int? {
+        if let v = try? decode(Int.self, forKey: key) { return v }
+        if let s = try? decode(String.self, forKey: key) {
+            if let i = Int(s) { return i }
+            if let d = Double(s) { return Int(d.rounded()) }
+        }
+        return nil
+    }
+
+    func decodeDoubleForgiving(forKey key: K) -> Double? {
+        if let v = try? decode(Double.self, forKey: key) { return v }
+        if let i = try? decode(Int.self, forKey: key) { return Double(i) }
+        if let s = try? decode(String.self, forKey: key) {
+            if let d = Double(s) { return d }
+            if let i = Int(s) { return Double(i) }
+        }
+        return nil
+    }
+}
 // MARK: - Mapping helpers
 extension DiaryAPI.Row {
     func toDiaryEntry() -> DiaryEntry {

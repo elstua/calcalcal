@@ -22,7 +22,14 @@ struct BigEntryBlock: View {
     // Optional override for displaying totals while editing/live-updating
     var overrideTotalCalories: Int? = nil
     
-    @State private var blocks: [Block]
+    // When provided, this binding will be used as the source of truth
+    // for the editor content to keep multiple views in perfect sync.
+    var externalBlocks: Binding<[Block]>? = nil
+    @State private var internalBlocks: [Block]
+    private var effectiveBlocks: Binding<[Block]> {
+        if let externalBlocks { return externalBlocks }
+        return $internalBlocks
+    }
     
     init(entry: DiaryEntry,
          height: CGFloat = 550,
@@ -36,7 +43,8 @@ struct BigEntryBlock: View {
          shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
          forceExpanded: Bool = false,
          onBlocksChange: (([Block]) -> Void)? = nil,
-         overrideTotalCalories: Int? = nil) {
+         overrideTotalCalories: Int? = nil,
+         externalBlocks: Binding<[Block]>? = nil) {
         self.entry = entry
         self.height = height
         self.cornerRadius = cornerRadius
@@ -50,7 +58,8 @@ struct BigEntryBlock: View {
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
-        _blocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
+        self.externalBlocks = externalBlocks
+        _internalBlocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
     }
     
     var body: some View {
@@ -65,11 +74,17 @@ struct BigEntryBlock: View {
             .padding([.top, .horizontal])
             
             // Always show the full editor
-            UnifiedTextEditor(blocks: $blocks, imageMap: imageMap, isEditable: isEditable, shouldBecomeFirstResponder: $shouldBecomeFirstResponder)
+            UnifiedTextEditor(
+                blocks: effectiveBlocks,
+                imageMap: imageMap,
+                isEditable: isEditable,
+                shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                entryId: entry.id
+            )
                 .blockSpacing(20)
                 .onBlocksChange { newBlocks in
-                    // Keep local state and bubble up to parent
-                    self.blocks = newBlocks
+                    // Keep state (external or internal) and bubble up to parent
+                    self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
                 }
                 .frame(maxHeight: .infinity)
@@ -91,7 +106,10 @@ struct BigEntryBlock: View {
         .onTapGesture { onTap?() }
         // Keep internal editor blocks in sync with external model
         .onChange(of: entry.blocks) { newValue in
-            self.blocks = newValue.withStableIdsAndChangeTracking()
+            // Only drive internal state if we're not using an external binding
+            if externalBlocks == nil {
+                self.internalBlocks = newValue.withStableIdsAndChangeTracking()
+            }
         }
         // Do not force full refresh; rely on stableId-aware diffs to prevent state bleed
         .id(entry.id)

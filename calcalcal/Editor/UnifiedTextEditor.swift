@@ -10,6 +10,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
     var defaultBlockSpacing: CGFloat = 32
     var isEditable: Bool = true
     @Binding var shouldBecomeFirstResponder: Bool
+    var entryId: UUID? = nil
     
     init(
         blocks: Binding<[Block]>,
@@ -17,7 +18,8 @@ struct UnifiedTextEditor: UIViewRepresentable {
         onBlocksChange: (([Block]) -> Void)? = nil,
         defaultBlockSpacing: CGFloat = 32,
         isEditable: Bool = true,
-        shouldBecomeFirstResponder: Binding<Bool> = .constant(false)
+        shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
+        entryId: UUID? = nil
     ) {
         self._blocks = blocks
         self.imageMap = imageMap
@@ -25,6 +27,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         self.defaultBlockSpacing = defaultBlockSpacing
         self.isEditable = isEditable
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self.entryId = entryId
     }
     
     func makeUIView(context: Context) -> UnifiedTextView {
@@ -34,10 +37,18 @@ struct UnifiedTextEditor: UIViewRepresentable {
         textView.imageMap = imageMap
         textView.delegate = context.coordinator
         textView.isEditable = isEditable
+        textView.entryId = entryId
         print("[makeUIView] Initial blocks: \(blocks)")
         print("[makeUIView] DEBUG: textView=\(textView), entry context unknown at this level")
         textView.renderBlocks()
         print("[makeUIView] Called renderBlocks()")
+        // Ensure initial visuals appear even before the first layout pass settles
+        DispatchQueue.main.async {
+            textView.updateExclusionPaths()
+            textView.updateImageViews()
+            textView.updateBlockBackgroundViews()
+            textView.setNeedsDisplay()
+        }
         if shouldBecomeFirstResponder {
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
@@ -51,6 +62,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         // Always keep ancillary props in sync
         textView.imageMap = imageMap
         textView.isEditable = isEditable
+        textView.entryId = entryId
 
         // Only update content if the change is external; if user recently edited, queue external update
         guard textView.blocks != blocks else {
@@ -117,18 +129,34 @@ struct UnifiedTextEditor: UIViewRepresentable {
         }
 
         if !metadataChangeIndices.isEmpty && contentChangeIndices.isEmpty {
-            // Apply metadata-only updates for labels/backgrounds without touching text
-            textView.isProgrammaticUpdate = true
+            // Metadata-only differences: prefer device metadata (view) as source of truth.
+            // Merge view metadata into the SwiftUI model to keep them in sync.
+            var merged = newBlocks
             for i in metadataChangeIndices {
-                if i < newBlocks.count {
-                    textView.updateBlockMetadata(at: i, calorieData: newBlocks[i].calorieData, nutrition: newBlocks[i].nutrition)
+                guard i < merged.count, let blockRange = textView.rangeForBlock(at: i),
+                      let meta = textView.unifiedContentStorage.blockMetadata(at: blockRange.location) else { continue }
+                // Pull latest metadata from the view
+                merged[i].calorieData = meta.calorieData
+                if let data = meta.nutritionJSON {
+                    let decoded = try? JSONDecoder().decode(NutritionData.self, from: data)
+                    merged[i].nutrition = decoded
+                } else {
+                    merged[i].nutrition = nil
                 }
             }
-            textView.blocks = newBlocks
+            // Sync local snapshot
+            textView.isProgrammaticUpdate = true
+            textView.blocks = merged
             textView.isProgrammaticUpdate = false
-            // Force visuals to refresh so calorie labels update immediately
+            // Update visuals
             textView.updateBlockBackgroundViews()
             textView.setNeedsDisplay()
+            // Propagate merged metadata back up if it differs
+            if merged != blocks {
+                DispatchQueue.main.async {
+                    self.onBlocksChange?(merged)
+                }
+            }
             if shouldBecomeFirstResponder {
                 DispatchQueue.main.async {
                     textView.becomeFirstResponder()
@@ -160,8 +188,24 @@ struct UnifiedTextEditor: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
             return
         }
+        // Before rendering, merge any existing on-device metadata into incoming model
+        var mergedBlocks = newBlocks
+        // Try to preserve metadata even when content changes
+        for i in 0..<min(textView.blocks.count, mergedBlocks.count) {
+            // Skip if incoming already has metadata
+            if mergedBlocks[i].calorieData != nil && mergedBlocks[i].nutrition != nil { continue }
+            if let range = textView.rangeForBlock(at: i),
+               let meta = textView.unifiedContentStorage.blockMetadata(at: range.location) {
+                if mergedBlocks[i].calorieData == nil {
+                    mergedBlocks[i].calorieData = meta.calorieData
+                }
+                if mergedBlocks[i].nutrition == nil, let data = meta.nutritionJSON {
+                    mergedBlocks[i].nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                }
+            }
+        }
         textView.isProgrammaticUpdate = true
-        textView.blocks = newBlocks
+        textView.blocks = mergedBlocks
         let caretLocation = textView.selectedRange.location
         if !contentChangeIndices.isEmpty && contentChangeIndices.count <= 2 {
             textView.renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: contentChangeIndices)

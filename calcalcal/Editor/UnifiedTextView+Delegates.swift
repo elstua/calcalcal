@@ -8,6 +8,8 @@ extension UnifiedTextView {
     
     func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorage.EditActions, range editedRange: NSRange, changeInLength delta: Int) {
         if isProgrammaticUpdate { return }
+        // Ignore storage mutations when view is not editable (e.g., read-only previews in lists)
+        if !self.isEditable { return }
         // Skip updates while the user is composing text (IME)
         if self.markedTextRange != nil { return }
         // Mark last user edit time for external-sync suppression
@@ -36,6 +38,62 @@ extension UnifiedTextView {
         // Update blocks on character changes
         DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.isProgrammaticUpdate else { return }
+
+            // Re-anchor block metadata at paragraph starts and clear metadata for the edited paragraph
+            let nsString = self.textStorage.string as NSString
+            // Identify the primary edited paragraph
+            var editedParaStart = 0
+            var editedParaEnd = 0
+            var editedContentsEnd = 0
+            nsString.getParagraphStart(&editedParaStart, end: &editedParaEnd, contentsEnd: &editedContentsEnd, for: editedRange)
+
+            // Walk all paragraphs to ensure metadata anchors are correct
+            var location = 0
+            while location < nsString.length {
+                var paragraphStart = 0
+                var paragraphEnd = 0
+                var contentsEnd = 0
+                nsString.getParagraphStart(&paragraphStart, end: &paragraphEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+                let paragraphRange = NSRange(location: paragraphStart, length: paragraphEnd - paragraphStart)
+
+                // Build metadata from either the start or a probe inside the paragraph
+                func buildMetadataFromAttributes(at pos: Int) -> UnifiedTextContentStorage.BlockMetadata? {
+                    guard pos >= 0 && pos < self.textStorage.length else { return nil }
+                    let attrs = self.textStorage.attributes(at: pos, effectiveRange: nil)
+                    guard let typeRaw = attrs[UnifiedTextContentStorage.blockTypeAttributeName] as? Int,
+                          let blockType = UnifiedTextContentStorage.BlockMetadata.BlockType(rawValue: typeRaw) else {
+                        return nil
+                    }
+                    let spacing = (attrs[UnifiedTextContentStorage.blockSpacingAttributeName] as? CGFloat) ?? self.defaultBlockSpacing
+                    let imageRef = attrs[UnifiedTextContentStorage.imageReferenceAttributeName] as? UUID
+                    let calorieData = attrs[UnifiedTextContentStorage.calorieDataAttributeName] as? String
+                    let nutritionJSON = attrs[UnifiedTextContentStorage.nutritionJSONAttributeName] as? Data
+                    return UnifiedTextContentStorage.BlockMetadata(
+                        blockType: blockType,
+                        blockSpacing: spacing,
+                        imageReference: imageRef,
+                        calorieData: calorieData,
+                        nutritionJSON: nutritionJSON
+                    )
+                }
+
+                var metadataAtStart = self.unifiedContentStorage.blockMetadata(at: paragraphStart)
+                if metadataAtStart == nil {
+                    // Probe one character in to recover existing metadata that slid inward
+                    let probe = min(paragraphStart + 1, max(0, self.textStorage.length - 1))
+                    metadataAtStart = buildMetadataFromAttributes(at: probe)
+                }
+
+                // Re-anchor metadata: if start lacks metadata but there is metadata inside, re-apply it at the start.
+                if let meta = metadataAtStart, self.unifiedContentStorage.blockMetadata(at: paragraphStart) == nil {
+                    self.unifiedContentStorage.setBlockMetadata(meta, for: paragraphRange)
+                    #if DEBUG
+                    print("📌 Re-anchored metadata at paragraph start \(paragraphRange)")
+                    #endif
+                }
+
+                location = paragraphEnd
+            }
 
             // After updating, re-apply image block metadata to paragraphs that are still image blocks
             let string = self.textStorage.string as NSString
