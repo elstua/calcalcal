@@ -3,7 +3,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import multer from 'multer';
+import multer, { type StorageEngine } from 'multer';
 import { r2PresignPutObject } from '../services/storage/r2';
 
 const router = Router();
@@ -11,15 +11,15 @@ const router = Router();
 router.use(authenticateToken);
 
 // Multer storage for multipart
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+const storage: StorageEngine = multer.diskStorage({
+  destination: (req: AuthRequest, file: Express.Multer.File, cb: (error: any, destination: string) => void) => {
     const userId = (req as AuthRequest).userId!;
     const today = new Date().toISOString().slice(0, 10);
     const dest = path.resolve(process.cwd(), 'apps', 'backend', 'node', 'uploads', userId, today);
     fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
-  filename: (_req, file, cb) => {
+  filename: (_req: AuthRequest, file: Express.Multer.File, cb: (error: any, filename: string) => void) => {
     const ext = (path.extname(file.originalname) || '').toLowerCase() || (() => {
       const mt = (file.mimetype || '').toLowerCase();
       if (mt.includes('jpeg') || mt.includes('jpg')) return '.jpg';
