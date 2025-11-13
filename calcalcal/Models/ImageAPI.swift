@@ -1,14 +1,6 @@
 import Foundation
-import UIKit
 
 struct ImageAPI {
-    struct PresignResponse: Codable {
-        let uploadUrl: String
-        let objectKey: String
-        let publicUrl: String
-        let headers: [String: String]
-    }
-    
     struct UploadResponse: Codable {
         let publicUrl: String
         let relativeUrl: String?
@@ -43,13 +35,6 @@ struct ImageAPI {
         return request
     }
     
-    static func isLocalBaseURL() -> Bool {
-        let base = Configuration.apiURL
-        guard let url = URL(string: base), let host = url.host?.lowercased() else { return false }
-        return host == "localhost" || host == "127.0.0.1"
-    }
-    
-    // Development upload (multipart)
     static func uploadJPEG(data: Data, filename: String = "image.jpg", contentType: String = "image/jpeg") async throws -> UploadResponse {
         let base = Configuration.apiURL
         guard let url = URL(string: "\(base)/api/storage/upload") else { throw URLError(.badURL) }
@@ -88,53 +73,20 @@ struct ImageAPI {
         return decoded
     }
     
-    // Production presign + PUT upload
-    static func presignJPEG(filename: String = "image.jpg", contentType: String = "image/jpeg") async throws -> PresignResponse {
-        let base = Configuration.apiURL
-        guard let url = URL(string: "\(base)/api/storage/presign") else { throw URLError(.badURL) }
-        var request = try authorizedRequest(url: url, method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let payload: [String: Any] = ["filename": filename, "contentType": contentType]
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        
-        #if DEBUG
-        print("🪪 Presign start -> \(url.absoluteString)")
-        #endif
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if !(200..<300).contains(http.statusCode) {
-            let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Presign failed HTTP=\(http.statusCode) body=\(bodyText)")
-            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Presign failed: HTTP \(http.statusCode)"])
+    /// Ensure we send an absolute URL to the backend (required by server to fetch or inline the image)
+    private static func normalizeImageURL(_ imageUrl: String) -> String {
+        let trimmed = imageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
+            return trimmed
         }
-        let decoder = JSONDecoder()
-        let result = try decoder.decode(PresignResponse.self, from: data)
-        #if DEBUG
-        print("✅ Presign success -> publicUrl=\(result.publicUrl)")
-        #endif
-        return result
-    }
-    
-    static func putToPresignedURL(uploadUrl: String, headers: [String: String], data: Data) async throws {
-        guard let url = URL(string: uploadUrl) else { throw URLError(.badURL) }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        for (k, v) in headers {
-            request.setValue(v, forHTTPHeaderField: k)
+        // Prepend base API URL for relative paths like "uploads/..." or "/uploads/..."
+        var base = Configuration.apiURL
+        if base.hasSuffix("/") { base.removeLast() }
+        if trimmed.hasPrefix("/") {
+            return "\(base)\(trimmed)"
+        } else {
+            return "\(base)/\(trimmed)"
         }
-        #if DEBUG
-        print("⬆️ PUT upload start -> \(uploadUrl.prefix(80))\(uploadUrl.count > 80 ? "…" : "") bytes=\(data.count)")
-        #endif
-        let (_, response) = try await URLSession.shared.upload(for: request, from: data)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if !(200..<300).contains(http.statusCode) {
-            print("❌ PUT upload failed HTTP=\(http.statusCode)")
-            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "PUT upload failed: HTTP \(http.statusCode)"])
-        }
-        #if DEBUG
-        print("✅ PUT upload success")
-        #endif
     }
     
     static func analyzeImage(imageUrl: String, entryId: String? = nil, blockId: String? = nil) async throws -> AnalyzeImageResponse {
@@ -142,13 +94,14 @@ struct ImageAPI {
         guard let url = URL(string: "\(base)/api/ai/analyze-image") else { throw URLError(.badURL) }
         var request = try authorizedRequest(url: url, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var payload: [String: Any] = ["imageUrl": imageUrl]
+        let absoluteImageUrl = normalizeImageURL(imageUrl)
+        var payload: [String: Any] = ["imageUrl": absoluteImageUrl]
         if let entryId = entryId { payload["entryId"] = entryId }
         if let blockId = blockId { payload["blockId"] = blockId }
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         #if DEBUG
-        print("🤖 Analyze start imageUrl=\(imageUrl)")
+        print("🤖 Analyze start imageUrl=\(absoluteImageUrl)")
         #endif
         
         let (data, response) = try await URLSession.shared.data(for: request)

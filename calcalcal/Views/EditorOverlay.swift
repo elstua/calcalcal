@@ -102,29 +102,14 @@ struct EditorOverlay: View {
                         Task.detached(priority: .userInitiated) {
                             do {
                                 #if DEBUG
-                                print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok")
+                                print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
                                 #endif
-                                
-                                let publicUrl: String
-                                if ImageAPI.isLocalBaseURL() {
-                                    #if DEBUG
-                                    print("📤 Dev upload -> /api/storage/upload")
-                                    #endif
-                                    let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
-                                    publicUrl = upload.publicUrl
-                                } else {
-                                    #if DEBUG
-                                    print("🪪 Prod presign -> /api/storage/presign")
-                                    #endif
-                                    let presign = try await ImageAPI.presignJPEG(filename: "photo.jpg", contentType: "image/jpeg")
-                                    try await ImageAPI.putToPresignedURL(uploadUrl: presign.uploadUrl, headers: presign.headers, data: compressed.data)
-                                    publicUrl = presign.publicUrl
-                                }
+                                let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
                                 
                                 #if DEBUG
-                                print("📸 Pipeline: uploaded -> \(publicUrl), analyzing…")
+                                print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
                                 #endif
-                                let analysis = try await ImageAPI.analyzeImage(imageUrl: publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+                                let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
                                 
                                 #if DEBUG
                                 print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
