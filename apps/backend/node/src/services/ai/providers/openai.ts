@@ -9,7 +9,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
     content: string,
     options?: { temperature?: number; model?: string; prompt?: string; promptVersion?: string }
   ): Promise<NutritionAnalysisResult> {
-    const model = options?.model || process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+    const model = options?.model || process.env.AI_OPENAI_MODEL || 'gpt-5-nano';
     const temperature = options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
     const loaded = loadPrompt('nutrition');
     const systemPrompt = options?.prompt || loaded.text;
@@ -63,7 +63,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
   }
 }
 
-const defaultSystemPrompt = `You are a nutrition expert. Analyze the food description and return ONLY a valid JSON object with these exact fields (all numbers):
+const defaultSystemPrompt = `Analyze the food description from the nutrition point of view and return ONLY a valid JSON object with these exact fields (all numbers):
 {
   "calories": <number>,
   "protein": <number in grams>,
@@ -75,6 +75,6 @@ const defaultSystemPrompt = `You are a nutrition expert. Analyze the food descri
   "confidence": <number between 0 and 1>
 }
 
-If you cannot determine the nutrition, use your best estimate. Always return valid JSON.`;
+If you cannot determine the nutrition, use your best estimate. If the food description is not clear or very broad, like "dinner/breakfast/my lunch" without any specific description, return null. Try to split complex dishes into main ingredients and the way they are cooked, it will help you to get the correct nutrition. Always return valid JSON.`;
 
 
