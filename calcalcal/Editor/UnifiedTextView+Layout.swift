@@ -91,7 +91,10 @@ extension UnifiedTextView {
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard let metadata = metadata, paragraphRange.location < string.length, NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else { return }
+            // For imageText blocks, allow empty text to still create exclusion paths
+            if metadata.blockType != .imageText {
+                guard !paragraphText.isEmpty else { return }
+            }
             if metadata.blockType == .imageText {
                 let provider = layoutProvider(for: metadata.blockType)
                 exclusionPaths.append(contentsOf: provider.exclusionPaths(for: paragraphRange, in: self, metadata: metadata))
@@ -123,7 +126,7 @@ extension UnifiedTextView {
                   paragraphRange.location < string.length,
                   NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else { return }
+            // Allow empty text for imageText blocks
             currentImageRefs.insert(imageRef)
         }
         for (imageRef, imageView) in imageViews {
@@ -139,7 +142,7 @@ extension UnifiedTextView {
                   paragraphRange.location < string.length,
                   NSMaxRange(paragraphRange) <= string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else { return }
+            // Allow empty text for imageText blocks
             let boundingRect = self.boundingRect(for: paragraphRange)
             let containerWidth = self.textContainer.size.width - self.textContainer.lineFragmentPadding * 2
             let imageWidth = containerWidth * 0.3
@@ -214,7 +217,9 @@ extension UnifiedTextView {
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard paragraphRange.location < string.length else { return }
             let paragraphText = string.substring(with: paragraphRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !paragraphText.isEmpty else { return }
+            if metadata?.blockType != .imageText {
+                guard !paragraphText.isEmpty else { return }
+            }
             paragraphInfos.append((paragraphRange, metadata, blockIndex))
             blockIndex += 1
         }

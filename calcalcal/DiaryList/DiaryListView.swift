@@ -67,6 +67,7 @@ struct DiaryListView: View {
                 print("🐛 DEBUG: Found entry at index \(index), ID=\(entries[index].id.uuidString), was: \(entries[index].blocks.map { $0.type })")
                 entries[index].blocks = blocks
                 entries[index].lastModified = Date()
+                BlocksCache.shared.save(entryId: entryId, blocks: blocks)
                 print("🐛 DEBUG: Updated entry at index \(index), now: \(entries[index].blocks.map { $0.type })")
                 recalcTimeline()
             } else {

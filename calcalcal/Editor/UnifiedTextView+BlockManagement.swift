@@ -124,9 +124,13 @@ extension UnifiedTextView {
                     }
                     didChangeAnyText = true
                 }
-                // Update metadata for this block
-                let newRange = NSRange(location: blockRange.location, length: newAttributedText.length)
-                unifiedContentStorage.setBlockMetadata(metadata, for: newRange)
+                // Update metadata for this block; clamp to valid textStorage bounds
+                let maxLen = max(0, textStorage.length - blockRange.location)
+                let metaLength = min(newAttributedText.length, maxLen)
+                if metaLength > 0 && blockRange.location < textStorage.length {
+                    let newRange = NSRange(location: blockRange.location, length: metaLength)
+                    unifiedContentStorage.setBlockMetadata(metadata, for: newRange)
+                }
             }
             // Update visuals; if no text changed, still refresh lightweight visuals
             if didChangeAnyText {
@@ -528,6 +532,7 @@ extension UnifiedTextView {
     private func updateBlocksFromTextStorage() {
         let string = textStorage.string as NSString
         var newBlocks: [Block] = []
+        var paragraphIndex: Int = 0
         
         unifiedContentStorage.enumerateParagraphs { paragraphRange, metadata in
             guard paragraphRange.location < string.length else { return }
@@ -548,7 +553,7 @@ extension UnifiedTextView {
                     if let data = metadata.nutritionJSON {
                         nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
                     }
-                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition, imageUrl: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageUrl : nil), imageObjectKey: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageObjectKey : nil)))
                 case .imageText:
                     // Reconstruct even if text is empty
                     if let imageRef = metadata.imageReference, let image = imageMap[imageRef], let imageData = image.pngData() {
@@ -556,24 +561,44 @@ extension UnifiedTextView {
                         if let d = metadata.nutritionJSON {
                             nutrition = try? JSONDecoder().decode(NutritionData.self, from: d)
                         }
-                        newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
-                    } else {
-                        // Fallback: treat as text if image missing
+                        var block = Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                        // Preserve imageUrl/ObjectKey from previous model if available
+                        if paragraphIndex < self.blocks.count {
+                            block.imageUrl = self.blocks[paragraphIndex].imageUrl
+                            block.imageObjectKey = self.blocks[paragraphIndex].imageObjectKey
+                        }
+                        newBlocks.append(block)
+                    } else if let imageRef = metadata.imageReference {
+                        // Preserve image-text semantics even when image is not yet hydrated
                         var nutrition: NutritionData? = nil
                         if let data = metadata.nutritionJSON {
                             nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
                         }
-                        newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                        var block = Block(type: .imageText(Data(), imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                        if paragraphIndex < self.blocks.count {
+                            block.imageUrl = self.blocks[paragraphIndex].imageUrl
+                            block.imageObjectKey = self.blocks[paragraphIndex].imageObjectKey
+                        }
+                        newBlocks.append(block)
+                    } else {
+                        // No imageRef; fallback to text
+                        var nutrition: NutritionData? = nil
+                        if let data = metadata.nutritionJSON {
+                            nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                        }
+                        newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition, imageUrl: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageUrl : nil), imageObjectKey: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageObjectKey : nil)))
                     }
                 case .spacer:
                     newBlocks.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
                 }
+                paragraphIndex += 1
                 return
             }
             
             // No metadata: only keep non-empty text paragraphs
             guard !trimmed.isEmpty else { return }
-            newBlocks.append(Block(type: .text(paragraphText), calorieData: nil))
+            newBlocks.append(Block(type: .text(paragraphText), calorieData: nil, nutrition: nil, imageUrl: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageUrl : nil), imageObjectKey: (paragraphIndex < self.blocks.count ? self.blocks[paragraphIndex].imageObjectKey : nil)))
+            paragraphIndex += 1
         }
         
         // Update blocks array to keep SwiftUI state in sync

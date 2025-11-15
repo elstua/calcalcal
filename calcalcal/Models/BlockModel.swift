@@ -20,6 +20,10 @@ struct Block: Equatable, Identifiable {
     var type: BlockType
     var calorieData: String?
     var nutrition: NutritionData?
+    // Remote image association (persisted via content markers)
+    var imageUrl: String? = nil
+    // Optional backend object key if available
+    var imageObjectKey: String? = nil
     // Stable identifier used for change tracking within editor sessions
     var stableId: UUID? = nil
     // Add more metadata as needed
@@ -29,23 +33,42 @@ struct Block: Equatable, Identifiable {
 extension Block {
     static func == (lhs: Block, rhs: Block) -> Bool {
         // Include stableId to avoid treating blocks from different entries as equal when content matches
-        return lhs.type == rhs.type && lhs.calorieData == rhs.calorieData && lhs.nutrition == rhs.nutrition && lhs.stableId == rhs.stableId
+        return lhs.type == rhs.type
+        && lhs.calorieData == rhs.calorieData
+        && lhs.nutrition == rhs.nutrition
+        && lhs.imageUrl == rhs.imageUrl
+        && lhs.imageObjectKey == rhs.imageObjectKey
+        && lhs.stableId == rhs.stableId
     }
 }
 
 // MARK: - Text-only serialization utilities
 extension Array where Element == Block {
     /// Serialize blocks to a single plain text `content` string by joining text-bearing blocks
-    /// with double newline. Image and spacer blocks are ignored for v1 text persistence.
+    /// with double newline.
+    ///
+    /// For imageText blocks, we prepend a hidden marker line that preserves the image URL and reference:
+    /// [[IMG id=<uuid> url=<url>]]
+    /// <user text...>
     func toContentString() -> String {
         let paragraphs: [String] = self.compactMap { block in
             switch block.type {
             case .text(let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
-            case .imageText(_, _, let text):
+            case .imageText(_, let ref, let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : trimmed
+                if let url = block.imageUrl, !url.isEmpty {
+                    // Escape closing marker in URL minimally by replacing "]]" if present
+                    let safeUrl = url.replacingOccurrences(of: "]]", with: "%5D%5D")
+                    return """
+                    [[IMG id=\(ref.uuidString) url=\(safeUrl)]]
+                    \(trimmed)
+                    """
+                } else {
+                    // If we have no URL but text exists, persist text; if both empty, drop
+                    return trimmed.isEmpty ? nil : trimmed
+                }
             case .image:
                 return nil
             case .spacer:
@@ -101,11 +124,51 @@ extension Array where Element == Block {
 }
 
 extension String {
-    /// Deserialize a `content` string into text-only blocks by splitting on double newline.
-    /// Image/spacer information is not reconstructible in v1 and is omitted.
+    /// Deserialize a `content` string into blocks by splitting on double newline.
+    /// Supports image markers in the form:
+    /// [[IMG id=<uuid> url=<url>]]
+    /// <text...>
     func toTextBlocks() -> [Block] {
         let parts = self.components(separatedBy: "\n\n")
-        return parts.map { Block(type: .text($0), calorieData: nil, nutrition: nil) }
+        return parts.map { paragraph -> Block in
+            let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("[[IMG ") {
+                // Attempt to parse marker line
+                if let endIdx = trimmed.firstIndex(of: "]"),
+                   let endEndIdx = trimmed.index(endIdx, offsetBy: 1, limitedBy: trimmed.endIndex),
+                   endEndIdx < trimmed.endIndex,
+                   trimmed[endIdx...].hasPrefix("]]") || true {
+                    // Extract header between [[IMG and ]]
+                    if let rangeStart = trimmed.range(of: "[[IMG "),
+                       let rangeEnd = trimmed.range(of: "]]") {
+                        let header = String(trimmed[rangeStart.upperBound..<rangeEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let rest = String(trimmed[rangeEnd.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        var ref: UUID? = nil
+                        var url: String? = nil
+                        // Very simple parser: split by spaces, expect key=value pairs
+                        header.split(separator: " ").forEach { pair in
+                            let comps = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                            if comps.count == 2 {
+                                let key = comps[0]
+                                var value = comps[1]
+                                if key == "id" {
+                                    ref = UUID(uuidString: value)
+                                } else if key == "url" {
+                                    value = value.replacingOccurrences(of: "%5D%5D", with: "]]")
+                                    url = value
+                                }
+                            }
+                        }
+                        if let ref, !rest.isEmpty {
+                            var block = Block(type: .imageText(Data(), ref, rest), calorieData: nil, nutrition: nil)
+                            block.imageUrl = url
+                            return block
+                        }
+                    }
+                }
+            }
+            return Block(type: .text(paragraph), calorieData: nil, nutrition: nil)
+        }
     }
 }
 

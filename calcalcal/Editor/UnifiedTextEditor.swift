@@ -166,7 +166,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
             return
         }
 
-        // Apply content changes - partial if small, full otherwise
+        // Apply content changes; use full rebuild path for safety (image/text layout is complex)
         #if DEBUG
         print("[updateUIView] Applying content changes; indices=\(contentChangeIndices)")
         #endif
@@ -207,11 +207,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         textView.isProgrammaticUpdate = true
         textView.blocks = mergedBlocks
         let caretLocation = textView.selectedRange.location
-        if !contentChangeIndices.isEmpty && contentChangeIndices.count <= 2 {
-            textView.renderBlocks(restoreCaretTo: caretLocation, affectedBlockIndices: contentChangeIndices)
-        } else {
-            textView.renderBlocks(restoreCaretTo: caretLocation)
-        }
+        textView.renderBlocks(restoreCaretTo: caretLocation)
         textView.isProgrammaticUpdate = false
         #if DEBUG
         print("[updateUIView] Called renderBlocks()")
@@ -295,7 +291,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         }
         
         func textViewDidChange(_ textView: UITextView) {
-            guard let unifiedTextView = textView as? UnifiedTextView else { return }
+            guard textView is UnifiedTextView else { return }
             // Skip updates while the user is composing text (IME)
             if textView.markedTextRange != nil { return }
             // Debounce parsing and model updates to reduce churn

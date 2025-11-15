@@ -26,6 +26,12 @@ struct BigEntryBlock: View {
     // for the editor content to keep multiple views in perfect sync.
     var externalBlocks: Binding<[Block]>? = nil
     @State private var internalBlocks: [Block]
+    @State private var hydratedImageMap: [UUID: UIImage] = [:]
+    private var effectiveImageMap: [UUID: UIImage] {
+        var merged = imageMap
+        for (k, v) in hydratedImageMap { merged[k] = v }
+        return merged
+    }
     private var effectiveBlocks: Binding<[Block]> {
         if let externalBlocks { return externalBlocks }
         return $internalBlocks
@@ -76,7 +82,7 @@ struct BigEntryBlock: View {
             // Always show the full editor
             UnifiedTextEditor(
                 blocks: effectiveBlocks,
-                imageMap: imageMap,
+                imageMap: effectiveImageMap,
                 isEditable: isEditable,
                 shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
                 entryId: entry.id
@@ -110,15 +116,50 @@ struct BigEntryBlock: View {
             if externalBlocks == nil {
                 self.internalBlocks = newValue.withStableIdsAndChangeTracking()
             }
+            hydrateImages(for: newValue)
         }
         // Do not force full refresh; rely on stableId-aware diffs to prevent state bleed
         .id(entry.id)
+        .onAppear {
+            hydrateImages(for: entry.blocks)
+        }
     }
     
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMMM"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Image hydration
+extension BigEntryBlock {
+    private func hydrateImages(for blocks: [Block]) {
+        for block in blocks {
+            switch block.type {
+            case .imageText(_, let ref, _):
+                if hydratedImageMap[ref] != nil { continue }
+                if let url = block.imageUrl, !url.isEmpty {
+                    if let cached = ImageCache.shared.imageIfCached(for: url) {
+                        hydratedImageMap[ref] = cached
+                    } else {
+                        Task.detached { @MainActor in
+                            if let fetched = await ImageCache.shared.fetch(url) {
+                                hydratedImageMap[ref] = fetched
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to local cache key derived from entryId + imageRef
+                    let localKey = "local:\(entry.id.uuidString):\(ref.uuidString)"
+                    if let cached = ImageCache.shared.imageIfCached(for: localKey) {
+                        hydratedImageMap[ref] = cached
+                    }
+                }
+            default:
+                continue
+            }
+        }
     }
 }
 

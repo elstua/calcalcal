@@ -90,6 +90,9 @@ struct EditorOverlay: View {
                     let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
                     // Use resized image in the UI
                     imageMap[uuid] = compressed.resizedImage
+                    // Store in local image cache under deterministic key for fallback before URL is known
+                    let localKey = "local:\(entry.id.uuidString):\(uuid.uuidString)"
+                    ImageCache.shared.store(compressed.resizedImage, for: localKey)
                     // Store PNG data of resized image in the model for stable internal rendering
                     if let resizedPNG = compressed.resizedImage.pngData() {
                         let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
@@ -109,6 +112,22 @@ struct EditorOverlay: View {
                                 #if DEBUG
                                 print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
                                 #endif
+                                // Persist into disk cache for future sessions
+                                ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
+                                // Persist image URL/objectKey into the corresponding block for future reloads
+                                await MainActor.run {
+                                    if let idx = blocks.firstIndex(where: { block in
+                                        if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
+                                        return false
+                                    }) {
+                                        var updated = blocks[idx]
+                                        updated.imageUrl = upload.publicUrl
+                                        updated.imageObjectKey = upload.objectKey
+                                        blocks[idx] = updated
+                                        // Persist blocks cache immediately
+                                        BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
+                                    }
+                                }
                                 let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
                                 
                                 #if DEBUG
@@ -116,7 +135,7 @@ struct EditorOverlay: View {
                                 #endif
                                 
                                 // Build nutrition model
-                                var nutrition = NutritionData(
+                                let nutrition = NutritionData(
                                     calories: analysis.calories,
                                     protein: analysis.macros?.protein,
                                     fat: analysis.macros?.fat,
@@ -140,12 +159,15 @@ struct EditorOverlay: View {
                                         if case let .imageText(data, ref, _) = updated.type {
                                             updated.type = .imageText(data, ref, analysis.description)
                                         }
-                                        // Update nutrition & calorieData for UI
+                                        // Ensure image URL stays attached
+                                        updated.imageUrl = updated.imageUrl ?? upload.publicUrl
+                                        // Update nutrition & calorieData for UI (local-only, totals come from backend)
                                         updated.nutrition = nutrition
                                         if let cals = analysis.calories, cals > 0 {
                                             updated.calorieData = String(cals)
                                         }
                                         blocks[idx] = updated
+                                        BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
                                         #if DEBUG
                                         print("📸 Pipeline: block \(idx) updated with analysis")
                                         #endif
@@ -214,6 +236,8 @@ struct EditorOverlay: View {
                                 "analyzedBlocks": payload
                             ]
                         )
+                        // Hydrate any images from cache/network
+                        hydrateImagesForOverlay()
                     }
                 } catch {
                     // Best-effort; ignore if blocks not available yet
@@ -229,6 +253,8 @@ struct EditorOverlay: View {
             // Initialize lastSavedContent to current textual content to avoid initial autosave loop
             let initial = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
             lastSavedContent = initial
+            // Initial hydration pass
+            hydrateImagesForOverlay()
         }
         .onDisappear {
             // Cancel any pending async tasks to prevent contamination with new overlays
@@ -350,6 +376,7 @@ extension EditorOverlay {
                 forceExpanded: true,
                 onBlocksChange: { updated in
                     blocks = updated
+                    BlocksCache.shared.save(entryId: entry.id, blocks: updated)
                     scheduleAutosaveIfTextChanged(blocks: updated)
                 },
                 overrideTotalCalories: liveTotalCalories,
@@ -368,6 +395,7 @@ extension EditorOverlay {
             if updatedBlocks != newValue {
                 blocks = updatedBlocks
             }
+            BlocksCache.shared.save(entryId: entry.id, blocks: updatedBlocks)
             scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
         }
     }
@@ -376,6 +404,36 @@ extension EditorOverlay {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMMM"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Image hydration
+extension EditorOverlay {
+    private func hydrateImagesForOverlay() {
+        for block in blocks {
+            switch block.type {
+            case .imageText(_, let ref, _):
+                if imageMap[ref] != nil { continue }
+                if let url = block.imageUrl, !url.isEmpty {
+                    if let cached = ImageCache.shared.imageIfCached(for: url) {
+                        imageMap[ref] = cached
+                    } else {
+                        Task.detached { @MainActor in
+                            if let fetched = await ImageCache.shared.fetch(url) {
+                                imageMap[ref] = fetched
+                            }
+                        }
+                    }
+                } else {
+                    let localKey = "local:\(entry.id.uuidString):\(ref.uuidString)"
+                    if let cached = ImageCache.shared.imageIfCached(for: localKey) {
+                        imageMap[ref] = cached
+                    }
+                }
+            default:
+                continue
+            }
+        }
     }
 }
 
@@ -447,6 +505,8 @@ extension EditorOverlay {
                 print("⬆️ Upserting content for day \(day)… (overlay)")
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
                 print("🐛 DEBUG: Autosave result - local_id=\(entry.id.uuidString), db_id=\(row.id), db_date=\(row.date)")
+                // Save blocks cache after successful upsert
+                BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
                 
                 // Check if task was cancelled before starting AI analysis
                 if Task.isCancelled {
@@ -659,6 +719,8 @@ extension EditorOverlay {
                 lastSavedAt = Date()
                 lastSavedContent = trimmed
                 print("✅ Flush save success (no AI analysis)")
+                // Save blocks cache on flush as well
+                BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
             } else {
                 print("⚠️ Missing user id; deferring flush save")
             }
