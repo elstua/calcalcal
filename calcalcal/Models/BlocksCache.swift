@@ -213,6 +213,44 @@ final class BlocksCache {
         guard dto.entryId == entryId.uuidString else { return nil }
         return decodeBlocks(dto.blocks)
     }
+
+    /// Rename/migrate cached blocks when a placeholder entry receives its canonical server id.
+    func migrateEntry(from oldId: UUID, to newId: UUID) {
+        guard oldId != newId else { return }
+        ioQueue.async {
+            let fm = FileManager.default
+            let oldURL = self.fileURL(for: oldId)
+            let newURL = self.fileURL(for: newId)
+            guard fm.fileExists(atPath: oldURL.path) else { return }
+            
+            let decoder = JSONDecoder()
+            let isoFormatter = ISO8601DateFormatter()
+            
+            do {
+                if fm.fileExists(atPath: newURL.path) {
+                    let oldData = try Data(contentsOf: oldURL)
+                    let newData = try Data(contentsOf: newURL)
+                    let oldEntry = try decoder.decode(CachedEntry.self, from: oldData)
+                    let newEntry = try decoder.decode(CachedEntry.self, from: newData)
+                    let oldDate = isoFormatter.date(from: oldEntry.updatedAt) ?? .distantPast
+                    let newDate = isoFormatter.date(from: newEntry.updatedAt) ?? .distantPast
+                    
+                    if oldDate > newDate {
+                        try fm.removeItem(at: newURL)
+                        try oldData.write(to: newURL, options: .atomic)
+                    }
+                    try? fm.removeItem(at: oldURL)
+                } else {
+                    try fm.moveItem(at: oldURL, to: newURL)
+                }
+            } catch {
+                if !fm.fileExists(atPath: newURL.path) {
+                    try? fm.copyItem(at: oldURL, to: newURL)
+                }
+                try? fm.removeItem(at: oldURL)
+            }
+        }
+    }
 }
 
 

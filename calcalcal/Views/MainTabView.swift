@@ -74,6 +74,15 @@ struct MainTabView: View {
                 .zIndex(100)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
+            guard let info = notification.userInfo,
+                  let localId = info["localId"] as? UUID,
+                  let serverId = info["serverId"] as? UUID else { return }
+            if var current = presentedEntry, current.id == localId {
+                current.id = serverId
+                presentedEntry = current
+            }
+        }
     }
 }
 

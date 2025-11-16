@@ -7,6 +7,7 @@ struct EditorOverlay: View {
     @Binding var shouldBecomeFirstResponder: Bool
     let namespace: Namespace.ID
     let onClose: () -> Void
+    @State private var canonicalEntryId: UUID
     
     @State private var showImagePicker: Bool = false
     @State private var pickedImage: UIImage? = nil
@@ -23,6 +24,19 @@ struct EditorOverlay: View {
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
     
+    init(entry: DiaryEntry,
+         blocks: Binding<[Block]>,
+         shouldBecomeFirstResponder: Binding<Bool>,
+         namespace: Namespace.ID,
+         onClose: @escaping () -> Void) {
+        self.entry = entry
+        self._blocks = blocks
+        self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self.namespace = namespace
+        self.onClose = onClose
+        _canonicalEntryId = State(initialValue: entry.id)
+    }
+    
     var body: some View {
         ZStack(alignment: .top) {
             // Dimmed background with interactive opacity
@@ -34,7 +48,38 @@ struct EditorOverlay: View {
             // Wrapper that responds to keyboard. Keep matched view inside for stable geometry.
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    coreBigEntryView(entry: overlayEntry())
+                    DiaryEditorCard(
+                        entry: overlayEntry(),
+                        height: 550,
+                        cornerRadius: 24,
+                        showShadow: false,
+                        useExternalDecoration: true,
+                        onAddImage: { showImagePicker = true },
+                        imageMap: imageMap,
+                        isEditable: true,
+                        shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                        forceExpanded: true,
+                        onBlocksChange: { updated in
+                            blocks = updated
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
+                            scheduleAutosaveIfTextChanged(blocks: updated)
+                        },
+                        overrideTotalCalories: liveTotalCalories,
+                        externalBlocks: $blocks
+                    )
+                    .onChange(of: blocks) { newValue in
+                        let updatedBlocks = newValue.map { block in
+                            if block.stableId == nil {
+                                return block.withUpdatedChangeTracking()
+                            }
+                            return block
+                        }
+                        if updatedBlocks != newValue {
+                            blocks = updatedBlocks
+                        }
+                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
+                        scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
+                    }
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 0, style: .continuous)
@@ -91,8 +136,7 @@ struct EditorOverlay: View {
                     // Use resized image in the UI
                     imageMap[uuid] = compressed.resizedImage
                     // Store in local image cache under deterministic key for fallback before URL is known
-                    let localKey = "local:\(entry.id.uuidString):\(uuid.uuidString)"
-                    ImageCache.shared.store(compressed.resizedImage, for: localKey)
+                    ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
                     // Store PNG data of resized image in the model for stable internal rendering
                     if let resizedPNG = compressed.resizedImage.pngData() {
                         let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
@@ -125,7 +169,7 @@ struct EditorOverlay: View {
                                         updated.imageObjectKey = upload.objectKey
                                         blocks[idx] = updated
                                         // Persist blocks cache immediately
-                                        BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
+                                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                                     }
                                 }
                                 let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
@@ -167,7 +211,7 @@ struct EditorOverlay: View {
                                             updated.calorieData = String(cals)
                                         }
                                         blocks[idx] = updated
-                                        BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
+                                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                                         #if DEBUG
                                         print("📸 Pipeline: block \(idx) updated with analysis")
                                         #endif
@@ -201,8 +245,8 @@ struct EditorOverlay: View {
             // Fetch existing per-block calories for this entry (if already analyzed)
             loadTask = Task {
                 do {
-                    print("🐛 DEBUG: Loading blocks for entry.id=\(entry.id.uuidString)")
-                    let dbBlocks = try await DiaryAPI.getBlocksById(entry.id.uuidString)
+                    print("🐛 DEBUG: Loading blocks for entry.id=\(canonicalEntryId.uuidString)")
+                    let dbBlocks = try await DiaryAPI.getBlocksById(canonicalEntryId.uuidString)
                     print("🐛 DEBUG: getBlocksById returned \(dbBlocks.count) blocks: \(dbBlocks.map { $0.content ?? "nil" })")
                     
                     // Check if task was cancelled before applying results
@@ -232,7 +276,7 @@ struct EditorOverlay: View {
                             name: .editorApplyPerBlockMetadata,
                             object: nil,
                             userInfo: [
-                                "entryId": entry.id,
+                                "entryId": canonicalEntryId,
                                 "analyzedBlocks": payload
                             ]
                         )
@@ -261,9 +305,9 @@ struct EditorOverlay: View {
             loadTask?.cancel()
             loadTask = nil
             autosaveTask?.cancel()
-            print("🐛 DEBUG: EditorOverlay dismissed, calling cancel() on autosaveTask for entry.id=\(entry.id.uuidString)")
+            print("🐛 DEBUG: EditorOverlay dismissed, calling cancel() on autosaveTask for entry.id=\(canonicalEntryId.uuidString)")
             autosaveTask = nil
-            print("🐛 DEBUG: EditorOverlay dismissed, cancelled load and autosave tasks for entry.id=\(entry.id.uuidString)")
+            print("🐛 DEBUG: EditorOverlay dismissed, cancelled load and autosave tasks for entry.id=\(canonicalEntryId.uuidString)")
             
             flushSave()
             // Apply any queued remote updates only after editor closes
@@ -322,6 +366,7 @@ extension Notification.Name {
     static let editorParagraphCommitted = Notification.Name("editorParagraphCommitted")
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
+    static let diaryEntryCanonicalIdResolved = Notification.Name("diaryEntryCanonicalIdResolved")
 }
 
 // MARK: - Utilities
@@ -349,7 +394,7 @@ extension EditorOverlay {
     /// Precompute the `DiaryEntry` passed into BigEntryBlock to reduce type-checking complexity.
     private func overlayEntry() -> DiaryEntry {
         DiaryEntry(
-            id: entry.id,
+            id: canonicalEntryId,
             date: entry.date,
             blocks: blocks,
             totalCalories: liveTotalCalories ?? entry.totalCalories,
@@ -358,53 +403,6 @@ extension EditorOverlay {
         )
     }
 
-    /// Core BigEntryBlock view with shared modifiers.
-    @ViewBuilder
-    private func coreBigEntryView(entry: DiaryEntry) -> some View {
-            // Unified editable block with shared binding for perfect sync
-            BigEntryBlock(
-                entry: entry,
-                height: 550,
-                cornerRadius: 24,
-                showShadow: false,
-                useExternalDecoration: true,
-                onAddImage: { showImagePicker = true },
-                onTap: nil,
-                imageMap: imageMap,
-                isEditable: true,
-                shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                forceExpanded: true,
-                onBlocksChange: { updated in
-                    blocks = updated
-                    BlocksCache.shared.save(entryId: entry.id, blocks: updated)
-                    scheduleAutosaveIfTextChanged(blocks: updated)
-                },
-                overrideTotalCalories: liveTotalCalories,
-                externalBlocks: $blocks
-            )
-            .padding(.horizontal)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: blocks) { newValue in
-            // Update change tracking for modified blocks
-            let updatedBlocks = newValue.map { block in
-                if block.stableId == nil {
-                    return block.withUpdatedChangeTracking()
-                }
-                return block
-            }
-            if updatedBlocks != newValue {
-                blocks = updatedBlocks
-            }
-            BlocksCache.shared.save(entryId: entry.id, blocks: updatedBlocks)
-            scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
-        }
-    }
-    
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMMM"
-        return formatter.string(from: date)
-    }
 }
 
 // MARK: - Image hydration
@@ -425,8 +423,7 @@ extension EditorOverlay {
                         }
                     }
                 } else {
-                    let localKey = "local:\(entry.id.uuidString):\(ref.uuidString)"
-                    if let cached = ImageCache.shared.imageIfCached(for: localKey) {
+                    if let cached = ImageCache.shared.localImage(ref: ref, legacyEntryId: entry.id) {
                         imageMap[ref] = cached
                     }
                 }
@@ -439,6 +436,14 @@ extension EditorOverlay {
 
 // MARK: - Autosave helpers
 extension EditorOverlay {
+    @MainActor
+    private func canonicalizeEntryIfNeeded(row: DiaryAPI.Row, blocks: [Block]) {
+        guard let serverUUID = UUID(uuidString: row.id) else { return }
+        if serverUUID == canonicalEntryId { return }
+        EntryIdentityCoordinator.shared.canonicalize(localId: canonicalEntryId, serverId: serverUUID, blocks: blocks)
+        canonicalEntryId = serverUUID
+    }
+    
     private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
         // Only autosave on explicit paragraph commit or when editing a previously saved paragraph.
         // Routine text changes are ignored; notifications will trigger scheduleAutosave(blocks:).
@@ -478,7 +483,7 @@ extension EditorOverlay {
     private func save(blocks: [Block]) async {
         // Check if task was cancelled before starting save
         if Task.isCancelled {
-            print("🐛 DEBUG: Save task cancelled for entry.id=\(entry.id.uuidString)")
+            print("🐛 DEBUG: Save task cancelled for entry.id=\(canonicalEntryId.uuidString)")
             return
         }
         
@@ -494,7 +499,7 @@ extension EditorOverlay {
         }
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        print("🐛 DEBUG: entry.id=\(entry.id.uuidString), entry.date=\(entry.date), computed day=\(day)")
+        print("🐛 DEBUG: entry.id=\(canonicalEntryId.uuidString), entry.date=\(entry.date), computed day=\(day)")
         do {
             // Ensure we have a valid authenticated session for writes (RLS requires it)
             guard let _ = try? KeychainManager.shared.loadTokens() else {
@@ -504,13 +509,16 @@ extension EditorOverlay {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 print("⬆️ Upserting content for day \(day)… (overlay)")
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
-                print("🐛 DEBUG: Autosave result - local_id=\(entry.id.uuidString), db_id=\(row.id), db_date=\(row.date)")
+                print("🐛 DEBUG: Autosave result - local_id=\(canonicalEntryId.uuidString), db_id=\(row.id), db_date=\(row.date)")
+                await MainActor.run {
+                    canonicalizeEntryIfNeeded(row: row, blocks: blocks)
+                }
                 // Save blocks cache after successful upsert
-                BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
+                BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                 
                 // Check if task was cancelled before starting AI analysis
                 if Task.isCancelled {
-                    print("🐛 DEBUG: Save task cancelled before AI analysis for entry.id=\(entry.id.uuidString)")
+                    print("🐛 DEBUG: Save task cancelled before AI analysis for entry.id=\(canonicalEntryId.uuidString)")
                     return
                 }
                 
@@ -529,7 +537,7 @@ extension EditorOverlay {
                                     name: .diaryEntryTotalsUpdated,
                                     object: nil,
                                     userInfo: [
-                                        "entryId": entry.id,
+                                        "entryId": canonicalEntryId,
                                         "totalCalories": 0
                                     ]
                                 )
@@ -619,7 +627,7 @@ extension EditorOverlay {
                                             name: .diaryEntryTotalsUpdated,
                                             object: nil,
                                             userInfo: [
-                                                "entryId": entry.id,
+                                                "entryId": canonicalEntryId,
                                                 "totalCalories": refreshed.total_calories as Any
                                             ]
                                         )
@@ -656,7 +664,7 @@ extension EditorOverlay {
                                                 name: .editorApplyPerBlockMetadata,
                                                 object: nil,
                                                 userInfo: [
-                                                    "entryId": entry.id,
+                                                    "entryId": canonicalEntryId,
                                                     "analyzedBlocks": payload
                                                 ]
                                             )
@@ -674,7 +682,7 @@ extension EditorOverlay {
                         name: .diaryEntryTotalsUpdated,
                         object: nil,
                         userInfo: [
-                            "entryId": entry.id,
+                            "entryId": canonicalEntryId,
                             "totalCalories": row.total_calories as Any
                         ]
                     )
@@ -714,13 +722,16 @@ extension EditorOverlay {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 print("⬆️ Flush saving content for day \(day)… (overlay)")
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
-                print("🐛 DEBUG: Flush save result - local_id=\(entry.id.uuidString), db_id=\(row.id)")
+                print("🐛 DEBUG: Flush save result - local_id=\(canonicalEntryId.uuidString), db_id=\(row.id)")
+                await MainActor.run {
+                    canonicalizeEntryIfNeeded(row: row, blocks: blocks)
+                }
                 
                 lastSavedAt = Date()
                 lastSavedContent = trimmed
                 print("✅ Flush save success (no AI analysis)")
                 // Save blocks cache on flush as well
-                BlocksCache.shared.save(entryId: entry.id, blocks: blocks)
+                BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
             } else {
                 print("⚠️ Missing user id; deferring flush save")
             }

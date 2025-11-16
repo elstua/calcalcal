@@ -230,6 +230,7 @@ struct UnifiedTextEditor: UIViewRepresentable {
         let nsString = textView.textStorage.string as NSString
         var reconstructed: [Block] = []
         var location = 0
+        var paragraphIndex = 0
         while location < nsString.length {
             var paragraphStart = 0
             var paragraphEnd = 0
@@ -249,23 +250,62 @@ struct UnifiedTextEditor: UIViewRepresentable {
                     if let data = metadata.nutritionJSON {
                         nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
                     }
-                    reconstructed.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                    var block = Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                    // Preserve image-related metadata even for text paragraphs to avoid losing URLs when rebuilding
+                    if paragraphIndex < blocks.count {
+                        block.imageUrl = blocks[paragraphIndex].imageUrl
+                        block.imageObjectKey = blocks[paragraphIndex].imageObjectKey
+                    }
+                    reconstructed.append(block)
                 case .imageText:
-                    if let imageRef = metadata.imageReference,
-                       let image = textView.imageMap[imageRef],
-                       let data = image.pngData() {
+                    if let imageRef = metadata.imageReference {
                         var nutrition: NutritionData? = nil
                         if let ndata = metadata.nutritionJSON {
                             nutrition = try? JSONDecoder().decode(NutritionData.self, from: ndata)
                         }
-                        reconstructed.append(Block(type: .imageText(data, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                        if let image = textView.imageMap[imageRef], let data = image.pngData() {
+                            var block = Block(type: .imageText(data, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                            // Preserve URL/objectKey if they existed in the previous model snapshot
+                            if paragraphIndex < blocks.count {
+                                block.imageUrl = blocks[paragraphIndex].imageUrl
+                                block.imageObjectKey = blocks[paragraphIndex].imageObjectKey
+                            }
+                            reconstructed.append(block)
+                        } else {
+                            // Preserve image-text block even when image isn't hydrated yet
+                            var block = Block(type: .imageText(Data(), imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                            if paragraphIndex < blocks.count {
+                                block.imageUrl = blocks[paragraphIndex].imageUrl
+                                block.imageObjectKey = blocks[paragraphIndex].imageObjectKey
+                            }
+                            reconstructed.append(block)
+                        }
+                    } else {
+                        // Defensive fallback: treat as text while preserving metadata
+                        var nutrition: NutritionData? = nil
+                        if let data = metadata.nutritionJSON {
+                            nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
+                        }
+                        var block = Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                        if paragraphIndex < blocks.count {
+                            block.imageUrl = blocks[paragraphIndex].imageUrl
+                            block.imageObjectKey = blocks[paragraphIndex].imageObjectKey
+                        }
+                        reconstructed.append(block)
                     }
                 case .spacer:
                     reconstructed.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
                 }
+                paragraphIndex += 1
             } else {
                 // Fallback: treat as a plain text block when no metadata present
-                reconstructed.append(Block(type: .text(paragraphText), calorieData: nil, nutrition: nil))
+                var block = Block(type: .text(paragraphText), calorieData: nil, nutrition: nil)
+                if paragraphIndex < blocks.count {
+                    block.imageUrl = blocks[paragraphIndex].imageUrl
+                    block.imageObjectKey = blocks[paragraphIndex].imageObjectKey
+                }
+                reconstructed.append(block)
+                paragraphIndex += 1
             }
 
             location = paragraphEnd

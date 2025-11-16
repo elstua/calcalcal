@@ -3,7 +3,7 @@ import Foundation
 // If not, move BlockModel.swift to Models/ or ensure it is in the same target.
 
 struct DiaryEntry: Identifiable, Equatable {
-    let id: UUID
+    var id: UUID
     let date: Date
     var blocks: [Block] // If error: ensure BlockModel.swift is in the same target
     var totalCalories: Int?

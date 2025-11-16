@@ -83,12 +83,29 @@ struct DiaryListView: View {
                 recalcTimeline()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
+            guard let info = notification.userInfo,
+                  let localId = info["localId"] as? UUID,
+                  let serverId = info["serverId"] as? UUID else { return }
+            if let index = entries.firstIndex(where: { $0.id == localId }) {
+                entries[index].id = serverId
+                recalcTimeline()
+            }
+            if var current = selectedEntry, current.id == localId {
+                current.id = serverId
+                selectedEntry = current
+            }
+        }
     }
 
     @ViewBuilder
     private func timelineRowView(index: Int, item: TimelineItem) -> some View {
         switch item {
         case .todayEntry(let entry):
+            let openAction = {
+                if let open = onRequestOpen { open(entry) }
+                else { showPopup = true; selectedEntry = entry }
+            }
             if let ns = sharedNamespace {
                 ZStack {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -96,41 +113,42 @@ struct DiaryListView: View {
                         .matchedGeometryEffect(id: "bg-\(entry.id)", in: ns)
                         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
                         .allowsHitTesting(false)
-                    BigEntryBlock(
+                    DiaryEditorCard(
                         entry: entry,
                         height: 550,
                         cornerRadius: 0,
                         showShadow: false,
                         useExternalDecoration: true,
-                        onAddImage: { },
-                        onTap: { },
+                        imageMap: [:],
                         isEditable: false,
-                        shouldBecomeFirstResponder: .constant(false)
+                        shouldBecomeFirstResponder: .constant(false),
+                        forceExpanded: false
                     )
-                    .padding(.horizontal)
                 }
                 .matchedGeometryEffect(id: entry.id, in: ns)
                 .contentShape(Rectangle())
-                .highPriorityGesture(
-                    TapGesture().onEnded {
-                        if let open = onRequestOpen { open(entry) }
-                        else { showPopup = true; selectedEntry = entry }
-                    }
-                )
+                .highPriorityGesture(TapGesture().onEnded(openAction))
                 .opacity(presentedEntryId == entry.id ? 0 : 1)
                 .allowsHitTesting(presentedEntryId != entry.id)
             } else {
-                BigEntryBlock(
-                    entry: entry,
-                    onAddImage: { },
-                    onTap: {
-                        if let open = onRequestOpen { open(entry) }
-                        else { showPopup = true; selectedEntry = entry }
-                    },
-                    isEditable: false,
-                    shouldBecomeFirstResponder: .constant(false)
-                )
-                .padding(.horizontal)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        .allowsHitTesting(false)
+                    DiaryEditorCard(
+                        entry: entry,
+                        cornerRadius: 0,
+                        showShadow: false,
+                        useExternalDecoration: true,
+                        imageMap: [:],
+                        isEditable: false,
+                        shouldBecomeFirstResponder: .constant(false),
+                        forceExpanded: false
+                    )
+                }
+                .contentShape(Rectangle())
+                .highPriorityGesture(TapGesture().onEnded(openAction))
             }
         case .entry(let entry):
             if let ns = sharedNamespace {
@@ -320,6 +338,13 @@ struct DiaryEntryPopupView: View {
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
     @State private var lastSavedContent: String? = nil
+    @State private var canonicalEntryId: UUID
+
+    init(entry: DiaryEntry, isPresented: Binding<Bool>) {
+        self._entry = State(initialValue: entry)
+        self._isPresented = isPresented
+        _canonicalEntryId = State(initialValue: entry.id)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -339,6 +364,7 @@ struct DiaryEntryPopupView: View {
                 forceExpanded: true,
                 onBlocksChange: { newBlocks in
                     entry.blocks = newBlocks
+                    BlocksCache.shared.save(entryId: canonicalEntryId, blocks: newBlocks)
                 }
             )
                 .padding()
@@ -346,6 +372,7 @@ struct DiaryEntryPopupView: View {
                 .shadow(radius: 10)
                 .onChange(of: entry.blocks) { newBlocks in
                     scheduleAutosaveIfTextChanged(blocks: newBlocks)
+                    BlocksCache.shared.save(entryId: canonicalEntryId, blocks: newBlocks)
                 }
             Spacer()
         }
@@ -426,6 +453,7 @@ struct DiaryEntryPopupView: View {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
                 await MainActor.run {
+                    canonicalizeEntryIfNeeded(row: row, blocks: blocks)
                     // Update visible totals in the editor footer
                     entry.totalCalories = row.total_calories
                     // Broadcast to update day list cards in place
@@ -433,11 +461,12 @@ struct DiaryEntryPopupView: View {
                         name: .diaryEntryTotalsUpdated,
                         object: nil,
                         userInfo: [
-                            "entryId": entry.id,
+                            "entryId": canonicalEntryId,
                             "totalCalories": row.total_calories as Any
                         ]
                     )
                 }
+                BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
             } else {
                 // Fallback: do nothing; next save will update once user id is available.
                 print("⚠️ Missing user id; deferring insert until available")
@@ -455,6 +484,17 @@ struct DiaryEntryPopupView: View {
 // MARK: - Notifications
 extension Notification.Name {
     static let diaryEntryTotalsUpdated = Notification.Name("diaryEntryTotalsUpdated")
+}
+
+extension DiaryEntryPopupView {
+    @MainActor
+    private func canonicalizeEntryIfNeeded(row: DiaryAPI.Row, blocks: [Block]) {
+        guard let serverUUID = UUID(uuidString: row.id) else { return }
+        if serverUUID == canonicalEntryId { return }
+        EntryIdentityCoordinator.shared.canonicalize(localId: canonicalEntryId, serverId: serverUUID, blocks: blocks)
+        canonicalEntryId = serverUUID
+        entry.id = serverUUID
+    }
 }
 
 // MARK: - Mock Data Generation

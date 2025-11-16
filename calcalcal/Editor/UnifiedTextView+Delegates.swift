@@ -143,6 +143,7 @@ extension UnifiedTextView {
         let string = textStorage.string as NSString
         var newBlocks: [Block] = []
         var location = 0
+        var paraIndex = 0
         while location < string.length {
             var paragraphStart = 0
             var paragraphEnd = 0
@@ -163,23 +164,57 @@ extension UnifiedTextView {
                     if let data = metadata.nutritionJSON {
                         nutrition = try? JSONDecoder().decode(NutritionData.self, from: data)
                     }
-                    newBlocks.append(Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                    var block = Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                    // Preserve image URL/objectKey if present in previous snapshot at same index
+                    if paraIndex < self.blocks.count {
+                        block.imageUrl = self.blocks[paraIndex].imageUrl
+                        block.imageObjectKey = self.blocks[paraIndex].imageObjectKey
+                    }
+                    newBlocks.append(block)
                 case .imageText:
-                    if let imageRef = metadata.imageReference, let image = imageMap[imageRef], let imageData = image.pngData() {
-                        // Preserve both image and text
+                    if let imageRef = metadata.imageReference {
                         var nutrition: NutritionData? = nil
                         if let d = metadata.nutritionJSON {
                             nutrition = try? JSONDecoder().decode(NutritionData.self, from: d)
                         }
-                        newBlocks.append(Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition))
+                        let imageData: Data = {
+                            if let image = imageMap[imageRef], let data = image.pngData() { return data }
+                            // Preserve image block even if not hydrated yet
+                            return Data()
+                        }()
+                        var block = Block(type: .imageText(imageData, imageRef, paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                        // Preserve URL/objectKey from previous snapshot at same index
+                        if paraIndex < self.blocks.count {
+                            block.imageUrl = self.blocks[paraIndex].imageUrl
+                            block.imageObjectKey = self.blocks[paraIndex].imageObjectKey
+                        }
+                        newBlocks.append(block)
+                    } else {
+                        // Defensive fallback: treat as text while preserving metadata-only changes
+                        var nutrition: NutritionData? = nil
+                        if let d = metadata.nutritionJSON {
+                            nutrition = try? JSONDecoder().decode(NutritionData.self, from: d)
+                        }
+                        var block = Block(type: .text(paragraphText), calorieData: metadata.calorieData, nutrition: nutrition)
+                        if paraIndex < self.blocks.count {
+                            block.imageUrl = self.blocks[paraIndex].imageUrl
+                            block.imageObjectKey = self.blocks[paraIndex].imageObjectKey
+                        }
+                        newBlocks.append(block)
                     }
                 case .spacer:
                     newBlocks.append(Block(type: .spacer, calorieData: nil, nutrition: nil))
                 }
             } else {
                 // Fallback: treat as text block
-                newBlocks.append(makeTextBlock(paragraphText))
+                var block = makeTextBlock(paragraphText)
+                if paraIndex < self.blocks.count {
+                    block.imageUrl = self.blocks[paraIndex].imageUrl
+                    block.imageObjectKey = self.blocks[paraIndex].imageObjectKey
+                }
+                newBlocks.append(block)
             }
+            paraIndex += 1
             location = paragraphEnd
         }
         // Only update local blocks snapshot; rendering is centralized via SwiftUI's updateUIView

@@ -150,9 +150,7 @@ extension BigEntryBlock {
                         }
                     }
                 } else {
-                    // Fallback to local cache key derived from entryId + imageRef
-                    let localKey = "local:\(entry.id.uuidString):\(ref.uuidString)"
-                    if let cached = ImageCache.shared.imageIfCached(for: localKey) {
+                    if let cached = ImageCache.shared.localImage(ref: ref, legacyEntryId: entry.id) {
                         hydratedImageMap[ref] = cached
                     }
                 }
