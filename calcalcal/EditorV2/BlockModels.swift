@@ -25,23 +25,32 @@ public enum BlockKind: Equatable, Codable {
 }
 
 @available(iOS 16.0, *)
+public enum BlockContent: Equatable {
+    case text(String)
+    case image(data: Data?, size: CGSize?, caption: String?)
+}
+
+@available(iOS 16.0, *)
 public struct BlockStyle: Equatable {
     public var contentInsets: NSDirectionalEdgeInsets
     public var cornerRadius: CGFloat
     public var backgroundColor: UIColor
     public var spacingBefore: CGFloat
     public var spacingAfter: CGFloat
+    public var minimumContentHeight: CGFloat
     
     public init(contentInsets: NSDirectionalEdgeInsets,
                 cornerRadius: CGFloat,
                 backgroundColor: UIColor,
                 spacingBefore: CGFloat,
-                spacingAfter: CGFloat) {
+                spacingAfter: CGFloat,
+                minimumContentHeight: CGFloat = 0) {
         self.contentInsets = contentInsets
         self.cornerRadius = cornerRadius
         self.backgroundColor = backgroundColor
         self.spacingBefore = spacingBefore
         self.spacingAfter = spacingAfter
+        self.minimumContentHeight = minimumContentHeight
     }
 }
 
@@ -52,17 +61,20 @@ public struct BlockMetadata: Equatable {
     public var style: BlockStyle
     public var calorieLabel: String?
     public var range: NSRange
+    public var content: BlockContent
     
     public init(id: BlockID = BlockID(),
                 kind: BlockKind,
                 style: BlockStyle? = nil,
                 calorieLabel: String? = nil,
-                range: NSRange) {
+                range: NSRange,
+                content: BlockContent = .text("")) {
         self.id = id
         self.kind = kind
         self.style = style ?? kind.defaultStyle
         self.calorieLabel = calorieLabel
         self.range = range
+        self.content = content
     }
 }
 
@@ -84,8 +96,18 @@ public struct BlockDocument: Equatable {
         var paragraphIndex = 0
         
         string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, _ in
-            let trimmed = string.substring(with: substringRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            let kind: BlockKind = trimmed.isEmpty ? .paragraph : .paragraph
+            let paragraphText = string.substring(with: substringRange)
+            let (kind, content): (BlockKind, BlockContent)
+            if paragraphText.hasPrefix("::image::") {
+                kind = .image
+                let caption = paragraphText
+                    .replacingOccurrences(of: "::image::", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                content = .image(data: nil, size: nil, caption: caption.isEmpty ? nil : caption)
+            } else {
+                kind = .paragraph
+                content = .text(paragraphText)
+            }
             let spacingBefore: CGFloat = paragraphIndex == 0 ? 0 : 16
             let spacingAfter: CGFloat = 12
             let style = BlockStyle(
@@ -93,9 +115,10 @@ public struct BlockDocument: Equatable {
                 cornerRadius: 12,
                 backgroundColor: UIColor.secondarySystemBackground,
                 spacingBefore: spacingBefore,
-                spacingAfter: spacingAfter
+                spacingAfter: spacingAfter,
+                minimumContentHeight: kind == .image ? 220 : 0
             )
-            let block = BlockMetadata(kind: kind, style: style, range: enclosingRange)
+            let block = BlockMetadata(kind: kind, style: style, range: enclosingRange, content: content)
             result.append(block)
             paragraphIndex += 1
         }
@@ -125,15 +148,17 @@ public extension BlockStyle {
         cornerRadius: 14,
         backgroundColor: UIColor.secondarySystemBackground,
         spacingBefore: 12,
-        spacingAfter: 12
+        spacingAfter: 12,
+        minimumContentHeight: 0
     )
     
     static let imageDefault = BlockStyle(
-        contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0),
+        contentInsets: NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16),
         cornerRadius: 18,
         backgroundColor: UIColor.tertiarySystemBackground,
         spacingBefore: 20,
-        spacingAfter: 20
+        spacingAfter: 20,
+        minimumContentHeight: 100
     )
 }
 

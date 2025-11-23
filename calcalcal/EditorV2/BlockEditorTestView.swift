@@ -3,7 +3,7 @@ import SwiftUI
 struct BlockEditorTestView: View {
     @State private var text: String = """
     Bulletproof coffee
-    Overnight oats with chia and banana
+    ::image::Morning smoothie
     Grilled salmon with quinoa bowl
     Dark chocolate square
     """

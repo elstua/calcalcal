@@ -105,6 +105,7 @@ final class BlockTextContentStorage: NSTextContentStorage, NSTextStorageDelegate
         let fullRange = NSRange(location: 0, length: storageLength)
         backingStore.removeAttribute(BlockAttributeKeys.blockIdentifier, range: fullRange)
         backingStore.removeAttribute(.paragraphStyle, range: fullRange)
+        backingStore.removeAttribute(.foregroundColor, range: fullRange)
         
         for block in document.blocks {
             let clampedRange = clampedRange(for: block.range, upperBound: storageLength)
@@ -113,6 +114,10 @@ final class BlockTextContentStorage: NSTextContentStorage, NSTextStorageDelegate
             backingStore.addAttribute(BlockAttributeKeys.blockIdentifier, value: block.id.rawValue, range: clampedRange)
             let paragraphStyle = paragraphStyle(for: block)
             backingStore.addAttribute(.paragraphStyle, value: paragraphStyle, range: clampedRange)
+            
+             if block.kind == .image {
+                backingStore.addAttribute(.foregroundColor, value: UIColor.clear, range: clampedRange)
+            }
         }
         backingStore.endEditing()
     }
@@ -128,7 +133,14 @@ final class BlockTextContentStorage: NSTextContentStorage, NSTextStorageDelegate
         style.lineBreakMode = .byWordWrapping
         style.paragraphSpacingBefore = block.style.spacingBefore
         style.paragraphSpacing = block.style.spacingAfter
-        style.lineHeightMultiple = 1.14
+        if block.kind == .image {
+            let minHeight = max(block.style.minimumContentHeight + block.style.contentInsets.top + block.style.contentInsets.bottom, 1)
+            style.minimumLineHeight = minHeight
+            style.maximumLineHeight = minHeight
+            style.alignment = .center
+        } else {
+            style.lineHeightMultiple = 1.14
+        }
         return style
     }
 }
