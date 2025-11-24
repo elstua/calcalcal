@@ -27,17 +27,12 @@ final class BlockTextLayoutController: NSObject, NSTextLayoutManagerDelegate {
     // MARK: - NSTextLayoutManagerDelegate
     
     func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, textLayoutFragmentFor location: NSTextLocation, in textElement: NSTextElement) -> NSTextLayoutFragment {
-        let block = textElement.elementRange.flatMap { blockContentStorage?.block(for: $0) }
-        switch block?.kind {
-        case .image:
-            let fragment = ImageBlockLayoutFragment(textElement: textElement, range: nil)
+        let fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
+        if let blockRange = textElement.elementRange,
+           let block = blockContentStorage?.block(for: blockRange) {
             fragment.blockMetadata = block
-            return fragment
-        default:
-            let fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
-            fragment.blockMetadata = block
-            return fragment
         }
+        return fragment
     }
     
     private func paragraphStyle(for block: BlockMetadata) -> NSParagraphStyle {
