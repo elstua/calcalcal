@@ -52,17 +52,21 @@ public struct BlockMetadata: Equatable {
     public var style: BlockStyle
     public var calorieLabel: String?
     public var range: NSRange
+    /// For image blocks, the actual image to display as an overlay.
+    public var image: UIImage?
     
     public init(id: BlockID = BlockID(),
                 kind: BlockKind,
                 style: BlockStyle? = nil,
                 calorieLabel: String? = nil,
-                range: NSRange) {
+                range: NSRange,
+                image: UIImage? = nil) {
         self.id = id
         self.kind = kind
         self.style = style ?? kind.defaultStyle
         self.calorieLabel = calorieLabel
         self.range = range
+        self.image = image
     }
 }
 
@@ -84,14 +88,12 @@ public struct BlockDocument: Equatable {
         
         string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, _ in
             // Detect whether this paragraph string contains the special
-            // attachment character used by `NSTextAttachment`. This lets us
-            // classify image blocks *without* touching attributes, which
-            // avoids the NSRangeException we were seeing from TextStorage.
+            // marker character (U+FFFC) used for image blocks.
             let paragraphString = string.substring(with: substringRange)
-            let attachmentChar = Character(UnicodeScalar(NSTextAttachment.character)!)
-            let isImageBlock = paragraphString.contains(attachmentChar)
+            let markerChar = Character(UnicodeScalar(NSTextAttachment.character)!)
+            let isImageBlock = paragraphString.contains(markerChar)
             let kind: BlockKind = isImageBlock ? .image : .paragraph
-            let spacingBefore: CGFloat = paragraphIndex == 0 ? 0 : 16
+            let spacingBefore: CGFloat = paragraphIndex == 0 ? 0 : 32
             let spacingAfter: CGFloat = 12
             let baseStyle: BlockStyle = kind.defaultStyle
             let style = BlockStyle(
@@ -101,7 +103,16 @@ public struct BlockDocument: Equatable {
                 spacingBefore: spacingBefore,
                 spacingAfter: spacingAfter
             )
-            let block = BlockMetadata(kind: kind, style: style, range: enclosingRange)
+            
+            // For image blocks, try to extract the BlockID from the marker's attribute.
+            var blockID = BlockID()
+            if isImageBlock, enclosingRange.location < textStorage.length {
+                if let uuid = textStorage.attribute(BlockAttributeKeys.imageBlockID, at: enclosingRange.location, effectiveRange: nil) as? UUID {
+                    blockID = BlockID(rawValue: uuid)
+                }
+            }
+            
+            let block = BlockMetadata(id: blockID, kind: kind, style: style, range: enclosingRange)
             result.append(block)
             paragraphIndex += 1
         }

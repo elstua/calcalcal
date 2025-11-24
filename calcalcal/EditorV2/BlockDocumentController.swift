@@ -10,6 +10,9 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
     
     private(set) var document = BlockDocument()
     
+    /// Called after the document is rebuilt so the text view can update overlays.
+    var onDocumentChange: (() -> Void)?
+    
     init(textStorage: NSTextStorage, contentManager: NSTextContentManager) {
         self.textStorage = textStorage
         self.contentManager = contentManager
@@ -43,6 +46,7 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
     private func rebuildBlocks() {
         guard let storage = textStorage else { return }
         document.rebuild(from: storage)
+        onDocumentChange?()
     }
     
     private func nsRange(for textRange: NSTextRange) -> NSRange? {

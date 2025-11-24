@@ -3,6 +3,8 @@ import Foundation
 enum BlockAttributeKeys {
     static let blockIdentifier = NSAttributedString.Key("BlockIdentifierAttribute")
     static let blockKind = NSAttributedString.Key("BlockKindAttribute")
+    /// Attribute key used to tag image block marker characters with their BlockID.
+    static let imageBlockID = NSAttributedString.Key("ImageBlockIDAttribute")
 }
 
 extension NSAttributedString {
