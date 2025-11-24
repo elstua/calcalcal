@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 
-@available(iOS 16.0, *)
 public struct BlockID: Hashable, Codable {
     public let rawValue: UUID
     public init(rawValue: UUID = UUID()) {
@@ -9,10 +8,13 @@ public struct BlockID: Hashable, Codable {
     }
 }
 
-@available(iOS 16.0, *)
 public enum BlockKind: Equatable, Codable {
     case paragraph
     case image
+    
+    var isImage: Bool {
+        self == .image
+    }
     
     var defaultStyle: BlockStyle {
         switch self {
@@ -24,7 +26,6 @@ public enum BlockKind: Equatable, Codable {
     }
 }
 
-@available(iOS 16.0, *)
 public struct BlockStyle: Equatable {
     public var contentInsets: NSDirectionalEdgeInsets
     public var cornerRadius: CGFloat
@@ -45,7 +46,6 @@ public struct BlockStyle: Equatable {
     }
 }
 
-@available(iOS 16.0, *)
 public struct BlockMetadata: Equatable {
     public var id: BlockID
     public var kind: BlockKind
@@ -66,7 +66,6 @@ public struct BlockMetadata: Equatable {
     }
 }
 
-@available(iOS 16.0, *)
 public struct BlockDocument: Equatable {
     public private(set) var blocks: [BlockMetadata]
     
@@ -84,14 +83,21 @@ public struct BlockDocument: Equatable {
         var paragraphIndex = 0
         
         string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, _ in
-            let trimmed = string.substring(with: substringRange).trimmingCharacters(in: .whitespacesAndNewlines)
-            let kind: BlockKind = trimmed.isEmpty ? .paragraph : .paragraph
+            // Detect whether this paragraph string contains the special
+            // attachment character used by `NSTextAttachment`. This lets us
+            // classify image blocks *without* touching attributes, which
+            // avoids the NSRangeException we were seeing from TextStorage.
+            let paragraphString = string.substring(with: substringRange)
+            let attachmentChar = Character(UnicodeScalar(NSTextAttachment.character)!)
+            let isImageBlock = paragraphString.contains(attachmentChar)
+            let kind: BlockKind = isImageBlock ? .image : .paragraph
             let spacingBefore: CGFloat = paragraphIndex == 0 ? 0 : 16
             let spacingAfter: CGFloat = 12
+            let baseStyle: BlockStyle = kind.defaultStyle
             let style = BlockStyle(
-                contentInsets: NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16),
-                cornerRadius: 12,
-                backgroundColor: UIColor.secondarySystemBackground,
+                contentInsets: baseStyle.contentInsets,
+                cornerRadius: baseStyle.cornerRadius,
+                backgroundColor: baseStyle.backgroundColor,
                 spacingBefore: spacingBefore,
                 spacingAfter: spacingAfter
             )
@@ -118,22 +124,23 @@ public struct BlockDocument: Equatable {
 
 // MARK: - Style presets
 
-@available(iOS 16.0, *)
 public extension BlockStyle {
     static let paragraphDefault = BlockStyle(
         contentInsets: NSDirectionalEdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16),
         cornerRadius: 14,
-        backgroundColor: UIColor.secondarySystemBackground,
-        spacingBefore: 12,
-        spacingAfter: 12
+        // Slightly stronger color so block backgrounds are clearly visible.
+        backgroundColor: UIColor.systemTeal.withAlphaComponent(0.25),
+        spacingBefore: 16,
+        spacingAfter: 16
     )
     
     static let imageDefault = BlockStyle(
         contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0),
         cornerRadius: 18,
-        backgroundColor: UIColor.tertiarySystemBackground,
-        spacingBefore: 20,
-        spacingAfter: 20
+        // Stronger contrast for image blocks.
+        backgroundColor: UIColor.systemOrange.withAlphaComponent(0.28),
+        spacingBefore: 24,
+        spacingAfter: 24
     )
 }
 

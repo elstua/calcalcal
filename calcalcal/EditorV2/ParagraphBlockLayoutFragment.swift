@@ -1,7 +1,6 @@
 import UIKit
 
-@available(iOS 16.0, *)
-final class ParagraphBlockLayoutFragment: NSTextLayoutFragment {
+class ParagraphBlockLayoutFragment: NSTextLayoutFragment {
     var blockMetadata: BlockMetadata?
     
     override func draw(at point: CGPoint, in context: CGContext) {
@@ -21,9 +20,14 @@ final class ParagraphBlockLayoutFragment: NSTextLayoutFragment {
     }
 }
 
+final class ImageBlockLayoutFragment: ParagraphBlockLayoutFragment {
+    // For now this shares the same background behavior as text paragraphs.
+    // We keep a separate subclass so we can later customize image-specific
+    // chrome (e.g. using ImageComponent metrics, overlays, focus state).
+}
+
 // MARK: - Helpers
 
-@available(iOS 16.0, *)
 private extension CGRect {
     func expanded(by insets: NSDirectionalEdgeInsets) -> CGRect {
         var rect = self

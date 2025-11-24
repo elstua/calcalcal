@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BlockEditorTestView: View {
     @State private var text: String = """
@@ -7,11 +8,15 @@ struct BlockEditorTestView: View {
     Grilled salmon with quinoa bowl
     Dark chocolate square
     """
+    @State private var editorTextView: BlockEditorTextView?
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                BlockEditorRepresentable(text: $text)
+                BlockEditorRepresentable(text: $text) { textView in
+                    // Capture the underlying UITextView for debugging actions.
+                    self.editorTextView = textView
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -19,6 +24,13 @@ struct BlockEditorTestView: View {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
                     )
+                
+                Button("Insert sample image block") {
+                    if let image = UIImage(systemName: "photo") {
+                        editorTextView?.insertImageBlock(image: image)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
                 
                 Text("Current text:")
                     .font(.headline)

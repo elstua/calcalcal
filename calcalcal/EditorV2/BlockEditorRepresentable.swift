@@ -1,10 +1,9 @@
-#if canImport(SwiftUI)
 import SwiftUI
 import UIKit
 
-@available(iOS 16.0, *)
 struct BlockEditorRepresentable: UIViewRepresentable {
     @Binding var text: String
+    var onTextViewCreated: ((BlockEditorTextView) -> Void)? = nil
     
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -14,13 +13,14 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         let view = BlockEditorTextView(configuration: BlockEditorConfiguration(initialText: text))
         view.delegate = context.coordinator
         context.coordinator.textView = view
+        onTextViewCreated?(view)
         return view
     }
     
     func updateUIView(_ uiView: BlockEditorTextView, context: Context) {
-        context.coordinator.isSyncingFromSwiftUI = true
-        uiView.updateTextIfNeeded(text)
-        context.coordinator.isSyncingFromSwiftUI = false
+        // For now we deliberately avoid pushing SwiftUI text changes back into
+        // the TextKit 2 stack while debugging attachment-related crashes.
+        // The underlying UITextView acts as the source of truth during editing.
     }
     
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -39,7 +39,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     }
 }
 
-@available(iOS 16.0, *)
 struct BlockEditorDemoView: View {
     @State private var text: String = """
     Oatmeal with berries
@@ -62,5 +61,3 @@ struct BlockEditorDemoView: View {
         .padding(16)
     }
 }
-
-#endif

@@ -1,37 +1,38 @@
-#if canImport(UIKit)
 import UIKit
 
-@available(iOS 16.0, *)
 final class BlockTextLayoutController: NSObject, NSTextLayoutManagerDelegate {
-    private weak var blockContentStorage: BlockTextContentStorage?
+    private let blockDocumentController: BlockDocumentController
     
-    init(contentStorage: BlockTextContentStorage) {
-        self.blockContentStorage = contentStorage
+    init(documentController: BlockDocumentController) {
+        self.blockDocumentController = documentController
     }
     
     func attach(to textLayoutManager: NSTextLayoutManager) {
         textLayoutManager.delegate = self
-        blockContentStorage?.addTextLayoutManager(textLayoutManager)
-        textLayoutManager.renderingAttributesValidator = { [weak self] manager, fragment in
-            guard
-                let self,
-                let block = self.blockContentStorage?.block(for: fragment.rangeInElement)
-            else { return }
-            
-            let attributedRange = fragment.rangeInElement
-            let style = self.paragraphStyle(for: block)
-            manager.setRenderingAttributes([.paragraphStyle: style], for: attributedRange)
-        }
+        // We no longer use renderingAttributesValidator for paragraph spacing
+        // because that causes caret/selection mismatch. Spacing is now baked
+        // into the storage via typingAttributes so layout and selection agree.
+        textLayoutManager.renderingAttributesValidator = nil
     }
     
     // MARK: - NSTextLayoutManagerDelegate
     
     func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, textLayoutFragmentFor location: NSTextLocation, in textElement: NSTextElement) -> NSTextLayoutFragment {
-        let fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
-        if let blockRange = textElement.elementRange,
-           let block = blockContentStorage?.block(for: blockRange) {
-            fragment.blockMetadata = block
+        guard
+            let blockRange = textElement.elementRange,
+            let block = blockDocumentController.block(for: blockRange)
+        else {
+            // Fallback to a plain paragraph fragment if we can't resolve block metadata.
+            return ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
         }
+        
+        let fragment: ParagraphBlockLayoutFragment
+        if block.kind.isImage {
+            fragment = ImageBlockLayoutFragment(textElement: textElement, range: nil)
+        } else {
+            fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
+        }
+        fragment.blockMetadata = block
         return fragment
     }
     
@@ -44,5 +45,4 @@ final class BlockTextLayoutController: NSObject, NSTextLayoutManagerDelegate {
         return style
     }
 }
-#endif
 
