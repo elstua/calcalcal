@@ -1,147 +1,216 @@
-# EditorV2 – TextKit 2 Block Editor (Current Logic & Plan)
+# EditorV2 – TextKit 2 Block Editor
 
 ## 1. High-level Goals
+
 - **True block semantics**: each paragraph/image behaves as its own block with independent spacing and visual chrome.
-- **UITextView as host**: reuse Apple’s IME, selection, accessibility, dictation, etc., instead of rebuilding them.
+- **UITextView as host**: reuse Apple's IME, selection, accessibility, dictation, etc., instead of rebuilding them.
 - **Device-text-first**: the `NSTextStorage` string is always the source of truth; block metadata and calories are overlays, never replacing user text.
-- **Crash-safe TextKit 2**: avoid the typical `NSRangeException` and TK1/TK2 “fallback” traps.
+- **Crash-safe TextKit 2**: avoid the typical `NSRangeException` and TK1/TK2 "fallback" traps.
+- **Normal caret behavior**: image blocks don't affect caret/selection sizing.
 
 ---
 
-## 2. Current Architecture (Working Prototype)
+## 2. Current Architecture (Working Implementation)
 
 ### 2.1 Object graph
+
 ```
 UITextView (BlockEditorTextView)
-    ├─ NSTextLayoutManager        (from UITextView, TextKit 2)
-    │    └─ BlockTextLayoutController (delegate + rendering attributes)
-    └─ NSTextContentStorage
-         └─ BlockTextContentStorage  (backingStore + block model)
+    ├─ NSTextLayoutManager        (default from UITextView, TextKit 2)
+    │    └─ BlockTextLayoutController (delegate for custom fragments)
+    ├─ NSTextContentStorage       (default, NOT subclassed)
+    │    └─ NSTextStorage         (default)
+    ├─ BlockDocumentController    (observes storage, builds BlockDocument)
+    └─ Image Overlays             (UIHostingController<ImageComponent> subviews)
 ```
 
-- **`BlockDocument` / `BlockMetadata` / `BlockStyle`**
-  - Derived model from the current `NSTextStorage` contents.
-  - One `BlockMetadata` per paragraph (for now, only `.paragraph` kind).
-  - Stores: range in storage, spacing before/after, content insets, background styling, future calorie metadata.
+### 2.2 Key design decisions
 
-- **`BlockTextContentStorage`**
-  - Owns a private `NSTextStorage` (`backingStore`) and exposes it via `textStorage`.
-  - On any edit (`textStorage(_:didProcessEditing:...)`):
-    - Rebuilds `BlockDocument` by enumerating paragraphs in `backingStore`.
-    - Invalidates TextKit 2 rendering attributes for the whole document range.
-    - Schedules a **deferred** attribute update on the next run loop tick.
-  - Deferred `applyBlockAttributes()`:
-    - Runs on main queue outside TextKit’s internal editing cycle.
-    - Clears block-related attributes on the full range.
-    - For each block, clamps its `NSRange` to the current storage length and applies:
-      - `BlockIdentifierAttribute` (UUID backing).
-      - Paragraph-level `NSParagraphStyle` with our block spacing and line height.
+#### Why we don't subclass `NSTextContentStorage`
 
-- **`BlockTextLayoutController`**
-  - Attached as the `NSTextLayoutManager.delegate`.
-  - Provides `renderingAttributesValidator`:
-    - For each `NSTextLayoutFragment`, looks up the matching `BlockMetadata` via `rangeInElement`.
-    - Optionally reinforces per-fragment paragraph style via `setRenderingAttributes(_:for:)` (safe rendering-time override).
+Early attempts used a custom `BlockTextContentStorage` subclass, but this caused persistent `NSRangeException` crashes when editing around attachments. TextKit 2's internal invariants are fragile when you replace the content storage.
 
-- **`BlockEditorTextView`**
-  - Created with `textContainer: nil` → UITextView configures TextKit 2.
-  - Grabs `textLayoutManager`, calls `replace(_:)` with our content storage and attaches `BlockTextLayoutController`.
-  - Exposes `updateTextIfNeeded(_:)` for SwiftUI wrapper.
+**Solution**: We use the **default** `NSTextContentStorage` provided by `UITextView` and observe it via `BlockDocumentController` (which implements `NSTextStorageDelegate`). This keeps TextKit's internal state consistent.
 
-- **`BlockEditorRepresentable` / `BlockEditorTestView`**
-  - Embeds `BlockEditorTextView` in SwiftUI, syncing plain `String` via delegate.
-  - Used as our playground; no backend or calorie integration yet.
+#### Why we don't use `NSTextAttachment` for images
 
-### 2.2 Crash-safety constraints we now respect
-- Never mutate attributes from inside TextKit callbacks like gesture handling or `renderingAttributesValidator`; all mutations are queued via `DispatchQueue.main.async`.
-- Every time we apply attributes, we:
-  - Capture `storageLength` once.
-  - Clamp all block ranges to `[0, storageLength]`.
-  - Use a single `beginEditing` / `endEditing` transaction.
-- We avoid touching `layoutManager` (TextKit 1) anywhere in EditorV2; we only use `.textLayoutManager`.
+Using `NSTextAttachment` causes the caret to grow to the attachment's height, which breaks the editing UX.
+
+**Solution**: We insert an **invisible marker character** (`\u{FFFC}`) and overlay `ImageComponent` as a `UIHostingController` subview positioned at the marker's layout rect. This keeps the caret at normal text height.
+
+#### How paragraph spacing works
+
+Using `renderingAttributesValidator` to apply paragraph styles causes caret/selection mismatch (TextKit computes selection from storage attributes, not rendering attributes).
+
+**Solution**: Paragraph spacing is baked into the actual `NSAttributedString` via `typingAttributes`, so storage and layout stay in sync. After every storage edit, `BlockDocumentController` rebuilds the block list and triggers `applyBlockStyles()`, which rewrites paragraph styles for each block range based on its kind. This makes block spacing deterministic and prevents newly created text blocks from inheriting an image block’s large spacing.
 
 ---
 
-## 3. Planned Implementation Phases
+## 3. Components
 
-### Phase 1 – Solid text blocks (now)
-- **Done**
-  - Stable typing, selection, and tapping in previews.
-  - Paragraph blocks with custom spacing via paragraph styles.
-  - Basic block model (`BlockDocument`) + attribute pipeline.
-  - SwiftUI test view to iterate on UX.
-- **Polish to add**
-  - Visual block chrome in `ParagraphBlockLayoutFragment` (backgrounds, subtle separators).
-  - Configurable global spacing / per-block variants via `BlockStyle`.
+### 3.1 `BlockDocument` / `BlockMetadata` / `BlockStyle` / `BlockKind`
 
-### Phase 2 – Block interactions
+**File**: `BlockModels.swift`
+
+- **`BlockKind`**: `.paragraph` or `.image`
+- **`BlockStyle`**: spacing, insets, corner radius, background color
+- **`BlockMetadata`**: id, kind, style, range, optional image reference
+- **`BlockDocument`**: array of `BlockMetadata`, rebuilt from `NSTextStorage` on each edit
+
+Detection logic:
+- Paragraphs containing the marker character (`\u{FFFC}`) are classified as `.image` blocks.
+- For image blocks, the `BlockID` is extracted from a custom attribute (`imageBlockID`) on the marker.
+
+### 3.2 `BlockDocumentController`
+
+**File**: `BlockDocumentController.swift`
+
+- Implements `NSTextStorageDelegate`.
+- On `textStorage(_:didProcessEditing:...)`, rebuilds `BlockDocument`.
+- Calls `onDocumentChange` callback so the text view can update image overlays.
+- Provides `block(for:)` to look up block metadata by `NSTextRange`.
+
+### 3.3 `BlockTextLayoutController`
+
+**File**: `BlockTextLayoutManager.swift`
+
+- Implements `NSTextLayoutManagerDelegate`.
+- Provides custom `NSTextLayoutFragment` subclasses per block kind:
+  - `ParagraphBlockLayoutFragment` for text blocks (draws background card).
+  - `ImageBlockLayoutFragment` for image blocks.
+- Does **not** use `renderingAttributesValidator` for spacing (to avoid caret mismatch).
+
+### 3.4 `ParagraphBlockLayoutFragment` / `ImageBlockLayoutFragment`
+
+**File**: `ParagraphBlockLayoutFragment.swift`
+
+- Subclasses of `NSTextLayoutFragment`.
+- Override `draw(at:in:)` to render block backgrounds (rounded rect cards).
+- `blockMetadata` property provides styling info.
+
+### 3.5 `BlockEditorTextView`
+
+**File**: `BlockEditorTextView.swift`
+
+Main text view that ties everything together:
+
+- Uses default TextKit 2 stack (no custom content storage).
+- Lazily creates `BlockDocumentController` and `BlockTextLayoutController`.
+- Manages **image overlays** as `UIHostingController<ImageComponent>` subviews.
+- Provides `insertImageBlock(image:)` to add image blocks.
+
+#### Image block insertion flow
+
+1. Generate a new `BlockID`.
+2. Store the `UIImage` in `imagesByBlockID[blockID]`.
+3. Build attributed string:
+   - **Marker** (`\u{FFFC}`): invisible (`.foregroundColor: .clear`), tagged with `imageBlockID` attribute.
+   - **Sample text** ("Description here"): visible, shares the image block spacing, no head indent (text wraps via exclusion paths).
+   - **Newline**: normal attributes for the next paragraph so it starts as a regular text block.
+4. Insert into `attributedText`.
+5. Set `typingAttributes` to image block style so continued typing maintains the block’s spacing while text still flows around the overlay via `textContainer.exclusionPaths`.
+6. Call `updateImageOverlays()`.
+
+#### Image overlay positioning
+
+On `layoutSubviews()` and document changes:
+
+1. Enumerate `.image` blocks from `BlockDocument`.
+2. For each block, get the marker's layout rect via `enumerateTextSegments`.
+3. Position `ImageComponent` at:
+   - **X**: `textContainerInset.left` (left edge, not marker's indented X).
+   - **Y**: marker's `rect.minY + textContainerInset.top`.
+4. Remove overlays for deleted blocks.
+
+### 3.6 `BlockEditorRepresentable` / `BlockEditorTestView`
+
+**Files**: `BlockEditorRepresentable.swift`, `BlockEditorTestView.swift`
+
+- SwiftUI wrappers for `BlockEditorTextView`.
+- `BlockEditorTestView` provides a test harness with "Insert sample image block" button.
+
+### 3.7 `BlockTextAttributes`
+
+**File**: `BlockTextAttributes.swift`
+
+Custom attribute keys:
+- `blockIdentifier`: UUID for block tracking.
+- `blockKind`: block type marker.
+- `imageBlockID`: UUID linking marker character to its image overlay.
+
+---
+
+## 4. Text & Spacing Configuration
+
+### Paragraph blocks
+
+```swift
+let paragraphStyle = NSMutableParagraphStyle()
+paragraphStyle.paragraphSpacingBefore = 10
+paragraphStyle.paragraphSpacing = 10
+paragraphStyle.lineHeightMultiple = 1.14
+```
+
+### Image blocks
+
+```swift
+let imageParagraphStyle = NSMutableParagraphStyle()
+imageParagraphStyle.paragraphSpacingBefore = 8
+imageParagraphStyle.paragraphSpacing = 88        // image height (80) + padding (8)
+imageParagraphStyle.lineHeightMultiple = 1.14
+```
+
+Text in image blocks flows around the overlay using `textContainer.exclusionPaths`, so no `headIndent` is required.
+
+---
+
+## 5. Crash-safety constraints
+
+1. **No custom `NSTextContentStorage` subclass** – use the default provided by `UITextView`.
+2. **No attribute mutations from inside TextKit callbacks** – only observe and rebuild the model.
+3. **No `renderingAttributesValidator` for spacing** – bake spacing into storage via `typingAttributes`.
+4. **Clamp all ranges** before any storage access.
+5. **Use marker + overlay for images** – don't use `NSTextAttachment` (causes caret sizing issues).
+
+---
+
+## 6. Future work
+
+### Phase 1 – Block interactions (next)
+- Tap / long-press on blocks for context menu, move, delete.
+- "Focus" state with highlighted background.
+
+### Phase 2 – Calorie metadata & overlays
+- Extend `BlockMetadata` with `calorieLabel`.
+- Draw calorie labels in `ParagraphBlockLayoutFragment.draw(at:in:)`.
 - **Goals**
-  - Tap / long-press on a paragraph block (e.g. for context menu, move, delete).
-  - “Focus” state for a block (highlighted background).
-- **Approach**
-  - Add hit-testing helpers on `BlockEditorTextView`:
-    - Convert touch location → `NSTextLayoutFragment` via `textLayoutManager.textLayoutFragment(forPosition:)`.
-    - Map fragment range → `BlockMetadata` via `BlockTextContentStorage.block(for:)`.
-  - Wire `UILongPressGestureRecognizer` (or use `UITextItemInteraction`) to surface `BlockID` and block rect to SwiftUI.
-
-### Phase 3 – Image blocks
-- **Goals**
-  - Support `.image` blocks with:
-    - Minimum height.
-    - Block spacing that keeps following text **below** the image.
-    - No ability to put text “next to” the image (only above/below).
-- **Approach**
-  - Model:
-    - Extend `BlockKind` with `.image(imageID)` (or data/URL, depending on existing pipeline).
-    - Define `BlockStyle.imageDefault` with larger `spacingBefore/After` and content insets.
-  - Layout / rendering:
-    - Use `NSTextAttachment` per image-block paragraph.
-    - Introduce `ImageBlockLayoutFragment` subclass for drawing the image inside a rounded-rect block surface.
-    - For image paragraphs, set `minimumLineHeight`/`maximumLineHeight` from `BlockStyle` via `paragraphStyle(for:)`.
-    - Ensure a paragraph separator after each image block so the next text block always starts below.
-  - UX:
-    - Initially, image blocks are non-editable text-wise (no caption) to keep behavior simple.
-    - Tap = open image picker / full-screen.
-
-### Phase 4 – Calorie metadata & overlays
-- **Goals**
-  - Show per-block calorie labels (similar to current editor) without affecting text layout.
+  - Show per-block calorie labels (similar to current editor) without affecting 
+  text layout.
 - **Approach**
   - Extend `BlockMetadata` with `calorieLabel` (and later richer nutrition JSON).
   - In `ParagraphBlockLayoutFragment.draw(at:in:)`, after drawing background:
     - Compute a label rect (right edge of the block, last line baseline).
     - Draw calories using Core Graphics / UIKit (or add a sublayer if needed).
   - Reuse the existing server → device “metadata only” pattern:
-    - Apply analyzed calories via notification → update `BlockDocument` → re-render fragments, without touching text.
+    - Apply analyzed calories via notification → update `BlockDocument` → re-render 
+    fragments, without touching text.
 
-### Phase 5 – Integration with Diary & feature flag
-- **Goals**
-  - Replace the existing editor in diary entry screens with EditorV2, gated behind a flag.
-- **Approach**
-  - Add a SwiftUI wrapper mirroring today’s `UnifiedTextEditor` API surface as much as reasonable:
-    - Bindings for full text plus `[Block]` for analytics.
-    - Hooks for external save / analysis triggers.
-  - Side-by-side mode:
-    - Keep the old editor for some users; use EditorV2 for others (A/B or dev-only).
-  - Migrate metadata-only calorie updates to target `BlockDocument` / `BlockTextContentStorage`.
+### Phase 3 – Diary integration
+- Replace existing editor with EditorV2.
+- Migrate calorie update flow to target `BlockDocument`.
 
 ---
 
-## 4. Implementation Order (Concrete TODOs)
+## 7. File overview
 
-1. **Stabilize text-only blocks**
-   - Finalize `paragraphStyle(for:)` semantics and `BlockStyle` presets.
-   - Add simple block background drawing (soft cards) to visually prove the model.
-2. **Block interactions**
-   - Implement hit-testing → `BlockID`.
-   - Expose tap / long-press callbacks in `BlockEditorRepresentable`.
-3. **Image blocks (MVP)**
-   - Add `.image` kind with attachment-based rendering and vertical-only flow.
-   - Ensure height + spacing rules match diary UX expectations.
-4. **Calorie overlays**
-   - Port the per-paragraph calorie rendering logic to EditorV2 fragments.
-5. **Diary integration**
-   - Add a new editor view in Diary screens using EditorV2 behind a flag.
-   - Run through common flows (short entry, long entry, edits after sync) and tune.
-
-This doc reflects the **current, working** TextKit 2 setup plus a stepwise plan to reach full block-based behavior (including images and calories) without reintroducing the crashes we just eliminated.
+| File | Purpose |
+|------|---------|
+| `BlockModels.swift` | `BlockID`, `BlockKind`, `BlockStyle`, `BlockMetadata`, `BlockDocument` |
+| `BlockDocumentController.swift` | Observes `NSTextStorage`, rebuilds `BlockDocument` |
+| `BlockTextLayoutManager.swift` | `NSTextLayoutManagerDelegate`, provides custom fragments |
+| `ParagraphBlockLayoutFragment.swift` | Custom fragment drawing (backgrounds) |
+| `BlockEditorTextView.swift` | Main text view, image overlay management |
+| `BlockEditorRepresentable.swift` | SwiftUI wrapper |
+| `BlockEditorTestView.swift` | Test harness |
+| `BlockTextAttributes.swift` | Custom attribute keys |
+| `PlainAttachmentEditor.swift` | Minimal test view for vanilla TextKit 2 + attachments |

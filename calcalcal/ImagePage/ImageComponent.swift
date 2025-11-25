@@ -13,7 +13,7 @@ struct ImageComponent: View {
             RoundedRectangle(cornerRadius: isLarge ? 16 : 8)
                 .fill(Color.white)
                 .shadow(radius: 1)
-                .frame(width: isLarge ? 350 : 110, height: isLarge ? 420 : 130)
+                .frame(width: isLarge ? 350 : 60, height: isLarge ? 420 : 80)
             
             VStack(spacing: 0) {
                 // Image or placeholder
@@ -21,13 +21,13 @@ struct ImageComponent: View {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: isLarge ? 320 : 86, height: isLarge ? 320 : 86)
+                        .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     // Placeholder (grey square)
                     RoundedRectangle(cornerRadius: isLarge ? 10 : 8)
                         .fill(Color.gray.opacity(1))
-                        .frame(width: isLarge ? 320 : 86, height: isLarge ? 320 : 86)
+                        .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
                         .offset(x: 0, y: isLarge ? 0 : -8)
                 }
                 

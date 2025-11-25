@@ -5,11 +5,21 @@ struct BlockEditorConfiguration {
     var initialText: String = ""
 }
 
-final class BlockEditorTextView: UITextView {
+final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Marker character used to represent an image block in the text storage.
     /// We use the object replacement character (U+FFFC) which is what
     /// NSTextAttachment normally uses, but we don't actually attach anything.
     static let imageMarker: String = "\u{FFFC}"
+    
+    // MARK: - Spacing Constants (centralized to avoid inconsistency)
+    
+    /// Spacing for regular paragraph blocks
+    private static let paragraphSpacing: CGFloat = 10
+    private static let paragraphSpacingBefore: CGFloat = 10
+    
+    /// Spacing for image blocks (large to push next content below the image)
+    private static let imageSpacing: CGFloat = 88
+    private static let imageSpacingBefore: CGFloat = 8
     
     // Lazily constructed after TextKit 2 stack is available.
     lazy var blockDocumentController: BlockDocumentController = {
@@ -38,6 +48,9 @@ final class BlockEditorTextView: UITextView {
     /// Images associated with block IDs (set when inserting image blocks).
     private var imagesByBlockID: [BlockID: UIImage] = [:]
     
+    /// Flag to prevent re-entry during style application.
+    private var isApplyingStyles = false
+    
     init(configuration: BlockEditorConfiguration = BlockEditorConfiguration()) {
         super.init(frame: .zero, textContainer: nil)
         
@@ -47,7 +60,15 @@ final class BlockEditorTextView: UITextView {
         
         // Observe layout changes to reposition image overlays.
         blockDocumentController.onDocumentChange = { [weak self] in
-            self?.updateImageOverlays()
+            guard let self else { return }
+            
+            // Re-apply paragraph styles after the document is rebuilt so every block
+            // picks up the correct spacing for its kind.
+            if !self.isApplyingStyles {
+                self.applyBlockStyles()
+            }
+            
+            self.updateImageOverlays()
         }
         
         textContainer.widthTracksTextView = true
@@ -69,8 +90,8 @@ final class BlockEditorTextView: UITextView {
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
         let baseColor = UIColor.label
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacingBefore = 12
-        paragraphStyle.paragraphSpacing = 12
+        paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
+        paragraphStyle.paragraphSpacing = Self.paragraphSpacing
         paragraphStyle.lineHeightMultiple = 1.14
         
         let attrs: [NSAttributedString.Key: Any] = [
@@ -80,6 +101,12 @@ final class BlockEditorTextView: UITextView {
         ]
         attributedText = NSAttributedString(string: configuration.initialText, attributes: attrs)
         typingAttributes = attrs
+        
+        // Set self as delegate to intercept text changes (Enter key handling).
+        delegate = self
+        
+        // Force layout invalidation so our custom layout fragments are created.
+        textLayoutManager?.textViewportLayoutController.layoutViewport()
     }
     
     @available(*, unavailable)
@@ -92,8 +119,8 @@ final class BlockEditorTextView: UITextView {
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
         let baseColor = UIColor.label
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.paragraphSpacingBefore = 12
-        paragraphStyle.paragraphSpacing = 12
+        paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
+        paragraphStyle.paragraphSpacing = Self.paragraphSpacing
         paragraphStyle.lineHeightMultiple = 1.14
         
         let attrs: [NSAttributedString.Key: Any] = [
@@ -108,46 +135,42 @@ final class BlockEditorTextView: UITextView {
     /// Helper to insert an image block at the current cursor position.
     /// Instead of using an attachment (which would affect caret size), we insert
     /// a marker character and overlay `ImageComponent` as a subview.
-    /// Text in the same paragraph flows to the right of the image via `headIndent`.
+    /// Text flows around the image using exclusion paths (no headIndent needed).
     func insertImageBlock(image: UIImage) {
         // Generate a new block ID for this image.
         let blockID = BlockID()
         imagesByBlockID[blockID] = image
         
-        // ImageComponent small mode width + some padding.
-        let imageWidth: CGFloat = 100
-        let textIndent: CGFloat = imageWidth + 12
-        
-        // Paragraph style for the image block line: text starts after the image.
-        let imageParagraphStyle = NSMutableParagraphStyle()
-        imageParagraphStyle.paragraphSpacingBefore = 20
-        imageParagraphStyle.paragraphSpacing = 20
-        imageParagraphStyle.lineHeightMultiple = 1.14
-        imageParagraphStyle.headIndent = textIndent
-        imageParagraphStyle.firstLineHeadIndent = textIndent
-        
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
         let baseColor = UIColor.label
         
-        // Attributes for the marker character only (invisible, but reserves space via kern).
+        // Paragraph style for image block - NO headIndent!
+        // Text will flow around the image via exclusion paths.
+        // Large paragraphSpacing ensures next block starts below the image.
+        let imageParagraphStyle = NSMutableParagraphStyle()
+        imageParagraphStyle.paragraphSpacingBefore = Self.imageSpacingBefore
+        imageParagraphStyle.paragraphSpacing = Self.imageSpacing
+        imageParagraphStyle.lineHeightMultiple = 1.14
+        
+        // Attributes for the marker character (invisible, tags the block).
         let markerAttrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
-            .foregroundColor: UIColor.clear, // Marker is invisible; overlay shows the image.
+            .foregroundColor: UIColor.clear,
             .paragraphStyle: imageParagraphStyle,
             BlockAttributeKeys.imageBlockID: blockID.rawValue
         ]
         
-        // Attributes for text in the image block (visible, same paragraph style).
+        // Attributes for text in the image block (same style, no indent).
         let imageTextAttrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
             .foregroundColor: baseColor,
             .paragraphStyle: imageParagraphStyle
         ]
         
-        // Normal text attributes for the next paragraph.
+        // Normal paragraph style for text after the image block
         let normalParagraphStyle = NSMutableParagraphStyle()
-        normalParagraphStyle.paragraphSpacingBefore = 12
-        normalParagraphStyle.paragraphSpacing = 12
+        normalParagraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
+        normalParagraphStyle.paragraphSpacing = Self.paragraphSpacing
         normalParagraphStyle.lineHeightMultiple = 1.14
         
         let normalAttrs: [NSAttributedString.Key: Any] = [
@@ -156,7 +179,7 @@ final class BlockEditorTextView: UITextView {
             .paragraphStyle: normalParagraphStyle
         ]
         
-        // Build: marker (invisible) + sample text (visible, indented) + newline (normal for next para).
+        // Build: marker + sample text + newline (newline uses NORMAL style so next paragraph has normal spacing)
         let markerPart = NSAttributedString(string: Self.imageMarker, attributes: markerAttrs)
         let sampleText = NSAttributedString(string: "Description here", attributes: imageTextAttrs)
         let newlinePart = NSAttributedString(string: "\n", attributes: normalAttrs)
@@ -174,10 +197,10 @@ final class BlockEditorTextView: UITextView {
         let cursorPosition = insertionIndex + 1 + sampleText.length
         selectedRange = NSRange(location: min(cursorPosition, mutable.length), length: 0)
         
-        // Set typing attributes to the image block style so continued typing stays indented.
+        // Set typing attributes - same style, no indent
         typingAttributes = imageTextAttrs
         
-        // Trigger overlay update.
+        // Trigger overlay and exclusion path update.
         updateImageOverlays()
     }
     
@@ -188,8 +211,10 @@ final class BlockEditorTextView: UITextView {
         updateImageOverlays()
     }
     
-    /// Positions `ImageComponent` overlays based on the layout rect of each
-    /// image block's marker character.
+    /// Size of the image component in "small" mode
+    private let imageComponentSize = CGSize(width: 72, height: 80)
+    
+    /// Positions `ImageComponent` overlays and sets up exclusion paths so text flows around images.
     private func updateImageOverlays() {
         // Collect current image blocks from the document.
         let imageBlocks = blockDocumentController.document.blocks.filter { $0.kind.isImage }
@@ -200,6 +225,9 @@ final class BlockEditorTextView: UITextView {
             host.view.removeFromSuperview()
             imageOverlays.removeValue(forKey: id)
         }
+        
+        // Build exclusion paths for all image blocks
+        var exclusionPaths: [UIBezierPath] = []
         
         // Create or update overlays for each image block.
         for block in imageBlocks {
@@ -224,15 +252,28 @@ final class BlockEditorTextView: UITextView {
             
             // Position the overlay at the left edge of the text container,
             // aligned vertically with the marker's line.
-            // ImageComponent small mode is 100x120.
-            let componentSize = CGSize(width: 100, height: 120)
-            host.view.frame = CGRect(
+            let imageFrame = CGRect(
                 x: textContainerInset.left,
                 y: rect.minY + textContainerInset.top,
-                width: componentSize.width,
-                height: componentSize.height
+                width: imageComponentSize.width,
+                height: imageComponentSize.height
             )
+            host.view.frame = imageFrame
+            
+            // Create exclusion path for this image in text container coordinates.
+            // The exclusion path is relative to the text container, not the view.
+            let exclusionRect = CGRect(
+                x: 0, // Start at left edge of text container
+                y: rect.minY,
+                width: imageComponentSize.width + 8, // Image width + padding
+                height: imageComponentSize.height
+            )
+            let exclusionPath = UIBezierPath(rect: exclusionRect)
+            exclusionPaths.append(exclusionPath)
         }
+        
+        // Set all exclusion paths on the text container
+        textContainer.exclusionPaths = exclusionPaths
     }
     
     /// Returns the image associated with a block (looked up by custom attribute
@@ -268,6 +309,127 @@ final class BlockEditorTextView: UITextView {
             return false // stop after first
         }
         return rect
+    }
+    
+    // MARK: - Text Input Handling (UITextViewDelegate)
+    
+    /// Intercept text changes to fix paragraph style inheritance.
+    /// When Enter is pressed, reset typingAttributes to standard BEFORE the newline is inserted.
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        if text == "\n" {
+            // Always use standard paragraph attributes for new paragraphs.
+            // Image blocks are created explicitly via insertImageBlock(), not by pressing Enter.
+            typingAttributes = standardParagraphAttributes
+        }
+        return true
+    }
+    
+    /// Standard paragraph attributes (no indent needed since we use exclusion paths).
+    private var standardParagraphAttributes: [NSAttributedString.Key: Any] {
+        let baseFont = UIFont.preferredFont(forTextStyle: .body)
+        let baseColor = UIColor.label
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
+        paragraphStyle.paragraphSpacing = Self.paragraphSpacing
+        paragraphStyle.lineHeightMultiple = 1.14
+        
+        return [
+            .font: baseFont,
+            .foregroundColor: baseColor,
+            .paragraphStyle: paragraphStyle
+        ]
+    }
+    
+    /// Called after text changes - update exclusion paths (styles are handled by document change callback).
+    func textViewDidChange(_ textView: UITextView) {
+        updateImageOverlays()
+    }
+    
+    /// Called when cursor moves - set typing attributes based on current block type.
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        let cursorLocation = selectedRange.location
+        let currentBlock = blockDocumentController.block(containing: NSRange(location: cursorLocation, length: 0))
+        
+        // If NOT in an image block, reset typing attributes to normal
+        if currentBlock == nil || !currentBlock!.kind.isImage {
+            typingAttributes = standardParagraphAttributes
+        }
+    }
+    
+    /// Apply the correct paragraph style to EACH block independently.
+    /// This normalizes paragraph styles after text changes (e.g., when pressing Enter
+    /// splits a paragraph, the new paragraph inherits the old style and needs fixing).
+    private func applyBlockStyles() {
+        // Prevent re-entry
+        guard !isApplyingStyles else { return }
+        
+        guard let textStorage = textLayoutManager?.textContentManager as? NSTextContentStorage,
+              let storage = textStorage.textStorage,
+              storage.length > 0 else { return }
+        
+        let blocks = blockDocumentController.document.blocks
+        guard !blocks.isEmpty else { return }
+        
+        isApplyingStyles = true
+        defer { isApplyingStyles = false }
+        
+        storage.beginEditing()
+        
+        for block in blocks {
+            let range = block.range
+            guard range.location < storage.length else { continue }
+            
+            // Clamp range to valid bounds
+            let safeLength = min(range.length, storage.length - range.location)
+            guard safeLength > 0 else { continue }
+            let safeRange = NSRange(location: range.location, length: safeLength)
+            
+            // Determine target spacing based on block type (using centralized constants)
+            let targetSpacing: CGFloat = block.kind.isImage ? Self.imageSpacing : Self.paragraphSpacing
+            let targetSpacingBefore: CGFloat = block.kind.isImage ? Self.imageSpacingBefore : Self.paragraphSpacingBefore
+            
+            // Check if this range already has the correct spacing
+            if let existingStyle = storage.attribute(.paragraphStyle, at: safeRange.location, effectiveRange: nil) as? NSParagraphStyle {
+                // Only update if spacing is wrong (tolerance of 1 to avoid floating point issues)
+                if abs(existingStyle.paragraphSpacing - targetSpacing) > 1 ||
+                   abs(existingStyle.paragraphSpacingBefore - targetSpacingBefore) > 1 {
+                    let newStyle = existingStyle.mutableCopy() as! NSMutableParagraphStyle
+                    newStyle.paragraphSpacing = targetSpacing
+                    newStyle.paragraphSpacingBefore = targetSpacingBefore
+                    storage.addAttribute(.paragraphStyle, value: newStyle, range: safeRange)
+                }
+            }
+        }
+        
+        storage.endEditing()
+        
+        // Also update typing attributes for current position
+        updateTypingAttributesForCurrentBlock()
+    }
+    
+    /// Set typing attributes based on current block type.
+    private func updateTypingAttributesForCurrentBlock() {
+        let cursorLocation = selectedRange.location
+        let currentBlock = blockDocumentController.block(containing: NSRange(location: cursorLocation, length: 0))
+        
+        if let block = currentBlock, block.kind.isImage {
+            // In image block - use image spacing
+            let baseFont = UIFont.preferredFont(forTextStyle: .body)
+            let baseColor = UIColor.label
+            let style = NSMutableParagraphStyle()
+            style.paragraphSpacingBefore = Self.imageSpacingBefore
+            style.paragraphSpacing = Self.imageSpacing
+            style.lineHeightMultiple = 1.14
+            
+            typingAttributes = [
+                .font: baseFont,
+                .foregroundColor: baseColor,
+                .paragraphStyle: style
+            ]
+        } else {
+            // In paragraph block or new position - use standard spacing
+            typingAttributes = standardParagraphAttributes
+        }
     }
 }
 

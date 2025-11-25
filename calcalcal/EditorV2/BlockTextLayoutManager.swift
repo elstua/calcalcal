@@ -18,21 +18,28 @@ final class BlockTextLayoutController: NSObject, NSTextLayoutManagerDelegate {
     // MARK: - NSTextLayoutManagerDelegate
     
     func textLayoutManager(_ textLayoutManager: NSTextLayoutManager, textLayoutFragmentFor location: NSTextLocation, in textElement: NSTextElement) -> NSTextLayoutFragment {
-        guard
-            let blockRange = textElement.elementRange,
-            let block = blockDocumentController.block(for: blockRange)
-        else {
-            // Fallback to a plain paragraph fragment if we can't resolve block metadata.
-            return ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
+        let fragment: ParagraphBlockLayoutFragment
+        
+        if let blockRange = textElement.elementRange,
+           let block = blockDocumentController.block(for: blockRange) {
+            // We found the block metadata - create appropriate fragment type
+            if block.kind.isImage {
+                fragment = ImageBlockLayoutFragment(textElement: textElement, range: nil)
+            } else {
+                fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
+            }
+            fragment.blockMetadata = block
+        } else {
+            // Fallback: create fragment with default paragraph style
+            fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
+            // Set default metadata so background is still drawn
+            fragment.blockMetadata = BlockMetadata(
+                kind: .paragraph,
+                style: .paragraphDefault,
+                range: NSRange(location: 0, length: 0)
+            )
         }
         
-        let fragment: ParagraphBlockLayoutFragment
-        if block.kind.isImage {
-            fragment = ImageBlockLayoutFragment(textElement: textElement, range: nil)
-        } else {
-            fragment = ParagraphBlockLayoutFragment(textElement: textElement, range: nil)
-        }
-        fragment.blockMetadata = block
         return fragment
     }
     

@@ -93,15 +93,15 @@ public struct BlockDocument: Equatable {
             let markerChar = Character(UnicodeScalar(NSTextAttachment.character)!)
             let isImageBlock = paragraphString.contains(markerChar)
             let kind: BlockKind = isImageBlock ? .image : .paragraph
-            let spacingBefore: CGFloat = paragraphIndex == 0 ? 0 : 32
-            let spacingAfter: CGFloat = 12
-            let baseStyle: BlockStyle = kind.defaultStyle
+            
+            // Use the default style for this block kind (includes correct spacing)
+            let baseStyle = kind.defaultStyle
             let style = BlockStyle(
                 contentInsets: baseStyle.contentInsets,
                 cornerRadius: baseStyle.cornerRadius,
                 backgroundColor: baseStyle.backgroundColor,
-                spacingBefore: spacingBefore,
-                spacingAfter: spacingAfter
+                spacingBefore: paragraphIndex == 0 ? 0 : baseStyle.spacingBefore,
+                spacingAfter: baseStyle.spacingAfter  // Use default: 10 for paragraph, 88 for image
             )
             
             // For image blocks, try to extract the BlockID from the marker's attribute.
@@ -118,14 +118,7 @@ public struct BlockDocument: Equatable {
         }
         
         if result.isEmpty {
-            let style = BlockStyle(
-                contentInsets: NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16),
-                cornerRadius: 12,
-                backgroundColor: UIColor.secondarySystemBackground,
-                spacingBefore: 0,
-                spacingAfter: 12
-            )
-            let block = BlockMetadata(kind: .paragraph, style: style, range: NSRange(location: 0, length: textStorage.length))
+            let block = BlockMetadata(kind: .paragraph, style: .paragraphDefault, range: NSRange(location: 0, length: textStorage.length))
             result.append(block)
         }
         
@@ -137,21 +130,21 @@ public struct BlockDocument: Equatable {
 
 public extension BlockStyle {
     static let paragraphDefault = BlockStyle(
-        contentInsets: NSDirectionalEdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16),
-        cornerRadius: 14,
-        // Slightly stronger color so block backgrounds are clearly visible.
-        backgroundColor: UIColor.systemTeal.withAlphaComponent(0.25),
-        spacingBefore: 16,
-        spacingAfter: 16
+        contentInsets: NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12),
+        cornerRadius: 12,
+        // Visible teal background for paragraph blocks
+        backgroundColor: UIColor.systemTeal.withAlphaComponent(0.15),
+        spacingBefore: 10,
+        spacingAfter: 10  // Normal spacing between paragraphs
     )
     
     static let imageDefault = BlockStyle(
-        contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0),
-        cornerRadius: 18,
-        // Stronger contrast for image blocks.
-        backgroundColor: UIColor.systemOrange.withAlphaComponent(0.28),
-        spacingBefore: 24,
-        spacingAfter: 24
+        contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 12),
+        cornerRadius: 14,
+        // Distinct orange background for image blocks
+        backgroundColor: UIColor.systemOrange.withAlphaComponent(0.2),
+        spacingBefore: 10,
+        spacingAfter: 88  // Large spacing to ensure next block is below image (80px image + 8px padding)
     )
 }
 
