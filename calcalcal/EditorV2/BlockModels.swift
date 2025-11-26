@@ -138,13 +138,17 @@ public extension BlockStyle {
         spacingAfter: 10  // Normal spacing between paragraphs
     )
     
+    /// Default style for image blocks.
+    /// Note: `spacingAfter` is dynamically calculated in BlockEditorTextView based on rendered line count:
+    /// - 1–2 visual lines -> spacingAfter = 88 (next block stays below the image)
+    /// - 3+ visual lines   -> spacingAfter = 10 (text already pushes content down)
     static let imageDefault = BlockStyle(
         contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 12),
         cornerRadius: 14,
         // Distinct orange background for image blocks
         backgroundColor: UIColor.systemOrange.withAlphaComponent(0.2),
         spacingBefore: 10,
-        spacingAfter: 88  // Large spacing to ensure next block is below image (80px image + 8px padding)
+        spacingAfter: 88  // Initial value - actual spacing calculated dynamically
     )
 }
 

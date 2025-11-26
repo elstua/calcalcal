@@ -32,6 +32,11 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
         return block(containing: nsRange)
     }
     
+    /// Allows callers to force a document rebuild after external text mutations.
+    func forceRebuild() {
+        rebuildBlocks()
+    }
+    
     // MARK: - NSTextStorageDelegate
     
     func textStorage(_ textStorage: NSTextStorage,

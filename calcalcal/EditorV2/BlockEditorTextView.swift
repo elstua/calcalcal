@@ -17,9 +17,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private static let paragraphSpacing: CGFloat = 10
     private static let paragraphSpacingBefore: CGFloat = 10
     
-    /// Spacing for image blocks (large to push next content below the image)
-    private static let imageSpacing: CGFloat = 88
+    /// Spacing for image blocks when text is shorter than image (push next content below the image)
+    private static let imageSpacingLarge: CGFloat = 88
+    /// Spacing for image blocks when text is taller than image (text already pushed content down)
+    private static let imageSpacingSmall: CGFloat = 10
     private static let imageSpacingBefore: CGFloat = 8
+    
+    /// Max number of text lines that still use the larger spacing.
+    private static let imageLineThreshold: Int = 2
     
     // Lazily constructed after TextKit 2 stack is available.
     lazy var blockDocumentController: BlockDocumentController = {
@@ -48,6 +53,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Images associated with block IDs (set when inserting image blocks).
     private var imagesByBlockID: [BlockID: UIImage] = [:]
     
+    /// Cached spacing decisions for image blocks: BlockID -> (lineCount, spacing).
+    /// Only recalculate when the number of visual lines changes.
+    private var imageSpacingCache: [BlockID: (lineCount: Int, spacing: CGFloat)] = [:]
+    
     /// Flag to prevent re-entry during style application.
     private var isApplyingStyles = false
     
@@ -61,6 +70,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Observe layout changes to reposition image overlays.
         blockDocumentController.onDocumentChange = { [weak self] in
             guard let self else { return }
+            
+            // Clean up spacing cache for deleted blocks
+            self.cleanupSpacingCache()
             
             // Re-apply paragraph styles after the document is rebuilt so every block
             // picks up the correct spacing for its kind.
@@ -101,6 +113,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         ]
         attributedText = NSAttributedString(string: configuration.initialText, attributes: attrs)
         typingAttributes = attrs
+        blockDocumentController.forceRebuild()
         
         // Set self as delegate to intercept text changes (Enter key handling).
         delegate = self
@@ -130,6 +143,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         ]
         attributedText = NSAttributedString(string: text, attributes: attrs)
         typingAttributes = attrs
+        blockDocumentController.forceRebuild()
     }
     
     /// Helper to insert an image block at the current cursor position.
@@ -146,10 +160,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         
         // Paragraph style for image block - NO headIndent!
         // Text will flow around the image via exclusion paths.
-        // Large paragraphSpacing ensures next block starts below the image.
+        // Start with large spacing (new image blocks have short text).
         let imageParagraphStyle = NSMutableParagraphStyle()
         imageParagraphStyle.paragraphSpacingBefore = Self.imageSpacingBefore
-        imageParagraphStyle.paragraphSpacing = Self.imageSpacing
+        imageParagraphStyle.paragraphSpacing = Self.imageSpacingLarge
         imageParagraphStyle.lineHeightMultiple = 1.14
         
         // Attributes for the marker character (invisible, tags the block).
@@ -192,6 +206,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         mutable.insert(newlinePart, at: insertionIndex + 1 + sampleText.length)
         
         attributedText = mutable
+        blockDocumentController.forceRebuild()
         
         // Place cursor at the end of the sample text so user can edit it.
         let cursorPosition = insertionIndex + 1 + sampleText.length
@@ -384,9 +399,18 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             guard safeLength > 0 else { continue }
             let safeRange = NSRange(location: range.location, length: safeLength)
             
-            // Determine target spacing based on block type (using centralized constants)
-            let targetSpacing: CGFloat = block.kind.isImage ? Self.imageSpacing : Self.paragraphSpacing
-            let targetSpacingBefore: CGFloat = block.kind.isImage ? Self.imageSpacingBefore : Self.paragraphSpacingBefore
+            // Determine target spacing based on block type
+            let targetSpacing: CGFloat
+            let targetSpacingBefore: CGFloat
+            
+            if block.kind.isImage {
+                // For image blocks, use cached spacing or calculate if content changed
+                targetSpacing = cachedSpacing(for: block)
+                targetSpacingBefore = Self.imageSpacingBefore
+            } else {
+                targetSpacing = Self.paragraphSpacing
+                targetSpacingBefore = Self.paragraphSpacingBefore
+            }
             
             // Check if this range already has the correct spacing
             if let existingStyle = storage.attribute(.paragraphStyle, at: safeRange.location, effectiveRange: nil) as? NSParagraphStyle {
@@ -407,18 +431,81 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         updateTypingAttributesForCurrentBlock()
     }
     
+    /// Returns cached spacing for an image block.
+    /// Spacing only changes when the rendered text crosses the line threshold.
+    private func cachedSpacing(for block: BlockMetadata) -> CGFloat {
+        let currentLineCount = lineCount(for: block)
+        
+        if let cached = imageSpacingCache[block.id], cached.lineCount == currentLineCount {
+            return cached.spacing
+        }
+        
+        let spacing = currentLineCount <= Self.imageLineThreshold ? Self.imageSpacingLarge : Self.imageSpacingSmall
+        imageSpacingCache[block.id] = (lineCount: currentLineCount, spacing: spacing)
+        return spacing
+    }
+    
+    /// Removes stale entries from the spacing cache (blocks that no longer exist).
+    private func cleanupSpacingCache() {
+        let currentImageBlockIDs = Set(blockDocumentController.document.blocks.filter { $0.kind.isImage }.map { $0.id })
+        imageSpacingCache = imageSpacingCache.filter { currentImageBlockIDs.contains($0.key) }
+    }
+    
+    /// Returns the rendered line count for a block's text content.
+    /// Uses TextKit 2 layout fragments to count actual line fragments.
+    private func lineCount(for block: BlockMetadata) -> Int {
+        guard let textLayoutManager = textLayoutManager,
+              let contentManager = textLayoutManager.textContentManager,
+              let textStorage = (contentManager as? NSTextContentStorage)?.textStorage else {
+            return 1
+        }
+        
+        // Ensure layout reflects the latest edits.
+        textLayoutManager.textViewportLayoutController.layoutViewport()
+        
+        guard block.range.location < textStorage.length else { return 1 }
+        let availableLength = textStorage.length - block.range.location
+        guard availableLength > 0 else { return 1 }
+        let safeLength = max(1, min(block.range.length, availableLength))
+        
+        let docRange = contentManager.documentRange
+        guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location),
+              let endLocation = contentManager.location(startLocation, offsetBy: safeLength),
+              let textRange = NSTextRange(location: startLocation, end: endLocation) else {
+            return 1
+        }
+        
+        var totalLines = 0
+        textLayoutManager.enumerateTextLayoutFragments(from: textRange.location,
+                                                       options: [.ensuresLayout, .ensuresExtraLineFragment]) { fragment in
+            let fragmentRange = fragment.rangeInElement
+            let fragmentEnd = fragmentRange.endLocation
+            
+            guard fragmentEnd.compare(textRange.endLocation) != .orderedDescending else {
+                return false
+            }
+            
+            totalLines += fragment.textLineFragments.count
+            return true
+        }
+        
+        return max(totalLines, 1)
+    }
+    
     /// Set typing attributes based on current block type.
     private func updateTypingAttributesForCurrentBlock() {
         let cursorLocation = selectedRange.location
         let currentBlock = blockDocumentController.block(containing: NSRange(location: cursorLocation, length: 0))
         
         if let block = currentBlock, block.kind.isImage {
-            // In image block - use image spacing
+            // In image block - use cached spacing
+            let spacing = cachedSpacing(for: block)
+            
             let baseFont = UIFont.preferredFont(forTextStyle: .body)
             let baseColor = UIColor.label
             let style = NSMutableParagraphStyle()
             style.paragraphSpacingBefore = Self.imageSpacingBefore
-            style.paragraphSpacing = Self.imageSpacing
+            style.paragraphSpacing = spacing
             style.lineHeightMultiple = 1.14
             
             typingAttributes = [
