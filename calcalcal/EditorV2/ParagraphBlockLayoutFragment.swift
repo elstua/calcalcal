@@ -7,10 +7,14 @@ class ParagraphBlockLayoutFragment: NSTextLayoutFragment {
     /// Default implementation uses layoutFragmentFrame expanded by content insets.
     func backgroundRect(at point: CGPoint, style: BlockStyle) -> CGRect {
         let fragmentFrame = layoutFragmentFrame
+        let trailingAccessoryWidth = (blockMetadata?.calorieLabel?.isEmpty == false) ? CalorieOverlayMetrics.reservedColumnWidth : 0
         return CGRect(
             x: point.x - style.contentInsets.leading,
             y: point.y - style.contentInsets.top,
-            width: fragmentFrame.width + style.contentInsets.leading + style.contentInsets.trailing,
+            width: fragmentFrame.width
+                + style.contentInsets.leading
+                + style.contentInsets.trailing
+                + trailingAccessoryWidth,
             height: fragmentFrame.height + style.contentInsets.top + style.contentInsets.bottom
         )
     }
@@ -37,10 +41,14 @@ final class ImageBlockLayoutFragment: ParagraphBlockLayoutFragment {
     override func backgroundRect(at point: CGPoint, style: BlockStyle) -> CGRect {
         let fragmentFrame = layoutFragmentFrame
         let imageAreaWidth: CGFloat = 72
+        let trailingAccessoryWidth = (blockMetadata?.calorieLabel?.isEmpty == false) ? CalorieOverlayMetrics.reservedColumnWidth : 0
         return CGRect(
             x: point.x - imageAreaWidth,
             y: point.y - style.contentInsets.top,
-            width: fragmentFrame.width + imageAreaWidth + style.contentInsets.trailing,
+            width: fragmentFrame.width
+                + imageAreaWidth
+                + style.contentInsets.trailing
+                + trailingAccessoryWidth,
             height: fragmentFrame.height + style.contentInsets.top + style.contentInsets.bottom
         )
     }

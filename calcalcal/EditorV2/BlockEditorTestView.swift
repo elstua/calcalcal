@@ -16,6 +16,9 @@ struct BlockEditorTestView: View {
                 BlockEditorRepresentable(text: $text) { textView in
                     // Capture the underlying UITextView for debugging actions.
                     self.editorTextView = textView
+                    DispatchQueue.main.async {
+                        self.applySampleCalorieLabels()
+                    }
                 }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(uiColor: .secondarySystemBackground))
@@ -48,6 +51,32 @@ struct BlockEditorTestView: View {
             .padding(20)
             .navigationTitle("Editor V2 Test")
         }
+        .onAppear {
+            DispatchQueue.main.async {
+                self.applySampleCalorieLabels()
+            }
+        }
+        .onChange(of: text) { _ in
+            DispatchQueue.main.async {
+                self.applySampleCalorieLabels()
+            }
+        }
+    }
+    
+    private func applySampleCalorieLabels() {
+        guard let textView = editorTextView else { return }
+        let blocks = textView.blockDocumentController.document.blocks
+        guard !blocks.isEmpty else {
+            textView.setCalorieLabels([:])
+            return
+        }
+        
+        var labels: [BlockID: String] = [:]
+        for (index, block) in blocks.enumerated() {
+            let calories = 120 + (index * 70)
+            labels[block.id] = "\(calories) kcal"
+        }
+        textView.setCalorieLabels(labels)
     }
 }
 

@@ -49,6 +49,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     
     /// Maps BlockID to the overlay hosting controller for image blocks.
     private var imageOverlays: [BlockID: UIHostingController<ImageComponent>] = [:]
+    /// Maps BlockID to calorie overlay views.
+    private var calorieOverlays: [BlockID: CalorieBlockView] = [:]
+    /// Cached exclusion paths contributed by image overlays.
+    private var cachedImageExclusionPaths: [UIBezierPath] = []
     
     /// Images associated with block IDs (set when inserting image blocks).
     private var imagesByBlockID: [BlockID: UIImage] = [:]
@@ -81,6 +85,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             }
             
             self.updateImageOverlays()
+            self.updateCalorieOverlays()
         }
         
         textContainer.widthTracksTextView = true
@@ -219,11 +224,20 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         updateImageOverlays()
     }
     
+    func setCalorieLabel(_ label: String?, for blockID: BlockID) {
+        blockDocumentController.setCalorieLabel(label, for: blockID)
+    }
+    
+    func setCalorieLabels(_ labels: [BlockID: String]) {
+        blockDocumentController.setCalorieLabels(labels)
+    }
+    
     // MARK: - Layout
     
     override func layoutSubviews() {
         super.layoutSubviews()
         updateImageOverlays()
+        updateCalorieOverlays()
     }
     
     /// Size of the image component in "small" mode
@@ -242,7 +256,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         
         // Build exclusion paths for all image blocks
-        var exclusionPaths: [UIBezierPath] = []
+        var imageExclusionPaths: [UIBezierPath] = []
         
         // Create or update overlays for each image block.
         for block in imageBlocks {
@@ -284,11 +298,87 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 height: imageComponentSize.height
             )
             let exclusionPath = UIBezierPath(rect: exclusionRect)
-            exclusionPaths.append(exclusionPath)
+            imageExclusionPaths.append(exclusionPath)
         }
         
-        // Set all exclusion paths on the text container
-        textContainer.exclusionPaths = exclusionPaths
+        cachedImageExclusionPaths = imageExclusionPaths
+        applyExclusionPaths(with: imageExclusionPaths)
+    }
+    
+    /// Positions calorie overlays on the last visible line for each text block.
+    private func updateCalorieOverlays() {
+        let labeledBlocks = blockDocumentController.document.blocks.filter { block in
+            guard let text = block.calorieLabel else { return false }
+            return !text.isEmpty
+        }
+        
+        let activeIDs = Set(labeledBlocks.map { $0.id })
+        for (id, view) in calorieOverlays where !activeIDs.contains(id) {
+            view.removeFromSuperview()
+            calorieOverlays.removeValue(forKey: id)
+        }
+        
+        for block in labeledBlocks {
+            guard let labelText = block.calorieLabel,
+                  let lineRect = lastLineRect(for: block) else {
+                continue
+            }
+            
+            let overlay: CalorieBlockView
+            if let existing = calorieOverlays[block.id] {
+                overlay = existing
+            } else {
+                let view = CalorieBlockView()
+                addSubview(view)
+                calorieOverlays[block.id] = view
+                overlay = view
+            }
+            
+            overlay.setCaloriesAnimated(labelText)
+            
+            let measuredSize = overlay.sizeThatFits(
+                CGSize(width: CalorieOverlayMetrics.labelMaxWidth,
+                       height: CGFloat.greatestFiniteMagnitude)
+            )
+            let width = min(
+                CalorieOverlayMetrics.labelMaxWidth,
+                max(CalorieOverlayMetrics.labelMinWidth, measuredSize.width)
+            )
+            let height = max(20, measuredSize.height)
+            let x = bounds.width
+                - textContainerInset.right
+                - CalorieOverlayMetrics.horizontalEdgePadding
+                - width
+            let y = lineRect.midY - (height / 2.0)
+            overlay.frame = CGRect(x: x, y: y, width: width, height: height)
+        }
+        
+        applyExclusionPaths(with: cachedImageExclusionPaths)
+    }
+    
+    private func applyExclusionPaths(with imagePaths: [UIBezierPath]) {
+        var paths = imagePaths
+        if shouldReserveCalorieColumn, let caloriePath = makeCalorieReservedPath() {
+            paths.append(caloriePath)
+        }
+        textContainer.exclusionPaths = paths
+    }
+    
+    private func makeCalorieReservedPath() -> UIBezierPath? {
+        let reservedWidth = CalorieOverlayMetrics.reservedColumnWidth
+        guard reservedWidth > 0 else { return nil }
+        let containerWidth = textContainer.size.width
+        guard containerWidth > 0 else { return nil }
+        let width = min(reservedWidth, containerWidth)
+        let x = max(0, containerWidth - width)
+        let height = max(bounds.height, max(contentSize.height, 1))
+        return UIBezierPath(rect: CGRect(x: x, y: 0, width: width, height: height))
+    }
+    
+    private var shouldReserveCalorieColumn: Bool {
+        blockDocumentController.document.blocks.contains {
+            $0.calorieLabel?.isEmpty == false
+        }
     }
     
     /// Returns the image associated with a block (looked up by custom attribute
@@ -326,6 +416,80 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         return rect
     }
     
+    private func textRange(for block: BlockMetadata) -> UITextRange? {
+        guard block.range.length > 0 else { return nil }
+        guard
+            let contentStorage = textLayoutManager?.textContentManager as? NSTextContentStorage,
+            let storage = contentStorage.textStorage,
+            block.range.location < storage.length
+        else {
+            return nil
+        }
+        
+        let availableLength = storage.length - block.range.location
+        guard availableLength > 0 else { return nil }
+        let safeLength = min(block.range.length, availableLength)
+        guard safeLength > 0 else { return nil }
+        
+        guard
+            let start = position(from: beginningOfDocument, offset: block.range.location),
+            let end = position(from: start, offset: safeLength)
+        else {
+            return nil
+        }
+        
+        return textRange(from: start, to: end)
+    }
+    
+    private func lastLineRect(for block: BlockMetadata) -> CGRect? {
+        guard let range = textRange(for: block) else {
+            return caretRectFallback(for: block)
+        }
+        
+        let usableRects = selectionRects(for: range)
+            .map(\.rect)
+            .filter { isUsable(rect: $0) && $0.width > 0.5 && $0.height > 0.5 }
+        
+        if let rect = usableRects.last {
+            return rect
+        }
+        
+        return caretRectFallback(for: block)
+    }
+    
+    private func caretRectFallback(for block: BlockMetadata) -> CGRect? {
+        guard
+            let contentStorage = textLayoutManager?.textContentManager as? NSTextContentStorage,
+            let storage = contentStorage.textStorage,
+            storage.length > 0,
+            block.range.location < storage.length
+        else {
+            return nil
+        }
+        
+        let availableLength = storage.length - block.range.location
+        let safeOffset = max(min(block.range.length, availableLength) - 1, 0)
+        
+        guard
+            let start = position(from: beginningOfDocument, offset: block.range.location),
+            let target = position(from: start, offset: safeOffset)
+        else {
+            return nil
+        }
+        
+        let caret = caretRect(for: target)
+        return isUsable(rect: caret) ? caret : nil
+    }
+    
+    private func isUsable(rect: CGRect) -> Bool {
+        guard !rect.isNull else { return false }
+        guard rect.origin.x.isFinite, rect.origin.y.isFinite,
+              rect.width.isFinite, rect.height.isFinite else {
+            return false
+        }
+        return rect.width > 0 && rect.height > 0
+    }
+    
     // MARK: - Text Input Handling (UITextViewDelegate)
     
     /// Intercept text changes to fix paragraph style inheritance.
@@ -358,6 +522,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Called after text changes - update exclusion paths (styles are handled by document change callback).
     func textViewDidChange(_ textView: UITextView) {
         updateImageOverlays()
+        updateCalorieOverlays()
     }
     
     /// Called when cursor moves - set typing attributes based on current block type.
@@ -422,6 +587,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                     newStyle.paragraphSpacingBefore = targetSpacingBefore
                     storage.addAttribute(.paragraphStyle, value: newStyle, range: safeRange)
                 }
+            }
+            
+            if storage.attribute(BlockAttributeKeys.blockIdentifier, at: safeRange.location, effectiveRange: nil) == nil {
+                storage.addAttribute(BlockAttributeKeys.blockIdentifier, value: block.id.rawValue, range: safeRange)
             }
         }
         

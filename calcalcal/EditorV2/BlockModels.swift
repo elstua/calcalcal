@@ -104,13 +104,9 @@ public struct BlockDocument: Equatable {
                 spacingAfter: baseStyle.spacingAfter  // Use default: 10 for paragraph, 88 for image
             )
             
-            // For image blocks, try to extract the BlockID from the marker's attribute.
-            var blockID = BlockID()
-            if isImageBlock, enclosingRange.location < textStorage.length {
-                if let uuid = textStorage.attribute(BlockAttributeKeys.imageBlockID, at: enclosingRange.location, effectiveRange: nil) as? UUID {
-                    blockID = BlockID(rawValue: uuid)
-                }
-            }
+            let blockID = blockID(for: enclosingRange,
+                                  isImageBlock: isImageBlock,
+                                  textStorage: textStorage)
             
             let block = BlockMetadata(id: blockID, kind: kind, style: style, range: enclosingRange)
             result.append(block)
@@ -123,6 +119,32 @@ public struct BlockDocument: Equatable {
         }
         
         return result
+    }
+    
+    mutating func applyCalorieLabels(_ labels: [BlockID: String]) {
+        guard !blocks.isEmpty else { return }
+        blocks = blocks.map { block in
+            var updated = block
+            updated.calorieLabel = labels[block.id]
+            return updated
+        }
+    }
+    
+    private static func blockID(for range: NSRange,
+                                isImageBlock: Bool,
+                                textStorage: NSTextStorage) -> BlockID {
+        if let attributedID = textStorage.blockID(at: range.location) {
+            return attributedID
+        }
+        
+        if isImageBlock, range.location < textStorage.length,
+           let uuid = textStorage.attribute(BlockAttributeKeys.imageBlockID,
+                                            at: range.location,
+                                            effectiveRange: nil) as? UUID {
+            return BlockID(rawValue: uuid)
+        }
+        
+        return BlockID()
     }
 }
 
