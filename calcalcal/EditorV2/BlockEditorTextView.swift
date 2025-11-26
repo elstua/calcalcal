@@ -53,6 +53,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private var calorieOverlays: [BlockID: CalorieBlockView] = [:]
     /// Cached exclusion paths contributed by image overlays.
     private var cachedImageExclusionPaths: [UIBezierPath] = []
+    /// Tracks whether a deferred calorie overlay update is already scheduled.
+    private var isCalorieOverlayUpdateScheduled = false
     
     /// Images associated with block IDs (set when inserting image blocks).
     private var imagesByBlockID: [BlockID: UIImage] = [:]
@@ -237,7 +239,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         updateImageOverlays()
-        updateCalorieOverlays()
+        scheduleCalorieOverlayUpdate()
     }
     
     /// Size of the image component in "small" mode
@@ -307,6 +309,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     
     /// Positions calorie overlays on the last visible line for each text block.
     private func updateCalorieOverlays() {
+        isCalorieOverlayUpdateScheduled = false
+        
+        guard
+            let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage,
+            textStorage.length > 0
+        else {
+            return
+        }
+        
         let labeledBlocks = blockDocumentController.document.blocks.filter { block in
             guard let text = block.calorieLabel else { return false }
             return !text.isEmpty
@@ -319,6 +330,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         
         for block in labeledBlocks {
+            guard block.range.location < textStorage.length else { continue }
             guard let labelText = block.calorieLabel,
                   let lineRect = lastLineRect(for: block) else {
                 continue
@@ -488,6 +500,16 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             return false
         }
         return rect.width > 0 && rect.height > 0
+    }
+    
+    /// Schedules calorie overlay updates on the next run loop tick to avoid racing
+    /// with TextKit while it is mutating the text storage during editing.
+    private func scheduleCalorieOverlayUpdate() {
+        guard !isCalorieOverlayUpdateScheduled else { return }
+        isCalorieOverlayUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.updateCalorieOverlays()
+        }
     }
     
     // MARK: - Text Input Handling (UITextViewDelegate)
