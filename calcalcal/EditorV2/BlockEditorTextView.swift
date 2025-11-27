@@ -65,6 +65,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     
     /// Flag to prevent re-entry during style application.
     private var isApplyingStyles = false
+    /// Tracks pending block-style applications to avoid running while TextKit is mid-edit.
+    private var isBlockStyleUpdateScheduled = false
     
     init(configuration: BlockEditorConfiguration = BlockEditorConfiguration()) {
         super.init(frame: .zero, textContainer: nil)
@@ -81,13 +83,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             self.cleanupSpacingCache()
             
             // Re-apply paragraph styles after the document is rebuilt so every block
-            // picks up the correct spacing for its kind.
-            if !self.isApplyingStyles {
-                self.applyBlockStyles()
-            }
+            // picks up the correct spacing for its kind. Defer onto the next run loop
+            // so we don't touch text storage while TextKit is still mutating it.
+            self.scheduleBlockStyleApplication()
             
             self.updateImageOverlays()
-            self.updateCalorieOverlays()
+            self.scheduleCalorieOverlayUpdate()
         }
         
         textContainer.widthTracksTextView = true
@@ -348,15 +349,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             
             overlay.setCaloriesAnimated(labelText)
             
-            let measuredSize = overlay.sizeThatFits(
-                CGSize(width: CalorieOverlayMetrics.labelMaxWidth,
-                       height: CGFloat.greatestFiniteMagnitude)
-            )
-            let width = min(
-                CalorieOverlayMetrics.labelMaxWidth,
-                max(CalorieOverlayMetrics.labelMinWidth, measuredSize.width)
-            )
-            let height = max(20, measuredSize.height)
+            let width = CalorieOverlayMetrics.labelMaxWidth
+            let height = CalorieOverlayMetrics.labelHeight
             let x = bounds.width
                 - textContainerInset.right
                 - CalorieOverlayMetrics.horizontalEdgePadding
@@ -511,6 +505,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             self?.updateCalorieOverlays()
         }
     }
+
+    /// Defers block style application so it runs after the current TextKit edit cycle finishes.
+    private func scheduleBlockStyleApplication() {
+        guard !isBlockStyleUpdateScheduled else { return }
+        isBlockStyleUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isBlockStyleUpdateScheduled = false
+            self.applyBlockStyles()
+        }
+    }
     
     // MARK: - Text Input Handling (UITextViewDelegate)
     
@@ -544,7 +549,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Called after text changes - update exclusion paths (styles are handled by document change callback).
     func textViewDidChange(_ textView: UITextView) {
         updateImageOverlays()
-        updateCalorieOverlays()
+        scheduleCalorieOverlayUpdate()
     }
     
     /// Called when cursor moves - set typing attributes based on current block type.
