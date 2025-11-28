@@ -88,6 +88,7 @@ struct BlockDocument: Equatable {
         let string = textStorage.string as NSString
         var result: [BlockMetadata] = []
         var paragraphIndex = 0
+        var seenBlockIDs = Set<BlockID>()
         
         string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: [.byParagraphs, .substringNotRequired]) { _, substringRange, enclosingRange, _ in
             // Detect whether this paragraph string contains the special
@@ -107,9 +108,14 @@ struct BlockDocument: Equatable {
                 spacingAfter: baseStyle.spacingAfter  // Use default: 10 for paragraph, 88 for image
             )
             
-            let blockID = blockID(for: enclosingRange,
+            var blockID = blockID(for: enclosingRange,
                                   isImageBlock: isImageBlock,
                                   textStorage: textStorage)
+            
+            if seenBlockIDs.contains(blockID) {
+                blockID = BlockID()
+            }
+            seenBlockIDs.insert(blockID)
             
             let block = BlockMetadata(id: blockID, kind: kind, style: style, range: enclosingRange)
             result.append(block)

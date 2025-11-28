@@ -113,7 +113,11 @@ final class BlockEditorBridge {
             }
         }
 
-        cachedBlocksByID = Dictionary(uniqueKeysWithValues: rebuilt.map { ($0.id, $0) })
+        var updatedCache: [UUID: Block] = [:]
+        for block in rebuilt {
+            updatedCache[block.id] = block
+        }
+        cachedBlocksByID = updatedCache
         return rebuilt
     }
 

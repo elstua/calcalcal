@@ -660,7 +660,19 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 }
             }
             
-            if storage.attribute(BlockAttributeKeys.blockIdentifier, at: safeRange.location, effectiveRange: nil) == nil {
+            let existingBlockID = storage.attribute(BlockAttributeKeys.blockIdentifier,
+                                                    at: safeRange.location,
+                                                    effectiveRange: nil)
+            let existingUUID: UUID?
+            if let uuid = existingBlockID as? UUID {
+                existingUUID = uuid
+            } else if let blockID = existingBlockID as? BlockID {
+                existingUUID = blockID.rawValue
+            } else {
+                existingUUID = nil
+            }
+            
+            if existingUUID != block.id.rawValue {
                 storage.addAttribute(BlockAttributeKeys.blockIdentifier, value: block.id.rawValue, range: safeRange)
             }
         }
