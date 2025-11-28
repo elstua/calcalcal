@@ -25,8 +25,38 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
     
     // MARK: - Public queries
     
+    /// Returns the block that contains the given range.
+    ///
+    /// For zero-length ranges (cursor positions), we treat the `location` as a point:
+    /// - First we look for a block whose range directly contains the caret index.
+    /// - If none is found and the caret is at the end of the document, we snap to
+    ///   the last block whose range contains `location - 1`. This ensures that a
+    ///   caret positioned *after* the final character still maps to the last block,
+    ///   while caret positions at the start of a paragraph correctly resolve to the
+    ///   new paragraph (since that index is inside its enclosingRange).
     func block(containing range: NSRange) -> BlockMetadata? {
-        document.blocks.first { NSIntersectionRange($0.range, range).length > 0 }
+        // Zero-length range: treat as a caret position instead of an extent.
+        if range.length == 0 {
+            let location = range.location
+            
+            // Prefer the block that actually contains this index.
+            if let directHit = document.blocks.first(where: { NSLocationInRange(location, $0.range) }) {
+                return directHit
+            }
+            
+            // If caret is at the very end (past the last character), fall back to
+            // the block that contains location - 1 so we still resolve to the
+            // last block in the document.
+            if location > 0,
+               let trailingHit = document.blocks.first(where: { NSLocationInRange(location - 1, $0.range) }) {
+                return trailingHit
+            }
+            
+            return nil
+        }
+        
+        // Non-empty range: standard intersection test.
+        return document.blocks.first { NSIntersectionRange($0.range, range).length > 0 }
     }
     
     func block(for textRange: NSTextRange) -> BlockMetadata? {

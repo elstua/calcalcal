@@ -60,8 +60,16 @@ final class BlockEditorBridge {
         var rebuilt: [Block] = []
 
         for metadata in textView.blockDocumentController.document.blocks {
-            guard metadata.range.location < backingString.length else { continue }
-            let substring = backingString.substring(with: metadata.range)
+            let range = metadata.range
+            let length = backingString.length
+            // Defensive guard: ensure the metadata range is fully inside the backing string.
+            // During rapid edits, the block document can temporarily become stale relative to
+            // the text storage; in that case we skip this block rather than crashing.
+            guard range.location < length, NSMaxRange(range) <= length else {
+                continue
+            }
+            
+            let substring = backingString.substring(with: range)
             let blockID = metadata.id.rawValue
             let previous = cachedBlocksByID[blockID]
 
@@ -278,13 +286,21 @@ private extension BlockEditorBridge {
     }
 
     func resolveImageReference(in textStorage: NSTextStorage, blockRange: NSRange) -> UUID? {
+        let storageLength = textStorage.length
+        // Defensive guard: ensure the blockRange is within the current text storage.
+        // The block metadata can become temporarily stale during rapid edits, so we
+        // clamp the upper bound and bail out if the start is invalid.
+        guard storageLength > 0, blockRange.location < storageLength else {
+            return nil
+        }
+        
         if let uuid = textStorage.attribute(BlockAttributeKeys.imageBlockID,
                                             at: blockRange.location,
                                             effectiveRange: nil) as? UUID {
             return uuid
         }
 
-        let upperBound = NSMaxRange(blockRange)
+        let upperBound = min(NSMaxRange(blockRange), storageLength)
         var cursor = blockRange.location
         while cursor < upperBound {
             if let uuid = textStorage.attribute(BlockAttributeKeys.imageBlockID,
