@@ -5,6 +5,8 @@ type GoogleGenAIModule = typeof import('@google/genai');
 type GoogleGenAIConstructor = GoogleGenAIModule['GoogleGenAI'];
 type GoogleGenAIClient = InstanceType<GoogleGenAIConstructor>;
 
+const dynamicImport = new Function('specifier', 'return import(specifier);') as <T>(specifier: string) => Promise<T>;
+
 let googleGenAiClientPromise: Promise<GoogleGenAIClient> | null = null;
 
 async function getGeminiClient(): Promise<GoogleGenAIClient> {
@@ -14,7 +16,9 @@ async function getGeminiClient(): Promise<GoogleGenAIClient> {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    googleGenAiClientPromise = import('@google/genai').then(({ GoogleGenAI }) => new GoogleGenAI({ apiKey }));
+    googleGenAiClientPromise = dynamicImport<GoogleGenAIModule>('@google/genai').then(
+      ({ GoogleGenAI }) => new GoogleGenAI({ apiKey })
+    );
   }
   return googleGenAiClientPromise;
 }
