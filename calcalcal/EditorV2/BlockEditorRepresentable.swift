@@ -51,6 +51,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
         private var notificationToken: NSObjectProtocol?
+        private var metadataToken: NSObjectProtocol?
         private var pendingSnapshot: DispatchWorkItem?
         private var lastAppliedBlocks: [Block] = []
         
@@ -60,6 +61,9 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         
         deinit {
             if let token = notificationToken {
+                NotificationCenter.default.removeObserver(token)
+            }
+            if let token = metadataToken {
                 NotificationCenter.default.removeObserver(token)
             }
         }
@@ -78,6 +82,14 @@ struct BlockEditorRepresentable: UIViewRepresentable {
                 queue: .main
             ) { [weak self] _ in
                 self?.scheduleSnapshot()
+            }
+            
+            metadataToken = NotificationCenter.default.addObserver(
+                forName: .editorApplyPerBlockMetadata,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleMetadataNotification(notification)
             }
         }
         
@@ -117,6 +129,18 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             }
             pendingSnapshot = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+        }
+        
+        private func handleMetadataNotification(_ notification: Notification) {
+            guard
+                let entryId = parent.entryId,
+                let userInfo = notification.userInfo,
+                let notifiedEntryID = userInfo["entryId"] as? UUID,
+                notifiedEntryID == entryId
+            else {
+                return
+            }
+            scheduleSnapshot()
         }
     }
 }

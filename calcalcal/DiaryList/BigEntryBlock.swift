@@ -98,7 +98,8 @@ struct BigEntryBlock: View {
             
             // Footer
             EntryFooterView(
-                calorieSummary: "\((overrideTotalCalories ?? entry.totalCalories).map { String($0) } ?? "…") kcal",
+                blocks: effectiveBlocks.wrappedValue,
+                remoteTotalCalories: overrideTotalCalories ?? entry.totalCalories,
                 onAddImage: { onAddImage?() }
             )
             .padding(.bottom, 8)

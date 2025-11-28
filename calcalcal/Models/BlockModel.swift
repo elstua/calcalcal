@@ -182,6 +182,45 @@ extension Block {
     }
 }
 
+// MARK: - Calorie helpers
+extension Collection where Element == Block {
+    /// Returns the sum of all calories derived from local block metadata.
+    /// Falls back to `calorieData` strings when nutrition payload is not available.
+    func resolvedCalorieTotal() -> Int? {
+        var total = 0
+        var hasValue = false
+        for block in self {
+            guard let value = block.resolvedCalorieValue() else { continue }
+            total += Swift.max(0, value)
+            hasValue = true
+        }
+        return hasValue ? total : nil
+    }
+}
+
+fileprivate extension Block {
+    func resolvedCalorieValue() -> Int? {
+        if let calories = nutrition?.calories {
+            return calories
+        }
+        guard let label = calorieData?.firstIntegerValue else { return nil }
+        return label
+    }
+}
+
+fileprivate extension String {
+    var firstIntegerValue: Int? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        if let exact = Int(trimmed) {
+            return exact
+        }
+        if let range = range(of: #"-?\d+"#, options: .regularExpression) {
+            return Int(self[range])
+        }
+        return nil
+    }
+}
+
 // MARK: - Nutrition data container
 struct NutritionData: Codable, Equatable {
     var calories: Int?
