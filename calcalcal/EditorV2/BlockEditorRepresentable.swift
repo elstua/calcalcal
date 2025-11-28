@@ -2,62 +2,121 @@ import SwiftUI
 import UIKit
 
 struct BlockEditorRepresentable: UIViewRepresentable {
-    @Binding var text: String
-    var onTextViewCreated: ((BlockEditorTextView) -> Void)? = nil
+    @Binding var blocks: [Block]
+    var imageMap: [UUID: UIImage]
+    var isEditable: Bool
+    @Binding var shouldBecomeFirstResponder: Bool
+    var entryId: UUID?
+    var onBlocksChange: (([Block]) -> Void)?
+    var onTextViewReady: ((BlockEditorTextView) -> Void)?
+    
+    init(blocks: Binding<[Block]>,
+         imageMap: [UUID: UIImage] = [:],
+         isEditable: Bool = true,
+         shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
+         entryId: UUID? = nil,
+         onBlocksChange: (([Block]) -> Void)? = nil,
+         onTextViewReady: ((BlockEditorTextView) -> Void)? = nil) {
+        self._blocks = blocks
+        self.imageMap = imageMap
+        self.isEditable = isEditable
+        self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self.entryId = entryId
+        self.onBlocksChange = onBlocksChange
+        self.onTextViewReady = onTextViewReady
+    }
     
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
     
     func makeUIView(context: Context) -> BlockEditorTextView {
-        let view = BlockEditorTextView(configuration: BlockEditorConfiguration(initialText: text))
-        view.delegate = context.coordinator
-        context.coordinator.textView = view
-        onTextViewCreated?(view)
-        return view
+        let textView = BlockEditorTextView()
+        context.coordinator.parent = self
+        context.coordinator.bind(to: textView)
+        onTextViewReady?(textView)
+        return textView
     }
     
     func updateUIView(_ uiView: BlockEditorTextView, context: Context) {
-        // For now we deliberately avoid pushing SwiftUI text changes back into
-        // the TextKit 2 stack while debugging attachment-related crashes.
-        // The underlying UITextView acts as the source of truth during editing.
+        context.coordinator.parent = self
+        uiView.isEditable = isEditable
+        uiView.entryIdentifier = entryId
+        context.coordinator.applyIfNeeded(blocks: blocks, imageMap: imageMap)
+        context.coordinator.handleFirstResponderIfNeeded(textView: uiView)
     }
     
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator {
         var parent: BlockEditorRepresentable
         weak var textView: BlockEditorTextView?
-        var isSyncingFromSwiftUI = false
+        var bridge: BlockEditorBridge?
+        private var notificationToken: NSObjectProtocol?
+        private var pendingSnapshot: DispatchWorkItem?
+        private var lastAppliedBlocks: [Block] = []
         
         init(parent: BlockEditorRepresentable) {
             self.parent = parent
         }
         
-        func textViewDidChange(_ textView: UITextView) {
-            guard !isSyncingFromSwiftUI else { return }
-            parent.text = textView.text
+        deinit {
+            if let token = notificationToken {
+                NotificationCenter.default.removeObserver(token)
+            }
         }
-    }
-}
-
-struct BlockEditorDemoView: View {
-    @State private var text: String = """
-    Oatmeal with berries
-    Chicken salad with avocado
-    Cappuccino
-    """
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            BlockEditorRepresentable(text: $text)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        
+        func bind(to textView: BlockEditorTextView) {
+            self.textView = textView
+            textView.isEditable = parent.isEditable
+            textView.entryIdentifier = parent.entryId
+            bridge = BlockEditorBridge(textView: textView)
+            bridge?.apply(blocks: parent.blocks, imageMap: parent.imageMap)
+            lastAppliedBlocks = parent.blocks
             
-            Text("Blocks: \(text.components(separatedBy: .newlines).filter { !$0.isEmpty }.count)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            notificationToken = NotificationCenter.default.addObserver(
+                forName: UITextView.textDidChangeNotification,
+                object: textView,
+                queue: .main
+            ) { [weak self] _ in
+                self?.scheduleSnapshot()
+            }
         }
-        .padding(16)
+        
+        func applyIfNeeded(blocks: [Block], imageMap: [UUID: UIImage]) {
+            guard let bridge else { return }
+            textView?.entryIdentifier = parent.entryId
+            if bridge.isApplyingExternalUpdate {
+                return
+            }
+            if lastAppliedBlocks == blocks {
+                bridge.refreshImages(using: imageMap)
+                return
+            }
+            bridge.apply(blocks: blocks, imageMap: imageMap)
+            lastAppliedBlocks = blocks
+        }
+        
+        func handleFirstResponderIfNeeded(textView: BlockEditorTextView) {
+            guard parent.shouldBecomeFirstResponder else { return }
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+                self.parent.shouldBecomeFirstResponder = false
+            }
+        }
+        
+        private func scheduleSnapshot() {
+            guard let bridge, !bridge.isApplyingExternalUpdate else { return }
+            pendingSnapshot?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, let bridge = self.bridge else { return }
+                let snapshot = bridge.snapshotBlocks()
+                self.lastAppliedBlocks = snapshot
+                if snapshot != self.parent.blocks {
+                    self.parent.blocks = snapshot
+                }
+                self.parent.onBlocksChange?(snapshot)
+            }
+            pendingSnapshot = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+        }
     }
 }

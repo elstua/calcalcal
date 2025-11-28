@@ -46,34 +46,37 @@ public struct BlockStyle: Equatable {
     }
 }
 
-public struct BlockMetadata: Equatable {
-    public var id: BlockID
-    public var kind: BlockKind
-    public var style: BlockStyle
-    public var calorieLabel: String?
-    public var range: NSRange
+struct BlockMetadata: Equatable {
+    var id: BlockID
+    var kind: BlockKind
+    var style: BlockStyle
+    var calorieLabel: String?
+    var nutrition: NutritionData?
+    var range: NSRange
     /// For image blocks, the actual image to display as an overlay.
-    public var image: UIImage?
+    var image: UIImage?
     
-    public init(id: BlockID = BlockID(),
-                kind: BlockKind,
-                style: BlockStyle? = nil,
-                calorieLabel: String? = nil,
-                range: NSRange,
-                image: UIImage? = nil) {
+    init(id: BlockID = BlockID(),
+         kind: BlockKind,
+         style: BlockStyle? = nil,
+         calorieLabel: String? = nil,
+         nutrition: NutritionData? = nil,
+         range: NSRange,
+         image: UIImage? = nil) {
         self.id = id
         self.kind = kind
         self.style = style ?? kind.defaultStyle
         self.calorieLabel = calorieLabel
+        self.nutrition = nutrition
         self.range = range
         self.image = image
     }
 }
 
-public struct BlockDocument: Equatable {
-    public private(set) var blocks: [BlockMetadata]
+struct BlockDocument: Equatable {
+    private(set) var blocks: [BlockMetadata]
     
-    public init(blocks: [BlockMetadata] = []) {
+    init(blocks: [BlockMetadata] = []) {
         self.blocks = blocks
     }
     
@@ -121,11 +124,12 @@ public struct BlockDocument: Equatable {
         return result
     }
     
-    mutating func applyCalorieLabels(_ labels: [BlockID: String]) {
+    mutating func applyMetadata(calorieLabels: [BlockID: String], nutrition: [BlockID: NutritionData]) {
         guard !blocks.isEmpty else { return }
         blocks = blocks.map { block in
             var updated = block
-            updated.calorieLabel = labels[block.id]
+            updated.calorieLabel = calorieLabels[block.id]
+            updated.nutrition = nutrition[block.id]
             return updated
         }
     }

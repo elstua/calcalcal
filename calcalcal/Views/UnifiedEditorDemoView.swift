@@ -55,13 +55,15 @@ struct UnifiedEditorDemoView: View {
                     alignment: .bottom
                 )
                 
-                // Unified Text Editor
-                UnifiedTextEditor(blocks: $blocks, imageMap: imageMap)
-                    .blockSpacing(20)
-                    .onBlocksChange { updatedBlocks in
+                // Block Editor V2
+                BlockEditorRepresentable(
+                    blocks: $blocks,
+                    imageMap: imageMap,
+                    onBlocksChange: { updatedBlocks in
                         print("Blocks changed: \(updatedBlocks.count) blocks")
                         self.debugLastAction = "onBlocksChange"
                     }
+                )
                 
                 // Bottom Toolbar
                 HStack {

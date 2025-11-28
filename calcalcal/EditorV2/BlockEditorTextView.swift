@@ -63,6 +63,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Only recalculate when the number of visual lines changes.
     private var imageSpacingCache: [BlockID: (lineCount: Int, spacing: CGFloat)] = [:]
     
+    /// Entry identifier used to scope metadata notifications and backend synchronization.
+    var entryIdentifier: UUID?
+    
     /// Flag to prevent re-entry during style application.
     private var isApplyingStyles = false
     /// Tracks pending block-style applications to avoid running while TextKit is mid-edit.
@@ -128,11 +131,20 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         
         // Force layout invalidation so our custom layout fragments are created.
         textLayoutManager?.textViewportLayoutController.layoutViewport()
+        
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(handleMetadataNotification(_:)),
+                                               name: .editorApplyPerBlockMetadata,
+                                               object: nil)
     }
     
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func updateTextIfNeeded(_ text: String) {
@@ -233,6 +245,21 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     
     func setCalorieLabels(_ labels: [BlockID: String]) {
         blockDocumentController.setCalorieLabels(labels)
+    }
+
+    func setNutritionData(_ nutrition: [BlockID: NutritionData]) {
+        blockDocumentController.setNutritionData(nutrition)
+    }
+
+    /// Replaces the current image overlay map and schedules a fresh layout pass.
+    func setImageMap(_ images: [BlockID: UIImage]) {
+        imagesByBlockID = images
+        updateImageOverlays()
+    }
+
+    /// Returns the current overlay image for a given block, if any.
+    func image(for blockID: BlockID) -> UIImage? {
+        imagesByBlockID[blockID]
     }
     
     // MARK: - Layout
@@ -526,6 +553,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             // Always use standard paragraph attributes for new paragraphs.
             // Image blocks are created explicitly via insertImageBlock(), not by pressing Enter.
             typingAttributes = standardParagraphAttributes
+            NotificationCenter.default.post(name: .editorParagraphCommitted, object: nil)
         }
         return true
     }
@@ -550,6 +578,22 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         updateImageOverlays()
         scheduleCalorieOverlayUpdate()
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
+    }
+
+    @objc private func handleMetadataNotification(_ notification: Notification) {
+        guard let entryIdentifier,
+              let userInfo = notification.userInfo,
+              let notifiedEntryID = userInfo["entryId"] as? UUID,
+              notifiedEntryID == entryIdentifier else {
+            return
+        }
+        let analyzedBlocks = parseAnalyzedBlocks(from: userInfo["analyzedBlocks"])
+        guard !analyzedBlocks.isEmpty else { return }
+        applyAnalyzedMetadata(analyzedBlocks)
     }
     
     /// Called when cursor moves - set typing attributes based on current block type.
@@ -713,6 +757,184 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             // In paragraph block or new position - use standard spacing
             typingAttributes = standardParagraphAttributes
         }
+    }
+
+    // MARK: - Metadata Handling
+    private func parseAnalyzedBlocks(from payload: Any?) -> [AnalyzedBlock] {
+        if let blocks = payload as? [AnalyzedBlock] {
+            return blocks
+        }
+        guard let dicts = payload as? [[String: Any]] else { return [] }
+        return dicts.compactMap { dict in
+            func parseInt(_ value: Any?) -> Int? {
+                if let intValue = value as? Int { return intValue }
+                if let number = value as? NSNumber { return number.intValue }
+                if let string = value as? String { return Int(string) }
+                return nil
+            }
+            func parseDouble(_ value: Any?) -> Double? {
+                if let doubleValue = value as? Double { return doubleValue }
+                if let number = value as? NSNumber { return number.doubleValue }
+                if let string = value as? String { return Double(string) }
+                return nil
+            }
+            let id = dict["id"] as? String ?? UUID().uuidString
+            let position = parseInt(dict["position"]) ?? 0
+            let content = (dict["content"] as? String) ?? ""
+            let calories = parseInt(dict["calories"])
+            return AnalyzedBlock(
+                id: id,
+                position: position,
+                content: content,
+                calories: calories,
+                protein: parseDouble(dict["protein"]),
+                fat: parseDouble(dict["fat"]),
+                carbs: parseDouble(dict["carbs"]),
+                fiber: parseDouble(dict["fiber"]),
+                sugar: parseDouble(dict["sugar"]),
+                sodium: parseDouble(dict["sodium"]),
+                confidence: parseDouble(dict["confidence"]),
+                aiAnalysis: nil
+            )
+        }
+    }
+    
+    private func applyAnalyzedMetadata(_ analyzedBlocks: [AnalyzedBlock]) {
+        guard
+            let textLayoutManager = textLayoutManager,
+            let contentManager = textLayoutManager.textContentManager as? NSTextContentStorage,
+            let textStorage = contentManager.textStorage
+        else {
+            return
+        }
+        
+        let backingString = textStorage.string as NSString
+        let metadataBlocks = blockDocumentController.document.blocks
+        guard !metadataBlocks.isEmpty else { return }
+        
+        var paragraphs: [(index: Int, metadata: BlockMetadata, text: String)] = []
+        for block in metadataBlocks {
+            var text = textForBlock(block, in: backingString)
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty && !block.kind.isImage {
+                continue
+            }
+            paragraphs.append((paragraphs.count, block, text))
+        }
+        
+        guard !paragraphs.isEmpty else { return }
+        
+        var calorieMap = currentCalorieMap()
+        var nutritionMap = currentNutritionMap()
+        var matchedParagraphIndices = Set<Int>()
+        var unmatchedAnalyzed: [AnalyzedBlock] = []
+        
+        for analyzed in analyzedBlocks {
+            let trimmedServer = analyzed.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            var matched = false
+            for (idx, paragraph) in paragraphs.enumerated() where !matchedParagraphIndices.contains(idx) {
+                let deviceText = paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !deviceText.isEmpty && !trimmedServer.isEmpty && deviceText == trimmedServer {
+                    apply(analyzed, to: paragraph.metadata.id, calorieMap: &calorieMap, nutritionMap: &nutritionMap)
+                    matchedParagraphIndices.insert(idx)
+                    matched = true
+                    break
+                }
+            }
+            if !matched {
+                unmatchedAnalyzed.append(analyzed)
+            }
+        }
+        
+        let remainingParagraphIndices = paragraphs.enumerated()
+            .filter { !matchedParagraphIndices.contains($0.offset) }
+            .map(\.offset)
+        
+        for (analyzed, paragraphIndex) in zip(unmatchedAnalyzed, remainingParagraphIndices) {
+            let metadata = paragraphs[paragraphIndex].metadata
+            apply(analyzed, to: metadata.id, calorieMap: &calorieMap, nutritionMap: &nutritionMap)
+        }
+        
+        blockDocumentController.setCalorieLabels(calorieMap)
+        blockDocumentController.setNutritionData(nutritionMap)
+    }
+    
+    private func apply(_ analyzed: AnalyzedBlock,
+                       to blockID: BlockID,
+                       calorieMap: inout [BlockID: String],
+                       nutritionMap: inout [BlockID: NutritionData]) {
+        if let calories = derivedCalories(from: analyzed) {
+            calorieMap[blockID] = String(calories)
+        }
+        if let nutrition = nutritionData(from: analyzed) {
+            nutritionMap[blockID] = nutrition
+        }
+    }
+    
+    private func textForBlock(_ metadata: BlockMetadata, in backingString: NSString) -> String {
+        guard metadata.range.location < backingString.length else { return "" }
+        var text = backingString.substring(with: metadata.range)
+        if metadata.kind.isImage {
+            text = text.replacingOccurrences(of: Self.imageMarker, with: "")
+        }
+        while let last = text.last, last.isNewline {
+            text.removeLast()
+        }
+        return text
+    }
+    
+    private func currentCalorieMap() -> [BlockID: String] {
+        var map: [BlockID: String] = [:]
+        for block in blockDocumentController.document.blocks {
+            if let label = block.calorieLabel, !label.isEmpty {
+                map[block.id] = label
+            }
+        }
+        return map
+    }
+    
+    private func currentNutritionMap() -> [BlockID: NutritionData] {
+        var map: [BlockID: NutritionData] = [:]
+        for block in blockDocumentController.document.blocks {
+            if let nutrition = block.nutrition {
+                map[block.id] = nutrition
+            }
+        }
+        return map
+    }
+    
+    private func derivedCalories(from analyzed: AnalyzedBlock) -> Int? {
+        if let calories = analyzed.calories, calories > 0 {
+            return calories
+        }
+        if let protein = analyzed.protein,
+           let fat = analyzed.fat,
+           let carbs = analyzed.carbs {
+            let estimate = (protein * 4.0) + (fat * 9.0) + (carbs * 4.0)
+            return Int(estimate.rounded())
+        }
+        return nil
+    }
+    
+    private func nutritionData(from analyzed: AnalyzedBlock) -> NutritionData? {
+        let hasMeaningfulData = (analyzed.calories ?? 0) > 0
+            || (analyzed.protein ?? 0) > 0
+            || (analyzed.fat ?? 0) > 0
+            || (analyzed.carbs ?? 0) > 0
+            || (analyzed.fiber ?? 0) > 0
+            || (analyzed.sugar ?? 0) > 0
+            || (analyzed.sodium ?? 0) > 0
+        guard hasMeaningfulData else { return nil }
+        return NutritionData(
+            calories: analyzed.calories,
+            protein: analyzed.protein,
+            fat: analyzed.fat,
+            carbs: analyzed.carbs,
+            fiber: analyzed.fiber,
+            sugar: analyzed.sugar,
+            sodium: analyzed.sodium,
+            confidence: analyzed.confidence
+        )
     }
 }
 

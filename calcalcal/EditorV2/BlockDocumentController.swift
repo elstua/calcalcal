@@ -10,6 +10,7 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
     
     private(set) var document = BlockDocument()
     private var calorieLabels: [BlockID: String] = [:]
+    private var nutritionData: [BlockID: NutritionData] = [:]
     
     /// Called after the document is rebuilt so the text view can update overlays.
     var onDocumentChange: (() -> Void)?
@@ -39,12 +40,17 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
         } else {
             calorieLabels.removeValue(forKey: blockID)
         }
-        applyCalorieLabelsAndNotify()
+        applyMetadataAndNotify()
     }
     
     func setCalorieLabels(_ labels: [BlockID: String]) {
         calorieLabels = labels
-        applyCalorieLabelsAndNotify()
+        applyMetadataAndNotify()
+    }
+    
+    func setNutritionData(_ nutrition: [BlockID: NutritionData]) {
+        nutritionData = nutrition
+        applyMetadataAndNotify()
     }
     
     /// Allows callers to force a document rebuild after external text mutations.
@@ -66,12 +72,12 @@ final class BlockDocumentController: NSObject, NSTextStorageDelegate {
     private func rebuildBlocks() {
         guard let storage = textStorage else { return }
         document.rebuild(from: storage)
-        document.applyCalorieLabels(calorieLabels)
+        document.applyMetadata(calorieLabels: calorieLabels, nutrition: nutritionData)
         onDocumentChange?()
     }
     
-    private func applyCalorieLabelsAndNotify() {
-        document.applyCalorieLabels(calorieLabels)
+    private func applyMetadataAndNotify() {
+        document.applyMetadata(calorieLabels: calorieLabels, nutrition: nutritionData)
         onDocumentChange?()
     }
     

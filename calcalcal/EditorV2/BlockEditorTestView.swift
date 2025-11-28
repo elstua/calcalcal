@@ -2,31 +2,40 @@ import SwiftUI
 import UIKit
 
 struct BlockEditorTestView: View {
-    @State private var text: String = """
-    Bulletproof coffee
-    Overnight oats with chia and banana
-    Grilled salmon with quinoa bowl
-    Dark chocolate square
-    """
+    @State private var blocks: [Block] = [
+        Block(type: .text("Bulletproof coffee"), calorieData: "120"),
+        Block(type: .text("Overnight oats with chia and banana"), calorieData: "340"),
+        Block(type: .text("Grilled salmon with quinoa bowl"), calorieData: "560"),
+        Block(type: .text("Dark chocolate square"), calorieData: "80")
+    ]
+    @State private var imageMap: [UUID: UIImage] = [:]
+    @State private var shouldBecomeFirstResponder = false
     @State private var editorTextView: BlockEditorTextView?
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                BlockEditorRepresentable(text: $text) { textView in
-                    // Capture the underlying UITextView for debugging actions.
-                    self.editorTextView = textView
-                    DispatchQueue.main.async {
-                        self.applySampleCalorieLabels()
+                BlockEditorRepresentable(
+                    blocks: $blocks,
+                    imageMap: imageMap,
+                    shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                    onBlocksChange: { updated in
+                        blocks = updated
+                    },
+                    onTextViewReady: { textView in
+                        editorTextView = textView
+                        DispatchQueue.main.async {
+                            self.applySampleCalorieLabels()
+                        }
                     }
-                }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
-                    )
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+                )
                 
                 Button("Insert sample image block") {
                     if let image = UIImage(systemName: "photo") {
@@ -35,12 +44,13 @@ struct BlockEditorTestView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 
-                Text("Current text:")
+                Text("Blocks: \(blocks.count)")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 ScrollView {
-                    Text(text.isEmpty ? "Start typing above…" : text)
+                    Text(blocks.map { blockText(for: $0) }
+                        .joined(separator: "\n"))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
                         .background(Color(uiColor: .tertiarySystemBackground))
@@ -50,16 +60,6 @@ struct BlockEditorTestView: View {
             }
             .padding(20)
             .navigationTitle("Editor V2 Test")
-        }
-        .onAppear {
-            DispatchQueue.main.async {
-                self.applySampleCalorieLabels()
-            }
-        }
-        .onChange(of: text) { _ in
-            DispatchQueue.main.async {
-                self.applySampleCalorieLabels()
-            }
         }
     }
     
@@ -78,8 +78,20 @@ struct BlockEditorTestView: View {
         }
         textView.setCalorieLabels(labels)
     }
+    
+    private func blockText(for block: Block) -> String {
+        switch block.type {
+        case .text(let text):
+            return text
+        case .imageText(_, _, let text):
+            return text
+        case .image:
+            return "[image]"
+        case .spacer:
+            return ""
+        }
+    }
 }
-
 
 struct BlockEditorTestView_Previews: PreviewProvider {
     static var previews: some View {
