@@ -1,20 +1,27 @@
-import { GoogleGenAI } from '@google/genai/node';
 import { loadPrompt } from '../prompt';
 import { NutritionAnalysisResult, NutritionProvider } from './types';
 
-export class GeminiNutritionProvider implements NutritionProvider {
-  private client: GoogleGenAI;
+type GoogleGenAIModule = typeof import('@google/genai');
+type GoogleGenAIConstructor = GoogleGenAIModule['GoogleGenAI'];
+type GoogleGenAIClient = InstanceType<GoogleGenAIConstructor>;
 
-  constructor() {
+let googleGenAiClientPromise: Promise<GoogleGenAIClient> | null = null;
+
+async function getGeminiClient(): Promise<GoogleGenAIClient> {
+  if (!googleGenAiClientPromise) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
-    this.client = new GoogleGenAI({ apiKey });
-  }
 
-  private getClient() {
-    return this.client;
+    googleGenAiClientPromise = import('@google/genai').then(({ GoogleGenAI }) => new GoogleGenAI({ apiKey }));
+  }
+  return googleGenAiClientPromise;
+}
+
+export class GeminiNutritionProvider implements NutritionProvider {
+  private async getClient() {
+    return getGeminiClient();
   }
 
   async analyze(
