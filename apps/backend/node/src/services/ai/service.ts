@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import Database from '../../services/database';
 import { AIAnalysisCacheModel } from '../../models/AIAnalysisCache';
 import { getNutritionProvider } from './providers';
-import { NutritionAnalysisResult } from './providers/types';
+import { NutritionAnalysisResult, NutritionProvider } from './providers/types';
 
 export class AIService {
   static async analyzeBlocks(blocks: any[]) {
@@ -14,72 +14,18 @@ export class AIService {
       providerName === 'gemini'
         ? process.env.AI_GEMINI_MODEL || 'gemini-2.5-flash'
         : process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+    const concurrencyEnv = Number(process.env.AI_MAX_CONCURRENCY ?? 3);
+    const concurrency = Number.isFinite(concurrencyEnv) && concurrencyEnv > 0 ? concurrencyEnv : 3;
 
-    const results: any[] = [];
+    const tasks = blocks.map((block) => () =>
+      AIService.analyzeSingleBlock(block, provider, {
+        temperature,
+        model,
+        promptVersion,
+      })
+    );
 
-    for (const block of blocks) {
-      const content = (block?.content || '').toString().trim();
-      if (!content) {
-        results.push(block);
-        continue;
-      }
-
-      const hash = AIService.hashContent(content);
-
-      const cached = await AIAnalysisCacheModel.getByContentHash(hash);
-      if (cached) {
-        results.push({
-          ...block,
-          ...cached.analysis_result,
-          confidence: cached.confidence,
-        });
-        continue;
-      }
-
-      try {
-        const analysis: NutritionAnalysisResult = await provider.analyze(content, {
-          temperature,
-          model,
-          promptVersion,
-        });
-
-        await AIAnalysisCacheModel.insert({
-          contentHash: hash,
-          content,
-          analysisResult: analysis,
-          confidence: analysis.confidence || 0,
-          rawResponseText: analysis.rawResponseText,
-          providerModel: analysis.providerModel,
-          temperature: analysis.temperature,
-          promptVersion: analysis.promptVersion,
-          parseOk: true,
-          parseErrorText: null,
-          attempt: 'primary',
-          usagePromptTokens: analysis.usage?.promptTokens,
-          usageCompletionTokens: analysis.usage?.completionTokens,
-          usageTotalTokens: analysis.usage?.totalTokens,
-        });
-
-        results.push({
-          ...block,
-          ...analysis,
-        });
-      } catch (error) {
-        results.push({
-          ...block,
-          calories: 0,
-          protein: 0,
-          fat: 0,
-          carbs: 0,
-          fiber: 0,
-          sugar: 0,
-          sodium: 0,
-          confidence: 0,
-        });
-      }
-    }
-
-    return results;
+    return AIService.runWithConcurrency(tasks, concurrency);
   }
 
   static calculateTotals(blocks: any[]) {
@@ -107,6 +53,94 @@ export class AIService {
 
   static hashContent(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  private static async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+    if (tasks.length === 0) {
+      return [];
+    }
+    const results: T[] = new Array(tasks.length);
+    const workerCount = Math.min(Math.max(1, Math.floor(limit) || 1), tasks.length) || 1;
+    let nextIndex = 0;
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const currentIndex = nextIndex++;
+        if (currentIndex >= tasks.length) {
+          break;
+        }
+        results[currentIndex] = await tasks[currentIndex]();
+      }
+    });
+
+    await Promise.all(workers);
+    return results;
+  }
+
+  private static async analyzeSingleBlock(
+    block: any,
+    provider: NutritionProvider,
+    options: { temperature: number; model: string; promptVersion: string }
+  ) {
+    const content = (block?.content || '').toString().trim();
+    if (!content) {
+      return block;
+    }
+
+    const hash = AIService.hashContent(content);
+    const cached = await AIAnalysisCacheModel.getByContentHash(hash);
+    if (cached) {
+      return {
+        ...block,
+        ...cached.analysis_result,
+        confidence: cached.confidence,
+      };
+    }
+
+    try {
+      const analysis: NutritionAnalysisResult = await provider.analyze(content, {
+        temperature: options.temperature,
+        model: options.model,
+        promptVersion: options.promptVersion,
+      });
+
+      await AIAnalysisCacheModel.insert({
+        contentHash: hash,
+        content,
+        analysisResult: analysis,
+        confidence: analysis.confidence || 0,
+        rawResponseText: analysis.rawResponseText,
+        providerModel: analysis.providerModel,
+        temperature: analysis.temperature,
+        promptVersion: analysis.promptVersion,
+        parseOk: true,
+        parseErrorText: null,
+        attempt: 'primary',
+        usagePromptTokens: analysis.usage?.promptTokens,
+        usageCompletionTokens: analysis.usage?.completionTokens,
+        usageTotalTokens: analysis.usage?.totalTokens,
+      });
+
+      return {
+        ...block,
+        ...analysis,
+      };
+    } catch (error: any) {
+      console.error('[AIService] analyzeSingleBlock failed', {
+        message: error?.message,
+      });
+      return {
+        ...block,
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+        fiber: 0,
+        sugar: 0,
+        sodium: 0,
+        confidence: 0,
+      };
+    }
   }
 }
 

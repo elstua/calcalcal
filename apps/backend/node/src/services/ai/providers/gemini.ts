@@ -46,6 +46,9 @@ export class GeminiNutritionProvider implements NutritionProvider {
     const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
 
     const client = await this.getClient();
+    const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 45000);
+    const requestTimeout =
+      Number.isFinite(timeoutEnv) && timeoutEnv > 0 ? Math.floor(timeoutEnv) : undefined;
 
     let responseText: string | undefined;
     let usage:
@@ -68,6 +71,13 @@ export class GeminiNutritionProvider implements NutritionProvider {
         config: {
           temperature,
           responseMimeType: 'application/json',
+          ...(requestTimeout
+            ? {
+                httpOptions: {
+                  timeout: requestTimeout,
+                },
+              }
+            : {}),
         },
       });
 
