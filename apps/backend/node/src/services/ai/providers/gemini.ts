@@ -1,16 +1,37 @@
-import { GoogleGenAI } from '@google/genai';
 import { loadPrompt } from '../prompt';
 import { NutritionAnalysisResult, NutritionProvider } from './types';
 
+type GoogleGenAIModule = typeof import('@google/genai/node');
+type GoogleGenAIConstructor = GoogleGenAIModule['GoogleGenAI'];
+type GoogleGenAIClient = InstanceType<GoogleGenAIConstructor>;
+
+let googleGenAiModulePromise: Promise<GoogleGenAIModule> | null = null;
+
+async function loadGoogleGenAiModule(): Promise<GoogleGenAIModule> {
+  if (!googleGenAiModulePromise) {
+    googleGenAiModulePromise = import('@google/genai/node');
+  }
+  return googleGenAiModulePromise;
+}
+
+async function createGeminiClient(apiKey: string): Promise<GoogleGenAIClient> {
+  const { GoogleGenAI } = await loadGoogleGenAiModule();
+  return new GoogleGenAI({ apiKey });
+}
+
 export class GeminiNutritionProvider implements NutritionProvider {
-  private client: GoogleGenAI;
+  private clientPromise: Promise<GoogleGenAIClient>;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
-    this.client = new GoogleGenAI({ apiKey });
+    this.clientPromise = createGeminiClient(apiKey);
+  }
+
+  private async getClient() {
+    return this.clientPromise;
   }
 
   async analyze(
@@ -24,17 +45,19 @@ export class GeminiNutritionProvider implements NutritionProvider {
     const promptVersion = options?.promptVersion || loaded.version;
     const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
 
+    const client = await this.getClient();
+
     let responseText: string | undefined;
     let usage:
       | {
-          promptTokenCount?: number;
-          candidatesTokenCount?: number;
-          totalTokenCount?: number;
+          promptTokenCount?: number | null;
+          candidatesTokenCount?: number | null;
+          totalTokenCount?: number | null;
         }
       | undefined;
 
     try {
-      const response = await this.client.models.generateContent({
+      const response = await client.models.generateContent({
         model,
         contents: [
           {
@@ -65,7 +88,7 @@ export class GeminiNutritionProvider implements NutritionProvider {
               }
             })()
           : null;
-      console.error('[Gemini] generateContent failed', {
+      console.error('[Gemini] models.generateContent failed', {
         model,
         temperature,
         status,
@@ -83,13 +106,19 @@ export class GeminiNutritionProvider implements NutritionProvider {
       throw new Error('Empty response from Gemini');
     }
 
-    let parsed: any;
+    let parsed: any = {};
     let parseOk = true;
     try {
       parsed = JSON.parse(responseText);
     } catch (_e) {
       parseOk = false;
-      parsed = {};
+    }
+
+    if (!parseOk) {
+      console.warn('[Gemini] Response parsing failed, returning zeros', {
+        model,
+        responseText,
+      });
     }
 
     const result: NutritionAnalysisResult = {
@@ -104,9 +133,9 @@ export class GeminiNutritionProvider implements NutritionProvider {
       rawResponseText: responseText,
       usage: usage
         ? {
-            promptTokens: usage.promptTokenCount,
-            completionTokens: usage.candidatesTokenCount,
-            totalTokens: usage.totalTokenCount,
+            promptTokens: usage.promptTokenCount ?? undefined,
+            completionTokens: usage.candidatesTokenCount ?? undefined,
+            totalTokens: usage.totalTokenCount ?? undefined,
           }
         : undefined,
       providerModel: model,
@@ -114,15 +143,6 @@ export class GeminiNutritionProvider implements NutritionProvider {
       promptVersion,
     };
 
-    if (!parseOk) {
-      console.warn('[Gemini] Response parsing failed, returning zeros', {
-        model,
-        responseText,
-      });
-    }
-
     return result;
   }
 }
-
-
