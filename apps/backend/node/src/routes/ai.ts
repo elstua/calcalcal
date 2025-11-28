@@ -86,6 +86,21 @@ router.post('/analyze-image', async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'imageUrl is required' });
     }
 
+    // Debug: Log full imageUrl to detect trailing characters
+    console.log(`[analyze-image] FULL imageUrl received: "${imageUrl}"`);
+    console.log(`[analyze-image] imageUrl length: ${imageUrl.length}, last 10 chars: "${imageUrl.slice(-10)}"`);
+    
+    // Check for and fix trailing dot after file extension (defensive fix for URL corruption)
+    let cleanedImageUrl = imageUrl;
+    const trailingDotPattern = /\.(jpg|jpeg|png|webp|gif)\.$/i;
+    if (trailingDotPattern.test(cleanedImageUrl)) {
+      console.warn('[analyze-image] ⚠️ WARNING: imageUrl ends with trailing dot after extension, stripping it');
+      cleanedImageUrl = cleanedImageUrl.slice(0, -1);
+      console.log(`[analyze-image] Cleaned imageUrl: "${cleanedImageUrl}"`);
+    } else if (imageUrl.endsWith('.')) {
+      console.warn('[analyze-image] ⚠️ WARNING: imageUrl ends with a trailing dot (but not after known extension)');
+    }
+
     if (!process.env.OPENAI_API_KEY) {
       console.error('[analyze-image] Missing OPENAI_API_KEY');
       return res.status(500).json({ error: 'AI provider not configured' });
@@ -105,8 +120,8 @@ router.post('/analyze-image', async (req: AuthRequest, res) => {
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
 
     console.log(
-      `[analyze-image] user=${userId} model=${model} url=${imageUrl.slice(0, 120)}${
-        imageUrl.length > 120 ? '…' : ''
+      `[analyze-image] user=${userId} model=${model} url=${cleanedImageUrl.slice(0, 120)}${
+        cleanedImageUrl.length > 120 ? '…' : ''
       }`
     );
 
@@ -129,9 +144,9 @@ If uncertain, provide your best estimate. Always return valid JSON.
     console.time('[analyze-image] openai_call');
     // If the image is hosted on localhost, OpenAI cannot fetch it.
     // Inline it as a data URL by reading from the local uploads directory.
-    let imageForOpenAI: string = imageUrl;
+    let imageForOpenAI: string = cleanedImageUrl;
     try {
-      const u = new URL(imageUrl);
+      const u = new URL(cleanedImageUrl);
       const isLocalHost =
         u.hostname === 'localhost' || u.hostname === '127.0.0.1';
       if (isLocalHost && u.pathname.startsWith('/uploads/')) {

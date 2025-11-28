@@ -31,6 +31,15 @@ final class CalorieBlockView: UIView {
         label.frame = bounds
     }
     
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let target = label.sizeThatFits(size)
+        return CGSize(width: target.width, height: max(20, target.height))
+    }
+    
+    override var intrinsicContentSize: CGSize {
+        sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+    }
+    
     func setCaloriesAnimated(_ text: String) {
         guard text != lastText else { return }
         lastText = text
@@ -43,6 +52,9 @@ final class CalorieBlockView: UIView {
         }
     }
 }
+
+
+
 
 
 

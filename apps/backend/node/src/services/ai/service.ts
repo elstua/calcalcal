@@ -9,7 +9,11 @@ export class AIService {
     const provider = getNutritionProvider();
     const promptVersion = process.env.AI_PROMPT_VERSION || 'v1';
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
-    const model = process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+    const providerName = (process.env.AI_PROVIDER || 'openai').toLowerCase();
+    const model =
+      providerName === 'gemini'
+        ? process.env.AI_GEMINI_MODEL || 'gemini-2.5-flash'
+        : process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
 
     const results: any[] = [];
 

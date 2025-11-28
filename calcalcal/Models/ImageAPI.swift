@@ -69,13 +69,31 @@ struct ImageAPI {
         let decoded = try decoder.decode(UploadResponse.self, from: respData)
         #if DEBUG
         print("✅ Upload success publicUrl=\(decoded.publicUrl)")
+        print("✅ Upload publicUrl length=\(decoded.publicUrl.count), last10='\(String(decoded.publicUrl.suffix(10)))'")
+        if decoded.publicUrl.hasSuffix(".") {
+            print("⚠️ WARNING: Upload response publicUrl ends with a trailing dot!")
+        }
         #endif
         return decoded
     }
     
     /// Ensure we send an absolute URL to the backend (required by server to fetch or inline the image)
     private static func normalizeImageURL(_ imageUrl: String) -> String {
-        let trimmed = imageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = imageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Strip any trailing dots that might have been incorrectly added after the file extension
+        // (defensive fix for URL corruption bug - e.g., ".jpg." -> ".jpg")
+        let validExtensions = [".jpg.", ".jpeg.", ".png.", ".webp.", ".gif."]
+        for ext in validExtensions {
+            if trimmed.lowercased().hasSuffix(ext) {
+                #if DEBUG
+                print("⚠️ normalizeImageURL: stripping trailing dot from URL ending with '\(ext)': \(trimmed)")
+                #endif
+                trimmed.removeLast() // Remove the trailing dot
+                break
+            }
+        }
+        
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
             return trimmed
         }
@@ -102,6 +120,11 @@ struct ImageAPI {
         
         #if DEBUG
         print("🤖 Analyze start imageUrl=\(absoluteImageUrl)")
+        print("🤖 Analyze input imageUrl=\(imageUrl), length=\(imageUrl.count), last10='\(String(imageUrl.suffix(10)))'")
+        print("🤖 Analyze normalized imageUrl=\(absoluteImageUrl), length=\(absoluteImageUrl.count), last10='\(String(absoluteImageUrl.suffix(10)))'")
+        if absoluteImageUrl.hasSuffix(".") {
+            print("⚠️ WARNING: imageUrl ends with a trailing dot!")
+        }
         #endif
         
         let (data, response) = try await URLSession.shared.data(for: request)

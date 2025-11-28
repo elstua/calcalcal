@@ -48,6 +48,16 @@ router.post('/upload', upload.single('file'), async (req: AuthRequest, res) => {
     const relativeUrl = `/uploads/${objectKey}`;
     const base = process.env.PUBLIC_BASE_URL?.trim();
     const publicUrl = base && base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
+    
+    // Debug: Log URL components to detect trailing characters
+    console.log(`[upload] objectKey="${objectKey}", length=${objectKey.length}`);
+    console.log(`[upload] relativeUrl="${relativeUrl}", length=${relativeUrl.length}`);
+    console.log(`[upload] PUBLIC_BASE_URL="${base || '(not set)'}"`);
+    console.log(`[upload] publicUrl="${publicUrl}", length=${publicUrl.length}, last10="${publicUrl.slice(-10)}"`);
+    if (publicUrl.endsWith('.')) {
+      console.warn('[upload] ⚠️ WARNING: publicUrl ends with a trailing dot!');
+    }
+    
     res.json({
       objectKey: `uploads/${objectKey}`,
       publicUrl,

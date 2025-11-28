@@ -80,21 +80,19 @@ struct BigEntryBlock: View {
             .padding([.top, .horizontal])
             
             // Always show the full editor
-            UnifiedTextEditor(
+            BlockEditorRepresentable(
                 blocks: effectiveBlocks,
                 imageMap: effectiveImageMap,
                 isEditable: isEditable,
                 shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                entryId: entry.id
-            )
-                .blockSpacing(20)
-                .onBlocksChange { newBlocks in
-                    // Keep state (external or internal) and bubble up to parent
+                entryId: entry.id,
+                onBlocksChange: { newBlocks in
                     self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
                 }
-                .frame(maxHeight: .infinity)
-                .padding(.horizontal)
+            )
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal)
             
             Spacer(minLength: 0)
             
