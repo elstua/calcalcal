@@ -11,6 +11,84 @@ const router = Router();
 
 router.use(authenticateToken);
 
+const activeAnalysisJobs = new Map<string, symbol>();
+
+function cloneBlocks(blocks: any[]): any[] {
+  try {
+    return JSON.parse(JSON.stringify(blocks));
+  } catch (_err) {
+    // Fallback shallow copy
+    return blocks.map((block) => ({ ...block }));
+  }
+}
+
+function queueAnalysisJob(entryId: string, blocks: any[]) {
+  const jobToken = Symbol(entryId);
+  const safeBlocks = cloneBlocks(blocks);
+  activeAnalysisJobs.set(entryId, jobToken);
+
+  setImmediate(async () => {
+    console.log(`[ai:analyze] job start entry=${entryId} blocks=${safeBlocks.length}`);
+    try {
+      const analyzedBlocks = await AIService.analyzeBlocks(safeBlocks);
+      const totals = AIService.calculateTotals(analyzedBlocks);
+
+      const isLatest = activeAnalysisJobs.get(entryId) === jobToken;
+      if (!isLatest) {
+        console.warn(`[ai:analyze] stale job skipped entry=${entryId}`);
+        return;
+      }
+
+      await Database.query(
+        `UPDATE diary_entries SET
+           blocks = $1,
+           total_calories = $2,
+           total_protein = $3,
+           total_fat = $4,
+           total_carbs = $5,
+           total_fiber = $6,
+           total_sugar = $7,
+           total_sodium = $8,
+           ai_analysis_status = $9,
+           ai_analysis_error = NULL
+         WHERE id = $10`,
+        [
+          JSON.stringify(analyzedBlocks),
+          totals.total_calories,
+          totals.total_protein,
+          totals.total_fat,
+          totals.total_carbs,
+          totals.total_fiber,
+          totals.total_sugar,
+          totals.total_sodium,
+          'completed',
+          entryId,
+        ]
+      );
+      console.log(`[ai:analyze] job completed entry=${entryId}`);
+    } catch (error: any) {
+      const isLatest = activeAnalysisJobs.get(entryId) === jobToken;
+      if (!isLatest) {
+        console.warn(`[ai:analyze] stale job failed but ignored entry=${entryId}`);
+        return;
+      }
+
+      console.error('[ai:analyze] job failed', {
+        entryId,
+        message: error?.message,
+      });
+      await Database.query(
+        `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
+        ['failed', error?.message || 'Unknown error', entryId]
+      );
+    } finally {
+      if (activeAnalysisJobs.get(entryId) === jobToken) {
+        activeAnalysisJobs.delete(entryId);
+      }
+    }
+  });
+}
+
 // POST /api/ai/analyze
 router.post('/analyze', async (req: AuthRequest, res) => {
   try {
@@ -29,48 +107,13 @@ router.post('/analyze', async (req: AuthRequest, res) => {
     }
 
     await Database.query(
-      `UPDATE diary_entries SET ai_analysis_status = $1 WHERE id = $2`,
+      `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = NULL WHERE id = $2`,
       ['processing', entryId]
     );
 
-    try {
-      const analyzedBlocks = await AIService.analyzeBlocks(blocks);
-      const totals = AIService.calculateTotals(analyzedBlocks);
+    queueAnalysisJob(entryId, blocks);
 
-      await Database.query(
-        `UPDATE diary_entries SET
-           blocks = $1,
-           total_calories = $2,
-           total_protein = $3,
-           total_fat = $4,
-           total_carbs = $5,
-           total_fiber = $6,
-           total_sugar = $7,
-           total_sodium = $8,
-           ai_analysis_status = $9
-         WHERE id = $10`,
-        [
-          JSON.stringify(analyzedBlocks),
-          totals.total_calories,
-          totals.total_protein,
-          totals.total_fat,
-          totals.total_carbs,
-          totals.total_fiber,
-          totals.total_sugar,
-          totals.total_sodium,
-          'completed',
-          entryId,
-        ]
-      );
-
-      res.json({ success: true, updatedBlocksCount: analyzedBlocks.length });
-    } catch (error: any) {
-      await Database.query(
-        `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
-        ['failed', error?.message || 'Unknown error', entryId]
-      );
-      res.status(500).json({ error: 'Analysis failed', message: error?.message || 'Unknown error' });
-    }
+    return res.status(202).json({ success: true, status: 'processing', updatedBlocksCount: null });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
