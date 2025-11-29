@@ -14,6 +14,7 @@ struct DiaryListView: View {
     // Shared geometry hooks (optional)
     var sharedNamespace: Namespace.ID? = nil
     var presentedEntryId: UUID? = nil
+    var isOverlayActive: Bool = false
     var onRequestOpen: ((DiaryEntry) -> Void)? = nil
     var onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil
     var userOffsetMinutes: Int? = nil // Optional override; fallback to device timezone if nil
@@ -24,10 +25,12 @@ struct DiaryListView: View {
         presentedEntryId: UUID? = nil,
         onRequestOpen: ((DiaryEntry) -> Void)? = nil,
         onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil,
-        userOffsetMinutes: Int? = nil
+        userOffsetMinutes: Int? = nil,
+        isOverlayActive: Bool = false
     ) {
         self.sharedNamespace = sharedNamespace
         self.presentedEntryId = presentedEntryId
+        self.isOverlayActive = isOverlayActive
         self.onRequestOpen = onRequestOpen
         self.onRequestImageMap = onRequestImageMap
         self.userOffsetMinutes = userOffsetMinutes
@@ -43,6 +46,7 @@ struct DiaryListView: View {
                     }
                 }
                 .padding(.vertical)
+                .padding(.horizontal, 16)
             }
             .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
             
@@ -102,94 +106,15 @@ struct DiaryListView: View {
     private func timelineRowView(index: Int, item: TimelineItem) -> some View {
         switch item {
         case .todayEntry(let entry):
-            let openAction = {
-                if let open = onRequestOpen { open(entry) }
-                else { showPopup = true; selectedEntry = entry }
-            }
-            if let ns = sharedNamespace {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .matchedGeometryEffect(id: "bg-\(entry.id)", in: ns)
-                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-                        .allowsHitTesting(false)
-                    DiaryEditorCard(
-                        entry: entry,
-                        height: 550,
-                        cornerRadius: 0,
-                        showShadow: false,
-                        useExternalDecoration: true,
-                        imageMap: [:],
-                        isEditable: false,
-                        shouldBecomeFirstResponder: .constant(false),
-                        forceExpanded: false
-                    )
-                }
-                .matchedGeometryEffect(id: entry.id, in: ns)
-                .contentShape(Rectangle())
-                .highPriorityGesture(TapGesture().onEnded(openAction))
-                .opacity(presentedEntryId == entry.id ? 0 : 1)
-                .allowsHitTesting(presentedEntryId != entry.id)
-            } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-                        .allowsHitTesting(false)
-                    DiaryEditorCard(
-                        entry: entry,
-                        cornerRadius: 0,
-                        showShadow: false,
-                        useExternalDecoration: true,
-                        imageMap: [:],
-                        isEditable: false,
-                        shouldBecomeFirstResponder: .constant(false),
-                        forceExpanded: false
-                    )
-                }
-                .contentShape(Rectangle())
-                .highPriorityGesture(TapGesture().onEnded(openAction))
-            }
+            timelineCard(entry: entry, isToday: true, placeholderDay: nil)
         case .entry(let entry):
-            if let ns = sharedNamespace {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .matchedGeometryEffect(id: "bg-\(entry.id)", in: ns)
-                        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
-                        .allowsHitTesting(false)
-                    SmallEntryBlock(
-                        entry: entry,
-                        onTap: nil,
-                        isEditable: false,
-                        useExternalDecoration: true
-                    )
-                    .padding(.horizontal)
-                }
-                .matchedGeometryEffect(id: entry.id, in: ns)
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    TapGesture().onEnded {
-                        if let open = onRequestOpen { open(entry) }
-                        else { showPopup = true; selectedEntry = entry }
-                    }
-                )
-                .opacity(presentedEntryId == entry.id ? 0 : 1)
-                .allowsHitTesting(presentedEntryId != entry.id)
-            } else {
-                SmallEntryBlock(
-                    entry: entry,
-                    onTap: {
-                        if let open = onRequestOpen { open(entry) }
-                        else { showPopup = true; selectedEntry = entry }
-                    },
-                    isEditable: false
-                )
-                .padding(.horizontal)
-            }
+            timelineCard(entry: entry, isToday: false, placeholderDay: nil)
         case .placeholder(let localDay):
-            placeholderRow(localDay: localDay, isToday: index == 0)
-                .padding(.horizontal)
+            timelineCard(
+                entry: placeholderDisplayEntry(for: localDay, isToday: index == 0),
+                isToday: index == 0,
+                placeholderDay: localDay
+            )
         case .collapsed(let range, let count, let id):
             let primary = "\(count) \(count == 1 ? "day" : "days"), \(DayTimelineGenerator.formatRange(range: range, offsetMinutes: effectiveOffsetMinutes()))"
             let secondary = "Tap to show \(min(14, count)) more days"
@@ -203,68 +128,163 @@ struct DiaryListView: View {
                     entriesByDay: mapping
                 )
             }
-            .padding(.horizontal)
         }
     }
 
-    private func placeholderRow(localDay: LocalDay, isToday: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Day number
-            Text(dayNumberString(from: localDay))
-                .font(.title.bold())
-                .foregroundColor(.primary)
-                .frame(width: 44, height: 44)
-                .background(Color.gray.opacity(0.15))
-                .clipShape(Circle())
-            VStack(alignment: .leading, spacing: 4) {
-                Text(isToday ? "write what you ate today" : "No entry yet. Start logging your food!")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                Text("… kcal")
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-                    .padding(.top, 2)
-            }
-            Spacer()
+    @ViewBuilder
+    private func timelineCard(entry: DiaryEntry, isToday: Bool, placeholderDay: LocalDay?) -> some View {
+        if isToday {
+            todayCard(entry: entry, placeholderDay: placeholderDay)
+        } else {
+            compactCard(entry: entry, placeholderDay: placeholderDay)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(Color.white)
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Create or reuse an entry for this placeholder day, then open it
-            let key = localDay.yyyymmdd
-            let offset = effectiveOffsetMinutes()
-            if let index = entries.firstIndex(where: { LocalDayMath.yyyymmdd(for: $0.date, offsetMinutes: offset) == key }) {
-                let target = entries[index]
-                if let open = onRequestOpen { open(target) }
-                else { selectedEntry = target; showPopup = true }
+    }
+    
+    @ViewBuilder
+    private func todayCard(entry: DiaryEntry, placeholderDay: LocalDay?) -> some View {
+        let openAction = tapAction(for: entry, placeholderDay: placeholderDay, isToday: true)
+        let tappableCard = todayCardShell(entry: entry)
+            .contentShape(Rectangle())
+            .highPriorityGesture(TapGesture().onEnded(openAction))
+            .allowsHitTesting(!isEntryPresented(entry))
+        
+        if let ns = sharedNamespace {
+            if isEntryPresented(entry) {
+                tappableCard.hidden()
             } else {
-                let placeholderBlock = Block(type: .text(isToday ? "write what you ate today" : "write what you ate this day"), calorieData: nil)
-                let newEntry = DiaryEntry(
-                    id: UUID(),
-                    date: localDay.startUTC,
-                    blocks: [placeholderBlock],
-                    totalCalories: nil,
-                    lastModified: Date(),
-                    aiGeneratedSummary: nil
-                )
-                entries.append(newEntry)
-                recalcTimeline()
-                if let open = onRequestOpen { open(newEntry) }
-                else { selectedEntry = newEntry; showPopup = true }
+                tappableCard
+                    .matchedGeometryEffect(id: entry.id, in: ns)
+            }
+        } else {
+            tappableCard
+        }
+    }
+    
+    @ViewBuilder
+    private func compactCard(entry: DiaryEntry, placeholderDay: LocalDay?) -> some View {
+        let openAction = tapAction(for: entry, placeholderDay: placeholderDay, isToday: false)
+        let tappableCard = compactCardShell(entry: entry)
+            .contentShape(Rectangle())
+            .highPriorityGesture(TapGesture().onEnded(openAction))
+            .allowsHitTesting(!isEntryPresented(entry))
+        
+        if let ns = sharedNamespace {
+            if isEntryPresented(entry) {
+                tappableCard.hidden()
+            } else {
+                tappableCard
+                    .matchedGeometryEffect(id: entry.id, in: ns)
+            }
+        } else {
+            tappableCard
+        }
+    }
+    
+    private func tapAction(for entry: DiaryEntry, placeholderDay: LocalDay?, isToday: Bool) -> () -> Void {
+        {
+            if let localDay = placeholderDay {
+                handlePlaceholderTap(localDay: localDay, isToday: isToday)
+            } else {
+                present(entry: entry)
             }
         }
     }
 
-    private func dayNumberString(from localDay: LocalDay) -> String {
-        let local = localDay.startUTC.addingTimeInterval(TimeInterval(effectiveOffsetMinutes() * 60))
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter.string(from: local)
+    private func isEntryPresented(_ entry: DiaryEntry) -> Bool {
+        guard isOverlayActive, let presentedEntryId else { return false }
+        return presentedEntryId == entry.id
+    }
+
+    @ViewBuilder
+    private func todayCardShell(entry: DiaryEntry) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                .allowsHitTesting(false)
+            DiaryEditorCard(
+                entry: entry,
+                height: 550,
+                cornerRadius: 0,
+                showShadow: false,
+                useExternalDecoration: true,
+                imageMap: [:],
+                isEditable: false,
+                shouldBecomeFirstResponder: .constant(false),
+                forceExpanded: false
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func compactCardShell(entry: DiaryEntry) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                .allowsHitTesting(false)
+            DiaryEditorCard(
+                entry: entry,
+                cornerRadius: 0,
+                showShadow: false,
+                useExternalDecoration: true,
+                isEditable: false,
+                shouldBecomeFirstResponder: .constant(false),
+                forceExpanded: false,
+                displayMode: .compactSummary
+            )
+        }
+    }
+
+    private func placeholderDisplayEntry(for localDay: LocalDay, isToday: Bool) -> DiaryEntry {
+        let placeholderBlock = Block(
+            type: .text(placeholderPrompt(isToday: isToday)),
+            calorieData: nil
+        )
+        return DiaryEntry(
+            id: UUID(),
+            date: localDay.startUTC,
+            blocks: [placeholderBlock],
+            totalCalories: nil,
+            lastModified: localDay.startUTC,
+            aiGeneratedSummary: nil
+        )
+    }
+    
+    private func handlePlaceholderTap(localDay: LocalDay, isToday: Bool) {
+        if let existing = entry(for: localDay) {
+            present(entry: existing)
+            return
+        }
+        let newEntry = DiaryEntry(
+            id: UUID(),
+            date: localDay.startUTC,
+            blocks: [Block(type: .text(placeholderPrompt(isToday: isToday)), calorieData: nil)],
+            totalCalories: nil,
+            lastModified: Date(),
+            aiGeneratedSummary: nil
+        )
+        entries.append(newEntry)
+        recalcTimeline()
+        present(entry: newEntry)
+    }
+    
+    private func entry(for localDay: LocalDay) -> DiaryEntry? {
+        let offset = effectiveOffsetMinutes()
+        return entries.first(where: { LocalDayMath.yyyymmdd(for: $0.date, offsetMinutes: offset) == localDay.yyyymmdd })
+    }
+    
+    private func present(entry: DiaryEntry) {
+        if let onRequestOpen {
+            onRequestOpen(entry)
+        } else {
+            selectedEntry = entry
+            showPopup = true
+        }
+    }
+    
+    private func placeholderPrompt(isToday: Bool) -> String {
+        isToday ? "write what you ate today" : "write what you ate this day"
     }
 
     private func recalcTimeline() {

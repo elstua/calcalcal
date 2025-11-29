@@ -23,6 +23,7 @@ struct EditorOverlay: View {
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
+    @State private var dimmingProgress: Double = 0
     
     init(entry: DiaryEntry,
          blocks: Binding<[Block]>,
@@ -41,7 +42,7 @@ struct EditorOverlay: View {
         ZStack(alignment: .top) {
             // Dimmed background with interactive opacity
             let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
-            Color.black.opacity(0.35 * progress)
+            Color.black.opacity(0.35 * progress * dimmingProgress)
                 .ignoresSafeArea()
                 .onTapGesture { dismissWithMatched() }
             
@@ -82,10 +83,11 @@ struct EditorOverlay: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 0, style: .continuous)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .fill(Color(.systemBackground))
-                        .modifier(ConditionalMatchedGeometry(enabled: useMatchedGeometry, id: "bg-\(entry.id)", namespace: namespace))
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .modifier(ConditionalMatchedGeometry(enabled: useMatchedGeometry, id: entry.id, namespace: namespace))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
@@ -236,6 +238,10 @@ struct EditorOverlay: View {
                 }
         }
         .onAppear {
+            dimmingProgress = 0
+            withAnimation(.easeInOut(duration: 0.25).delay(0.1)) {
+                dimmingProgress = 1
+            }
             // Allow matched geometry during the opening transition, then detach
             useMatchedGeometry = true
             liveTotalCalories = entry.totalCalories
@@ -374,9 +380,23 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
     let enabled: Bool
     let id: ID
     let namespace: Namespace.ID
+    let isSource: Bool
+    
+    init(
+        enabled: Bool,
+        id: ID,
+        namespace: Namespace.ID,
+        isSource: Bool = true
+    ) {
+        self.enabled = enabled
+        self.id = id
+        self.namespace = namespace
+        self.isSource = isSource
+    }
+    
     func body(content: Content) -> some View {
         if enabled {
-            content.matchedGeometryEffect(id: id, in: namespace, isSource: false)
+            content.matchedGeometryEffect(id: id, in: namespace, isSource: isSource)
         } else {
             content
         }
@@ -386,9 +406,15 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
 // MARK: - Private helpers
 extension EditorOverlay {
     private func dismissWithMatched() {
-        // Re-enable matched geometry just before closing to allow a smooth return animation
+        // Re-enable matched geometry before closing and defer the actual dismissal
+        // by one runloop tick so SwiftUI can re-render with the geometry link active.
         useMatchedGeometry = true
-        onClose()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            dimmingProgress = 0
+        }
+        DispatchQueue.main.async {
+            onClose()
+        }
     }
 
     /// Precompute the `DiaryEntry` passed into BigEntryBlock to reduce type-checking complexity.

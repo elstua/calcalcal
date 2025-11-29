@@ -34,8 +34,6 @@
 		DF538E012E03731B00473A32 /* Exceptions for "calcalcal" folder in "Calycal" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Editor/ARCHITECTURE.md,
-				Editor/README.md,
 				Info.plist,
 			);
 			target = ACB9E5D52D594D7D00C37803 /* Calycal */;

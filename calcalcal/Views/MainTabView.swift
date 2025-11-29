@@ -7,9 +7,13 @@ struct MainTabView: View {
     @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
     @State private var isOverlayVisible: Bool = false
+    @State private var shouldHideSourceCard: Bool = false
+    
+    private let overlayAnimation = Animation.easeInOut(duration: 0.35)
+    private let overlayAnimationDuration: Double = 0.35
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             TabView {
                 DiaryListView(
                     sharedNamespace: editorNamespace,
@@ -17,9 +21,10 @@ struct MainTabView: View {
                     onRequestOpen: { entry in
                         // Prepare focus and blocks, then present within a single animated transaction
                         shouldFocusEditor = false
+                        shouldHideSourceCard = true
                         print("🐛 DEBUG: Opening entry \(entry.id.uuidString) with blocks: \(entry.blocks.map { $0.type })")
                         presentedBlocks = entry.blocks
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
+                        withAnimation(overlayAnimation) {
                             presentedEntry = entry
                             isOverlayVisible = true
                         }
@@ -27,7 +32,8 @@ struct MainTabView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                             shouldFocusEditor = true
                         }
-                    }
+                    },
+                    isOverlayActive: shouldHideSourceCard
                 )
                 .tabItem {
                     Image(systemName: "book.fill")
@@ -41,38 +47,7 @@ struct MainTabView: View {
                     }
             }
             
-            if let entry = presentedEntry, isOverlayVisible {
-                EditorOverlay(
-                    entry: entry,
-                    blocks: $presentedBlocks,
-                    shouldBecomeFirstResponder: $shouldFocusEditor,
-                    namespace: editorNamespace,
-                    onClose: {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
-                            isOverlayVisible = false
-                        }
-                        // Clear focus quickly to avoid keyboard flashing on next open
-                        DispatchQueue.main.async {
-                            shouldFocusEditor = false
-                        }
-                        // Write back changes to the list via notification
-                        NotificationCenter.default.post(
-                            name: .editorOverlayDidCommit,
-                            object: nil,
-                            userInfo: [
-                                "entryId": entry.id,
-                                "blocks": presentedBlocks
-                            ]
-                        )
-                        // Release reference after the collapse finishes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            presentedEntry = nil
-                        }
-                    }
-                )
-                .transition(.identity) // rely purely on matchedGeometryEffect
-                .zIndex(100)
-            }
+            overlayLayer
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
             guard let info = notification.userInfo,
@@ -86,10 +61,52 @@ struct MainTabView: View {
     }
 }
 
+private extension MainTabView {
+    @ViewBuilder
+    var overlayLayer: some View {
+        if let entry = presentedEntry, isOverlayVisible {
+            EditorOverlay(
+                entry: entry,
+                blocks: $presentedBlocks,
+                shouldBecomeFirstResponder: $shouldFocusEditor,
+                namespace: editorNamespace,
+                onClose: {
+                    shouldHideSourceCard = false
+                    // Clear focus quickly to avoid keyboard flashing on next open
+                    DispatchQueue.main.async {
+                        shouldFocusEditor = false
+                    }
+                    // Write back changes to the list via notification
+                    NotificationCenter.default.post(
+                        name: .editorOverlayDidCommit,
+                        object: nil,
+                        userInfo: [
+                            "entryId": entry.id,
+                            "blocks": presentedBlocks
+                        ]
+                    )
+                    
+                    let closingId = entry.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + overlayAnimationDuration) {
+                        if presentedEntry?.id == closingId {
+                            withAnimation(overlayAnimation) {
+                                isOverlayVisible = false
+                            }
+                            presentedEntry = nil
+                        }
+                    }
+                }
+            )
+            .transition(.identity) // rely purely on matchedGeometryEffect
+            .zIndex(100)
+        }
+    }
+}
+
 struct MainTabView_Previews: PreviewProvider {
     static var previews: some View {
         MainTabView()
             .environmentObject(AppState())
     }
-} 
+}
 
