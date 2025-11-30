@@ -42,7 +42,7 @@ struct EditorOverlay: View {
         ZStack(alignment: .top) {
             // Dimmed background with interactive opacity
             let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
-            Color.black.opacity(0.35 * progress * dimmingProgress)
+            Color.black.opacity(0.20 * progress * dimmingProgress)
                 .ignoresSafeArea()
                 .onTapGesture { dismissWithMatched() }
             
@@ -409,7 +409,7 @@ extension EditorOverlay {
         // Re-enable matched geometry before closing and defer the actual dismissal
         // by one runloop tick so SwiftUI can re-render with the geometry link active.
         useMatchedGeometry = true
-        withAnimation(.easeInOut(duration: 0.25)) {
+        withAnimation(.easeInOut(duration: 0.20)) {
             dimmingProgress = 0
         }
         DispatchQueue.main.async {

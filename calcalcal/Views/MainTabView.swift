@@ -1,44 +1,40 @@
 import SwiftUI
+import UIKit
 
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
     @Namespace private var editorNamespace
+    
     @State private var presentedEntry: DiaryEntry? = nil
     @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
     @State private var isOverlayVisible: Bool = false
     @State private var shouldHideSourceCard: Bool = false
     
+    @State private var selectedDay: Date = Calendar.current.startOfDay(for: Date())
+    @State private var anchorDate: Date = Calendar.current.startOfDay(for: Date())
+    @State private var dayEntryStates: [String: DayEntryState] = [:]
+    @State private var showAllDaysSheet: Bool = false
+    @State private var isLoadingRecentDays: Bool = false
+    @GestureState private var pagerDragOffset: CGFloat = 0
+    
     private let overlayAnimation = Animation.easeInOut(duration: 0.35)
     private let overlayAnimationDuration: Double = 0.35
+    private let stripDayCount: Int = 6
+    private let calendar = Calendar.current
+    private let placeholderPrompts: Set<String> = [
+        "write what you ate today",
+        "write what you ate this day"
+    ]
     
     var body: some View {
         ZStack(alignment: .top) {
             TabView {
-                DiaryListView(
-                    sharedNamespace: editorNamespace,
-                    presentedEntryId: presentedEntry?.id,
-                    onRequestOpen: { entry in
-                        // Prepare focus and blocks, then present within a single animated transaction
-                        shouldFocusEditor = false
-                        shouldHideSourceCard = true
-                        print("🐛 DEBUG: Opening entry \(entry.id.uuidString) with blocks: \(entry.blocks.map { $0.type })")
-                        presentedBlocks = entry.blocks
-                        withAnimation(overlayAnimation) {
-                            presentedEntry = entry
-                            isOverlayVisible = true
-                        }
-                        // Trigger keyboard a moment after the transition starts for smoother feel
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            shouldFocusEditor = true
-                        }
-                    },
-                    isOverlayActive: shouldHideSourceCard
-                )
-                .tabItem {
-                    Image(systemName: "book.fill")
-                    Text("Diary")
-                }
+                dayFocusedDiaryTab
+                    .tabItem {
+                        Image(systemName: "book.fill")
+                        Text("Diary")
+                    }
                 
                 ProfileView()
                     .tabItem {
@@ -49,6 +45,12 @@ struct MainTabView: View {
             
             overlayLayer
         }
+        .onAppear {
+            anchorDate = calendar.startOfDay(for: Date())
+            clampSelectedDayIfNeeded()
+            ensurePlaceholdersForVisibleDays()
+            refreshVisibleEntries()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
             guard let info = notification.userInfo,
                   let localId = info["localId"] as? UUID,
@@ -57,11 +59,364 @@ struct MainTabView: View {
                 current.id = serverId
                 presentedEntry = current
             }
+            replaceEntryId(localId: localId, with: serverId)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorOverlayDidCommit)) { notification in
+            guard let info = notification.userInfo,
+                  let entryId = info["entryId"] as? UUID,
+                  let blocks = info["blocks"] as? [Block] else { return }
+            updateDayEntry(entryId: entryId) { state in
+                state.entry.blocks = blocks
+                state.entry.lastModified = Date()
+                state.isPlaceholder = isPlaceholderContent(blocks)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryTotalsUpdated)) { notification in
+            guard let info = notification.userInfo,
+                  let entryId = info["entryId"] as? UUID else { return }
+            let value = info["totalCalories"]
+            let total: Int?
+            if value is NSNull {
+                total = nil
+            } else {
+                total = value as? Int
+            }
+            updateDayEntry(entryId: entryId) { state in
+                state.entry.totalCalories = total
+            }
         }
     }
 }
 
 private extension MainTabView {
+    @ViewBuilder
+    var dayFocusedDiaryTab: some View {
+        ZStack {
+            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Diary")
+                        .font(.largeTitle.bold())
+                        .padding(.horizontal, 24)
+                    
+                    DayStripView(
+                        items: dayStripItems(),
+                        selectedDate: selectedDay,
+                        onSelectDate: { selectDay($0, animated: true) },
+                        onShowAllDays: { showAllDaysSheet = true }
+                    )
+                    .padding(.horizontal, 16)
+                }
+                .padding(.top, 2)
+                
+                dayPager
+                    .padding(.top, 2)
+                    .padding(.bottom, 2)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .sheet(isPresented: $showAllDaysSheet, onDismiss: {
+            refreshVisibleEntries()
+        }) {
+            DiaryListView(
+                sharedNamespace: editorNamespace,
+                presentedEntryId: presentedEntry?.id,
+                onRequestOpen: { entry in
+                    presentOverlay(for: entry)
+                },
+                isOverlayActive: shouldHideSourceCard
+            )
+        }
+    }
+    
+    @ViewBuilder
+    var dayPager: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            Group {
+                if let currentState = state(for: selectedDay) {
+                    ZStack(alignment: .top) {
+                        if let olderState = adjacentState(from: selectedDay, step: 1) {
+                            cardView(for: olderState.entry, enableMatchedGeometry: false)
+                                .offset(x: pagerDragOffset - width)
+                        }
+                        
+                        cardView(for: currentState.entry, enableMatchedGeometry: true)
+                            .offset(x: pagerDragOffset)
+                        
+                        if let newerState = adjacentState(from: selectedDay, step: -1) {
+                            cardView(for: newerState.entry, enableMatchedGeometry: false)
+                                .offset(x: pagerDragOffset + width)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .contentShape(Rectangle())
+                    .gesture(daySwipeGesture(containerWidth: width))
+                    .animation(
+                        .interactiveSpring(response: 0.4, dampingFraction: 0.85),
+                        value: pagerDragOffset == 0
+                    )
+                } else if isLoadingRecentDays {
+                    placeholderCard {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    }
+                } else {
+                    placeholderCard {
+                        Text("No entry for this day yet")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+    
+    @ViewBuilder
+    func cardView(for entry: DiaryEntry, enableMatchedGeometry: Bool) -> some View {
+        let shouldHideForOverlay = isOverlayVisible && presentedEntry?.id == entry.id
+        let block = BigEntryBlock(
+            entry: entry,
+            height: 500,
+            cornerRadius: 24,
+            showShadow: true,
+            useExternalDecoration: false,
+            onAddImage: nil,
+            onTap: enableMatchedGeometry ? { presentOverlay(for: entry) } : nil,
+            imageMap: [:],
+            isEditable: false,
+            shouldBecomeFirstResponder: .constant(false),
+            forceExpanded: true
+        )
+        .frame(height: 500, alignment: .top)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .id(entry.id)
+        
+        if enableMatchedGeometry {
+            block
+                .modifier(
+                    ConditionalMatchedGeometry(
+                        enabled: true,
+                        id: entry.id,
+                        namespace: editorNamespace
+                    )
+                )
+                .opacity(shouldHideForOverlay ? 0 : 1)
+                .allowsHitTesting(!shouldHideForOverlay)
+        } else {
+            block
+                .allowsHitTesting(false)
+        }
+    }
+    
+    func placeholderCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(Color(.systemBackground))
+            .frame(height: 500)
+            .overlay(content())
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+    }
+    
+    func presentOverlay(for entry: DiaryEntry) {
+        shouldFocusEditor = false
+        shouldHideSourceCard = true
+        presentedBlocks = entry.blocks
+        withAnimation(overlayAnimation) {
+            presentedEntry = entry
+            isOverlayVisible = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            shouldFocusEditor = true
+        }
+    }
+    
+    func dayStripItems() -> [DayStripItemModel] {
+        visibleDates.map { date in
+            let key = dayKey(for: date)
+            let state = dayEntryStates[key]
+            return DayStripItemModel(
+                id: key,
+                date: date,
+                calories: state?.entry.totalCalories,
+                hasEntry: !(state?.isPlaceholder ?? true)
+            )
+        }
+    }
+    
+    func selectDay(_ date: Date, animated: Bool) {
+        let normalized = calendar.startOfDay(for: date)
+        guard isDateVisible(normalized) else { return }
+        guard normalized != selectedDay else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                selectedDay = normalized
+            }
+        } else {
+            selectedDay = normalized
+        }
+    }
+    
+    func state(for date: Date) -> DayEntryState? {
+        dayEntryStates[dayKey(for: date)]
+    }
+    
+    func adjacentState(from date: Date, step: Int) -> DayEntryState? {
+        guard let targetDate = adjacentDate(from: date, step: step) else { return nil }
+        return state(for: targetDate)
+    }
+    
+    func adjacentDate(from date: Date, step: Int) -> Date? {
+        let ordered = visibleDates
+        guard let index = ordered.firstIndex(where: { calendar.isDate($0, inSameDayAs: date) }) else { return nil }
+        let targetIndex = index + step
+        guard ordered.indices.contains(targetIndex) else { return nil }
+        return ordered[targetIndex]
+    }
+    
+    func isDateVisible(_ date: Date) -> Bool {
+        visibleDates.contains { calendar.isDate($0, inSameDayAs: date) }
+    }
+    
+    func daySwipeGesture(containerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .updating($pagerDragOffset) { value, state, _ in
+                state = value.translation.width
+            }
+            .onEnded { value in
+                let translation = value.translation.width
+                let threshold = max(80, containerWidth * 0.2)
+                if translation <= -threshold, let newerDate = adjacentDate(from: selectedDay, step: -1) {
+                    selectDay(newerDate, animated: false)
+                } else if translation >= threshold, let olderDate = adjacentDate(from: selectedDay, step: 1) {
+                    selectDay(olderDate, animated: false)
+                }
+            }
+    }
+    
+    func ensurePlaceholdersForVisibleDays() {
+        var updated = dayEntryStates
+        for date in visibleDates {
+            let key = dayKey(for: date)
+            if updated[key] == nil {
+                updated[key] = DayEntryState(entry: placeholderEntry(for: date), isPlaceholder: true)
+            }
+        }
+        dayEntryStates = updated
+    }
+    
+    func refreshVisibleEntries() {
+        anchorDate = calendar.startOfDay(for: Date())
+        clampSelectedDayIfNeeded()
+        ensurePlaceholdersForVisibleDays()
+        if isLoadingRecentDays { return }
+        isLoadingRecentDays = true
+        let dates = visibleDates
+        let offset = effectiveOffsetMinutes()
+        let oldest = dates.last ?? anchorDate
+        let newest = dates.first ?? anchorDate
+        Task {
+            do {
+                let rows = try await DiaryAPI.listEntries(
+                    dateFrom: LocalDayMath.yyyymmdd(for: oldest, offsetMinutes: offset),
+                    dateTo: LocalDayMath.yyyymmdd(for: newest, offsetMinutes: offset)
+                )
+                let mapped = rows.map { $0.toDiaryEntry() }
+                await MainActor.run {
+                    apply(entries: mapped)
+                    isLoadingRecentDays = false
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingRecentDays = false
+                }
+            }
+        }
+    }
+    
+    func apply(entries: [DiaryEntry]) {
+        var updated = dayEntryStates
+        let offset = effectiveOffsetMinutes()
+        for date in visibleDates {
+            let key = dayKey(for: date)
+            if updated[key] == nil {
+                updated[key] = DayEntryState(entry: placeholderEntry(for: date), isPlaceholder: true)
+            }
+        }
+        for entry in entries {
+            let key = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offset)
+            if updated[key] != nil {
+                updated[key] = DayEntryState(entry: entry, isPlaceholder: isPlaceholderContent(entry.blocks))
+            }
+        }
+        dayEntryStates = updated
+    }
+    
+    func clampSelectedDayIfNeeded() {
+        guard !isDateVisible(selectedDay), let fallback = visibleDates.first else { return }
+        selectedDay = fallback
+    }
+    
+    var visibleDates: [Date] {
+        (0..<stripDayCount).compactMap { offset in
+            calendar.date(byAdding: .day, value: -offset, to: anchorDate)
+        }
+    }
+    
+    func dayKey(for date: Date) -> String {
+        LocalDayMath.yyyymmdd(for: date, offsetMinutes: effectiveOffsetMinutes())
+    }
+    
+    func effectiveOffsetMinutes() -> Int {
+        TimeZone.current.secondsFromGMT() / 60
+    }
+    
+    func placeholderPrompt(isToday: Bool) -> String {
+        isToday ? "write what you ate today" : "write what you ate this day"
+    }
+    
+    func placeholderEntry(for date: Date) -> DiaryEntry {
+        DiaryEntry(
+            id: UUID(),
+            date: date,
+            blocks: [
+                Block(
+                    type: .text(placeholderPrompt(isToday: calendar.isDateInToday(date))),
+                    calorieData: nil
+                )
+            ],
+            totalCalories: nil,
+            lastModified: date,
+            aiGeneratedSummary: nil
+        )
+    }
+    
+    func updateDayEntry(entryId: UUID, update: (inout DayEntryState) -> Void) {
+        for key in dayEntryStates.keys {
+            guard var state = dayEntryStates[key], state.entry.id == entryId else { continue }
+            update(&state)
+            dayEntryStates[key] = state
+            break
+        }
+    }
+    
+    func replaceEntryId(localId: UUID, with serverId: UUID) {
+        for key in dayEntryStates.keys {
+            guard var state = dayEntryStates[key], state.entry.id == localId else { continue }
+            state.entry.id = serverId
+            dayEntryStates[key] = state
+        }
+    }
+    
+    func isPlaceholderContent(_ blocks: [Block]) -> Bool {
+        let trimmed = blocks.toContentString()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return placeholderPrompts.contains(trimmed)
+    }
+    
     @ViewBuilder
     var overlayLayer: some View {
         if let entry = presentedEntry, isOverlayVisible {
@@ -72,11 +427,14 @@ private extension MainTabView {
                 namespace: editorNamespace,
                 onClose: {
                     shouldHideSourceCard = false
-                    // Clear focus quickly to avoid keyboard flashing on next open
                     DispatchQueue.main.async {
                         shouldFocusEditor = false
                     }
-                    // Write back changes to the list via notification
+                    updateDayEntry(entryId: entry.id) { state in
+                        state.entry.blocks = presentedBlocks
+                        state.entry.lastModified = Date()
+                        state.isPlaceholder = isPlaceholderContent(presentedBlocks)
+                    }
                     NotificationCenter.default.post(
                         name: .editorOverlayDidCommit,
                         object: nil,
@@ -97,9 +455,14 @@ private extension MainTabView {
                     }
                 }
             )
-            .transition(.identity) // rely purely on matchedGeometryEffect
+            .transition(.identity)
             .zIndex(100)
         }
+    }
+    
+    struct DayEntryState {
+        var entry: DiaryEntry
+        var isPlaceholder: Bool
     }
 }
 
