@@ -18,6 +18,8 @@ struct DayStripView: View {
     
     var body: some View {
         HStack(spacing: 0) {
+            DayStripAllDaysButton(action: onShowAllDays)
+            
             ForEach(items) { item in
                 DayStripItemView(
                     model: item,
@@ -26,8 +28,6 @@ struct DayStripView: View {
                     onTap: { onSelectDate(item.date) }
                 )
             }
-            
-            DayStripAllDaysButton(action: onShowAllDays)
         }
     }
 }

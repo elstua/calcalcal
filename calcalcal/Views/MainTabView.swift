@@ -16,7 +16,6 @@ struct MainTabView: View {
     @State private var dayEntryStates: [String: DayEntryState] = [:]
     @State private var showAllDaysSheet: Bool = false
     @State private var isLoadingRecentDays: Bool = false
-    @GestureState private var pagerDragOffset: CGFloat = 0
     
     private let overlayAnimation = Animation.easeInOut(duration: 0.35)
     private let overlayAnimationDuration: Double = 0.35
@@ -110,7 +109,7 @@ private extension MainTabView {
                 .padding(.top, 2)
                 
                 dayPager
-                    .padding(.top, 2)
+                    .padding(.top, 12)
                     .padding(.bottom, 2)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -131,84 +130,67 @@ private extension MainTabView {
     
     @ViewBuilder
     var dayPager: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            Group {
-                if let currentState = state(for: selectedDay) {
-                    ZStack(alignment: .top) {
-                        if let olderState = adjacentState(from: selectedDay, step: 1) {
-                            cardView(for: olderState.entry, enableMatchedGeometry: false)
-                                .offset(x: pagerDragOffset - width)
-                        }
-                        
-                        cardView(for: currentState.entry, enableMatchedGeometry: true)
-                            .offset(x: pagerDragOffset)
-                        
-                        if let newerState = adjacentState(from: selectedDay, step: -1) {
-                            cardView(for: newerState.entry, enableMatchedGeometry: false)
-                                .offset(x: pagerDragOffset + width)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .contentShape(Rectangle())
-                    .gesture(daySwipeGesture(containerWidth: width))
-                    .animation(
-                        .interactiveSpring(response: 0.4, dampingFraction: 0.85),
-                        value: pagerDragOffset == 0
-                    )
-                } else if isLoadingRecentDays {
-                    placeholderCard {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    }
-                } else {
-                    placeholderCard {
-                        Text("No entry for this day yet")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                    }
+        if pagerItems.isEmpty {
+            placeholderCard {
+                Text("No entry for this day yet")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+            }
+        } else {
+            DiaryPagerView(
+                items: pagerItems,
+                selectedDate: $selectedDay,
+                calendar: calendar,
+                spacing: 12,
+                trailingSpace: 48
+            ) { item, isActive in
+                cardView(for: item.entry, enableMatchedGeometry: isActive)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .overlay(alignment: .topTrailing) {
+                if isLoadingRecentDays {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .padding()
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
-    @ViewBuilder
     func cardView(for entry: DiaryEntry, enableMatchedGeometry: Bool) -> some View {
         let shouldHideForOverlay = isOverlayVisible && presentedEntry?.id == entry.id
-        let block = BigEntryBlock(
-            entry: entry,
-            height: 500,
-            cornerRadius: 24,
-            showShadow: true,
-            useExternalDecoration: false,
-            onAddImage: nil,
-            onTap: enableMatchedGeometry ? { presentOverlay(for: entry) } : nil,
-            imageMap: [:],
-            isEditable: false,
-            shouldBecomeFirstResponder: .constant(false),
-            forceExpanded: true
-        )
-        .frame(height: 500, alignment: .top)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
-        .id(entry.id)
         
-        if enableMatchedGeometry {
-            block
-                .modifier(
-                    ConditionalMatchedGeometry(
-                        enabled: true,
-                        id: entry.id,
-                        namespace: editorNamespace
-                    )
+        return VStack(spacing: 0) {
+            BigEntryBlock(
+                entry: entry,
+                height: 500,
+                cornerRadius: 24,
+                showShadow: true,
+                useExternalDecoration: false,
+                onAddImage: nil,
+                onTap: enableMatchedGeometry ? { presentOverlay(for: entry) } : nil,
+                imageMap: [:],
+                isEditable: false,
+                shouldBecomeFirstResponder: .constant(false),
+                forceExpanded: false
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .id(entry.id)
+            .modifier(
+                ConditionalMatchedGeometry(
+                    enabled: enableMatchedGeometry,
+                    id: entry.id,
+                    namespace: editorNamespace
                 )
-                .opacity(shouldHideForOverlay ? 0 : 1)
-                .allowsHitTesting(!shouldHideForOverlay)
-        } else {
-            block
-                .allowsHitTesting(false)
+            )
+            .opacity(shouldHideForOverlay ? 0 : 1)
+            .allowsHitTesting(enableMatchedGeometry ? !shouldHideForOverlay : false)
+            .frame(height: 500, alignment: .top)
+            
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
     func placeholderCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -234,7 +216,7 @@ private extension MainTabView {
     }
     
     func dayStripItems() -> [DayStripItemModel] {
-        visibleDates.map { date in
+        visibleDates.reversed().map { date in
             let key = dayKey(for: date)
             let state = dayEntryStates[key]
             return DayStripItemModel(
@@ -246,54 +228,32 @@ private extension MainTabView {
         }
     }
     
+    var pagerItems: [DiaryPagerItem] {
+        visibleDates
+            .reversed()
+            .compactMap { date in
+            guard let state = state(for: date) else { return nil }
+            return DiaryPagerItem(
+                id: dayKey(for: date),
+                date: date,
+                entry: state.entry
+            )
+        }
+    }
+    
     func selectDay(_ date: Date, animated: Bool) {
         let normalized = calendar.startOfDay(for: date)
         guard isDateVisible(normalized) else { return }
         guard normalized != selectedDay else { return }
-        if animated {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                selectedDay = normalized
-            }
-        } else {
-            selectedDay = normalized
-        }
+        selectedDay = normalized
     }
     
     func state(for date: Date) -> DayEntryState? {
         dayEntryStates[dayKey(for: date)]
     }
     
-    func adjacentState(from date: Date, step: Int) -> DayEntryState? {
-        guard let targetDate = adjacentDate(from: date, step: step) else { return nil }
-        return state(for: targetDate)
-    }
-    
-    func adjacentDate(from date: Date, step: Int) -> Date? {
-        let ordered = visibleDates
-        guard let index = ordered.firstIndex(where: { calendar.isDate($0, inSameDayAs: date) }) else { return nil }
-        let targetIndex = index + step
-        guard ordered.indices.contains(targetIndex) else { return nil }
-        return ordered[targetIndex]
-    }
-    
     func isDateVisible(_ date: Date) -> Bool {
         visibleDates.contains { calendar.isDate($0, inSameDayAs: date) }
-    }
-    
-    func daySwipeGesture(containerWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .updating($pagerDragOffset) { value, state, _ in
-                state = value.translation.width
-            }
-            .onEnded { value in
-                let translation = value.translation.width
-                let threshold = max(80, containerWidth * 0.2)
-                if translation <= -threshold, let newerDate = adjacentDate(from: selectedDay, step: -1) {
-                    selectDay(newerDate, animated: false)
-                } else if translation >= threshold, let olderDate = adjacentDate(from: selectedDay, step: 1) {
-                    selectDay(olderDate, animated: false)
-                }
-            }
     }
     
     func ensurePlaceholdersForVisibleDays() {
