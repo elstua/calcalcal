@@ -132,7 +132,7 @@ private extension MainTabView {
     var dayPager: some View {
         if pagerItems.isEmpty {
             placeholderCard {
-                Text("No entry for this day yet")
+                Text("loading...")
                     .font(.headline)
                     .foregroundColor(.secondary)
             }
@@ -142,7 +142,7 @@ private extension MainTabView {
                 selectedDate: $selectedDay,
                 calendar: calendar,
                 spacing: 12,
-                trailingSpace: 48
+                trailingSpace: 0
             ) { item, isActive in
                 cardView(for: item.entry, enableMatchedGeometry: isActive)
             }
@@ -163,7 +163,7 @@ private extension MainTabView {
         return VStack(spacing: 0) {
             BigEntryBlock(
                 entry: entry,
-                height: 500,
+                height: 540,
                 cornerRadius: 24,
                 showShadow: true,
                 useExternalDecoration: false,
@@ -174,8 +174,9 @@ private extension MainTabView {
                 shouldBecomeFirstResponder: .constant(false),
                 forceExpanded: false
             )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            
+            .padding(.vertical, 0)
+            .padding(.horizontal,8)
             .id(entry.id)
             .modifier(
                 ConditionalMatchedGeometry(
@@ -194,11 +195,11 @@ private extension MainTabView {
     }
     
     func placeholderCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
+        RoundedRectangle(cornerRadius: 32, style: .continuous)
             .fill(Color(.systemBackground))
-            .frame(height: 500)
+            .frame(height: 540)
             .overlay(content())
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 8)
             .padding(.vertical, 8)
     }
     

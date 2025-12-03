@@ -12,7 +12,7 @@ struct DiaryPagerView<Content: View>: View {
     @Binding var selectedDate: Date
     let calendar: Calendar
     var spacing: CGFloat = 16
-    var trailingSpace: CGFloat = 48
+    var trailingSpace: CGFloat = 0
     let content: (DiaryPagerItem, Bool) -> Content
     
     @State private var currentIndex: Int = 0
@@ -75,14 +75,17 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
     @Binding var index: Int
     @ViewBuilder let content: (Item) -> Content
     
-    @GestureState private var dragOffset: CGFloat = 0
+    @State private var dragOffset: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
+    /// Flag to track when we're handling a gesture-initiated animation.
+    /// When true, onChange(of: index) should NOT animate (we handle it ourselves).
+    @State private var isHandlingGesture: Bool = false
     
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = max(0, proxy.size.width - trailingSpace)
             let step = cardWidth + spacing
-            let centerAdjustment = (proxy.size.width - cardWidth) / 2
+            let centerAdjustment = (proxy.size.width - cardWidth) / 1.5
             
             HStack(spacing: spacing) {
                 ForEach(list) { item in
@@ -90,21 +93,36 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
                         .frame(width: cardWidth)
                 }
             }
-            .padding(.horizontal, spacing)
             .contentShape(Rectangle())
             .offset(x: scrollOffset + dragOffset + centerAdjustment)
             .highPriorityGesture(
                 DragGesture()
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation.width
+                    .onChanged { value in
+                        dragOffset = value.translation.width
                     }
                     .onEnded { value in
                         let progress = -value.translation.width / step
                         let rounded = progress.rounded()
                         let newIndex = clamp(index + Int(rounded))
-                        index = newIndex
-                        withAnimation(.easeInOut) {
-                            scrollOffset = targetOffset(for: newIndex, step: step)
+                        let finalTarget = targetOffset(for: newIndex, step: step)
+                        
+                        // Merge drag offset into scroll offset so animation starts from finger's release position
+                        scrollOffset += dragOffset
+                        dragOffset = 0
+                        
+                        // Start animation FIRST, before any state changes
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            scrollOffset = finalTarget
+                        }
+                        
+                        // Update index AFTER animation completes
+                        // This prevents parent state changes from interrupting the animation
+                        if newIndex != index {
+                            isHandlingGesture = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                index = newIndex
+                                isHandlingGesture = false
+                            }
                         }
                     }
             )
@@ -112,7 +130,10 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
                 scrollOffset = targetOffset(for: index, step: step)
             }
             .onChange(of: index) { newValue in
-                withAnimation(.easeInOut) {
+                // Only animate if this is an external change (e.g., tapping day strip)
+                // Skip if we're already handling a gesture-initiated animation
+                guard !isHandlingGesture else { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
                     scrollOffset = targetOffset(for: newValue, step: step)
                 }
             }
