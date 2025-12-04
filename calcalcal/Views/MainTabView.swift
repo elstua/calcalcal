@@ -20,6 +20,7 @@ struct MainTabView: View {
     @State private var dayEntryStates: [String: DayEntryState] = [:]
     @State private var showAllDaysSheet: Bool = false
     @State private var isLoadingRecentDays: Bool = false
+    @State private var pendingEntryFromSheet: DiaryEntry? = nil
     
     private let overlayAnimation = Animation.easeInOut(duration: 0.35)
     private let overlayAnimationDuration: Double = 0.35
@@ -124,12 +125,22 @@ private extension MainTabView {
         }
         .sheet(isPresented: $showAllDaysSheet, onDismiss: {
             refreshVisibleEntries()
+            // If an entry was queued to open from the sheet, present it now
+            if let entry = pendingEntryFromSheet {
+                pendingEntryFromSheet = nil
+                // Small delay to ensure sheet dismissal animation completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    presentOverlay(for: entry)
+                }
+            }
         }) {
             DiaryListView(
                 sharedNamespace: nil, // Not using matched geometry anymore
                 presentedEntryId: presentedEntry?.id,
                 onRequestOpen: { entry in
-                    presentOverlay(for: entry)
+                    // Queue the entry and dismiss sheet first - overlay will show after sheet closes
+                    pendingEntryFromSheet = entry
+                    showAllDaysSheet = false
                 },
                 isOverlayActive: shouldHideSourceCard
             )
@@ -230,13 +241,10 @@ private extension MainTabView {
             sourceCardFrame = frame
         }
         
-        withAnimation(overlayAnimation) {
-            presentedEntry = entry
-            isOverlayVisible = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            shouldFocusEditor = true
-        }
+        // Show overlay immediately - the overlay handles its own animation
+        presentedEntry = entry
+        isOverlayVisible = true
+        // Note: shouldFocusEditor is set by EditorOverlaySimple after morph animation completes
     }
     
     func dayStripItems() -> [DayStripItemModel] {
@@ -410,10 +418,11 @@ private extension MainTabView {
                 shouldBecomeFirstResponder: $shouldFocusEditor,
                 sourceFrame: sourceCardFrame,
                 onClose: {
+                    // Show source card again (overlay animates back to it)
                     shouldHideSourceCard = false
-                    DispatchQueue.main.async {
-                        shouldFocusEditor = false
-                    }
+                    shouldFocusEditor = false
+                    
+                    // Update entry data
                     updateDayEntry(entryId: entry.id) { state in
                         state.entry.blocks = presentedBlocks
                         state.entry.lastModified = Date()
@@ -428,18 +437,11 @@ private extension MainTabView {
                         ]
                     )
                     
-                    let closingId = entry.id
-                    DispatchQueue.main.asyncAfter(deadline: .now() + overlayAnimationDuration) {
-                        if presentedEntry?.id == closingId {
-                            withAnimation(overlayAnimation) {
-                                isOverlayVisible = false
-                            }
-                            presentedEntry = nil
-                        }
-                    }
+                    // Remove overlay from view hierarchy after morph animation
+                    isOverlayVisible = false
+                    presentedEntry = nil
                 }
             )
-            .transition(.identity)
             .zIndex(100)
         }
     }
@@ -450,7 +452,7 @@ private extension MainTabView {
     }
 }
 
-// MARK: - Simple Editor Overlay (no matched geometry)
+// MARK: - Editor Overlay with custom morphing animation
 struct EditorOverlaySimple: View {
     let entry: DiaryEntry
     @Binding var blocks: [Block]
@@ -474,8 +476,11 @@ struct EditorOverlaySimple: View {
     @State private var imageMap: [UUID: UIImage] = [:]
     @State private var dimmingProgress: Double = 0
     
-    // Animation state
-    @State private var animationProgress: CGFloat = 0
+    // Morphing animation state: 0 = at source card, 1 = expanded to full screen
+    @State private var morphProgress: CGFloat = 0
+    @State private var isClosing: Bool = false
+    
+    private let morphDuration: Double = 0.35
     
     init(entry: DiaryEntry,
          blocks: Binding<[Block]>,
@@ -493,6 +498,9 @@ struct EditorOverlaySimple: View {
     var body: some View {
         GeometryReader { geometry in
             let screenSize = geometry.size
+            let safeSource = validSourceFrame(screenSize: screenSize)
+            
+            // Target frame: full width with padding, full height
             let targetFrame = CGRect(
                 x: 8,
                 y: 0,
@@ -500,26 +508,30 @@ struct EditorOverlaySimple: View {
                 height: screenSize.height
             )
             
-            ZStack(alignment: .top) {
-                // Dimmed background
-                let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
-                Color.black.opacity(0.20 * progress * dimmingProgress)
+            // Interpolated values based on morphProgress
+            let currentFrame = interpolateFrame(from: safeSource, to: targetFrame, progress: morphProgress)
+            let currentCornerRadius = interpolate(from: 24, to: 24, progress: morphProgress)
+            
+            ZStack(alignment: .topLeading) {
+                // Dimmed background - fades with morph progress
+                let dragDimming = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
+                Color.black.opacity(0.25 * morphProgress * dragDimming)
                     .ignoresSafeArea()
                     .onTapGesture { dismissOverlay() }
                 
-                // Editor card with animated frame
+                // Editor card with morphing frame
                 VStack(spacing: 0) {
                     DiaryEditorCard(
                         entry: overlayEntry(),
                         height: 550,
-                        cornerRadius: 24,
+                        cornerRadius: currentCornerRadius,
                         showShadow: false,
                         useExternalDecoration: true,
                         onAddImage: { showImagePicker = true },
                         imageMap: imageMap,
                         isEditable: true,
                         shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                        forceExpanded: true,
+                        forceExpanded: morphProgress > 0.5, // Only expand content when mostly open
                         onBlocksChange: { updated in
                             blocks = updated
                             BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
@@ -544,27 +556,35 @@ struct EditorOverlaySimple: View {
                     
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 8)
+                .frame(width: currentFrame.width, height: currentFrame.height)
                 .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: currentCornerRadius, style: .continuous)
                         .fill(Color(.systemBackground))
-                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color.black.opacity(0.12 * morphProgress), radius: 12, x: 0, y: 8)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .frame(maxWidth: .infinity, alignment: .top)
-                .offset(y: max(0, dragOffset.height))
+                .clipShape(RoundedRectangle(cornerRadius: currentCornerRadius, style: .continuous))
+                .position(
+                    x: currentFrame.midX,
+                    y: currentFrame.midY + max(0, dragOffset.height)
+                )
                 .overlay(alignment: .topTrailing) {
-                    Button(action: { dismissOverlay() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.secondary)
-                            .padding(12)
+                    // Close button - only show when expanded
+                    if morphProgress > 0.8 {
+                        Button(action: { dismissOverlay() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.secondary)
+                                .padding(12)
+                        }
+                        .opacity(Double((morphProgress - 0.8) / 0.2)) // Fade in during last 20% of animation
+                        .position(x: currentFrame.maxX - 30, y: currentFrame.minY + 30)
                     }
-                    .padding(.top, 4)
                 }
                 .gesture(
                     DragGesture()
                         .updating($dragOffset) { value, state, _ in
+                            // Only allow drag when fully expanded
+                            guard morphProgress >= 1.0 else { return }
                             state = value.translation
                             if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
                                 shouldBecomeFirstResponder = false
@@ -572,6 +592,7 @@ struct EditorOverlaySimple: View {
                             }
                         }
                         .onEnded { value in
+                            guard morphProgress >= 1.0 else { return }
                             let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
                             if shouldDismiss {
                                 dismissOverlay()
@@ -608,12 +629,54 @@ struct EditorOverlaySimple: View {
     }
     
     private func dismissOverlay() {
-        withAnimation(.easeInOut(duration: 0.20)) {
-            dimmingProgress = 0
+        guard !isClosing else { return }
+        isClosing = true
+        
+        // Dismiss keyboard first
+        shouldBecomeFirstResponder = false
+        
+        // Animate back to source position
+        withAnimation(.easeInOut(duration: morphDuration)) {
+            morphProgress = 0
         }
-        DispatchQueue.main.async {
+        
+        // Call onClose after animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + morphDuration) {
             onClose()
         }
+    }
+    
+    // Ensure source frame is valid (has reasonable size and position)
+    private func validSourceFrame(screenSize: CGSize) -> CGRect {
+        // If source frame is invalid or too small, use a centered default
+        if sourceFrame.width < 50 || sourceFrame.height < 50 ||
+           sourceFrame.minX < -100 || sourceFrame.minY < -100 {
+            // Fallback: start from center of screen with card-like size
+            let fallbackWidth = screenSize.width - 32
+            let fallbackHeight: CGFloat = 500
+            return CGRect(
+                x: 16,
+                y: (screenSize.height - fallbackHeight) / 2,
+                width: fallbackWidth,
+                height: fallbackHeight
+            )
+        }
+        return sourceFrame
+    }
+    
+    // Linear interpolation between two CGFloat values
+    private func interpolate(from: CGFloat, to: CGFloat, progress: CGFloat) -> CGFloat {
+        from + (to - from) * progress
+    }
+    
+    // Interpolate between two CGRect frames
+    private func interpolateFrame(from: CGRect, to: CGRect, progress: CGFloat) -> CGRect {
+        CGRect(
+            x: interpolate(from: from.minX, to: to.minX, progress: progress),
+            y: interpolate(from: from.minY, to: to.minY, progress: progress),
+            width: interpolate(from: from.width, to: to.width, progress: progress),
+            height: interpolate(from: from.height, to: to.height, progress: progress)
+        )
     }
     
     private func overlayEntry() -> DiaryEntry {
@@ -628,9 +691,20 @@ struct EditorOverlaySimple: View {
     }
     
     private func setupOverlay() {
-        dimmingProgress = 0
-        withAnimation(.easeInOut(duration: 0.25).delay(0.1)) {
-            dimmingProgress = 1
+        // Start at source position (morphProgress = 0)
+        morphProgress = 0
+        isClosing = false
+        
+        // Animate to full screen
+        withAnimation(.easeInOut(duration: morphDuration)) {
+            morphProgress = 1
+        }
+        
+        // Focus editor after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + morphDuration) {
+            if !isClosing {
+                shouldBecomeFirstResponder = true
+            }
         }
         
         liveTotalCalories = entry.totalCalories

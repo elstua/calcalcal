@@ -40,7 +40,14 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     
     func updateUIView(_ uiView: BlockEditorTextView, context: Context) {
         context.coordinator.parent = self
+        #if DEBUG
+        print("🔧 BlockEditorRepresentable.updateUIView - isEditable: \(isEditable), uiView.isEditable before: \(uiView.isEditable)")
+        #endif
         uiView.isEditable = isEditable
+        uiView.isUserInteractionEnabled = true // Ensure interaction is enabled
+        #if DEBUG
+        print("🔧 BlockEditorRepresentable.updateUIView - uiView.isEditable after: \(uiView.isEditable)")
+        #endif
         uiView.entryIdentifier = entryId
         context.coordinator.applyIfNeeded(blocks: blocks, imageMap: imageMap)
         context.coordinator.handleFirstResponderIfNeeded(textView: uiView)
@@ -70,11 +77,19 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         
         func bind(to textView: BlockEditorTextView) {
             self.textView = textView
+            #if DEBUG
+            print("🔧 Coordinator.bind - parent.isEditable: \(parent.isEditable)")
+            #endif
             textView.isEditable = parent.isEditable
+            textView.isUserInteractionEnabled = true
+            textView.isSelectable = true
             textView.entryIdentifier = parent.entryId
             bridge = BlockEditorBridge(textView: textView)
             bridge?.apply(blocks: parent.blocks, imageMap: parent.imageMap)
             lastAppliedBlocks = parent.blocks
+            #if DEBUG
+            print("🔧 Coordinator.bind - textView.isEditable after: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
+            #endif
             
             notificationToken = NotificationCenter.default.addObserver(
                 forName: UITextView.textDidChangeNotification,

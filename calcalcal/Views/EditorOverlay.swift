@@ -106,8 +106,12 @@ struct EditorOverlay: View {
                 }
                 .padding(.top, 4)
             }
-            .gesture(
-                DragGesture()
+            // Use simultaneousGesture instead of gesture so that the drag gesture
+            // doesn't intercept touches meant for the UITextView inside. This allows
+            // the text editor to receive taps for cursor placement and text editing
+            // while still supporting drag-to-dismiss functionality.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20) // Require more distance to avoid interfering with text selection
                     .updating($dragOffset) { value, state, _ in
                         state = value.translation
                         if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
