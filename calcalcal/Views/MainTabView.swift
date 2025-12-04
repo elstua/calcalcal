@@ -3,13 +3,17 @@ import UIKit
 
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
-    @Namespace private var editorNamespace
     
     @State private var presentedEntry: DiaryEntry? = nil
     @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
     @State private var isOverlayVisible: Bool = false
     @State private var shouldHideSourceCard: Bool = false
+    
+    // Source card frame tracking for custom animation
+    @State private var sourceCardFrame: CGRect = .zero
+    @State private var overlayScale: CGFloat = 1.0
+    @State private var overlayOffset: CGSize = .zero
     
     @State private var selectedDay: Date = Calendar.current.startOfDay(for: Date())
     @State private var anchorDate: Date = Calendar.current.startOfDay(for: Date())
@@ -25,6 +29,9 @@ struct MainTabView: View {
         "write what you ate today",
         "write what you ate this day"
     ]
+    
+    // Named coordinate space for tracking card positions
+    private let rootCoordinateSpace = "rootCoordinateSpace"
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -44,6 +51,7 @@ struct MainTabView: View {
             
             overlayLayer
         }
+        .coordinateSpace(name: rootCoordinateSpace)
         .onAppear {
             anchorDate = calendar.startOfDay(for: Date())
             clampSelectedDayIfNeeded()
@@ -118,7 +126,7 @@ private extension MainTabView {
             refreshVisibleEntries()
         }) {
             DiaryListView(
-                sharedNamespace: editorNamespace,
+                sharedNamespace: nil, // Not using matched geometry anymore
                 presentedEntryId: presentedEntry?.id,
                 onRequestOpen: { entry in
                     presentOverlay(for: entry)
@@ -144,7 +152,7 @@ private extension MainTabView {
                 spacing: 12,
                 trailingSpace: 0
             ) { item, isActive in
-                cardView(for: item.entry, enableMatchedGeometry: isActive)
+                cardView(for: item.entry, isActive: isActive)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .overlay(alignment: .topTrailing) {
@@ -157,41 +165,50 @@ private extension MainTabView {
         }
     }
     
-    func cardView(for entry: DiaryEntry, enableMatchedGeometry: Bool) -> some View {
+    func cardView(for entry: DiaryEntry, isActive: Bool) -> some View {
         let shouldHideForOverlay = isOverlayVisible && presentedEntry?.id == entry.id
         
-        return VStack(spacing: 0) {
-            BigEntryBlock(
-                entry: entry,
-                height: 540,
-                cornerRadius: 24,
-                showShadow: true,
-                useExternalDecoration: false,
-                onAddImage: nil,
-                onTap: enableMatchedGeometry ? { presentOverlay(for: entry) } : nil,
-                imageMap: [:],
-                isEditable: false,
-                shouldBecomeFirstResponder: .constant(false),
-                forceExpanded: false
-            )
-            
-            .padding(.vertical, 0)
-            .padding(.horizontal,8)
-            .id(entry.id)
-            .modifier(
-                ConditionalMatchedGeometry(
-                    enabled: enableMatchedGeometry,
-                    id: entry.id,
-                    namespace: editorNamespace
+        return GeometryReader { geometry in
+            VStack(spacing: 0) {
+                BigEntryBlock(
+                    entry: entry,
+                    height: 540,
+                    cornerRadius: 24,
+                    showShadow: true,
+                    useExternalDecoration: false,
+                    onAddImage: nil,
+                    onTap: isActive ? { 
+                        // Capture the card's frame in root coordinate space before opening
+                        let frame = geometry.frame(in: .named(rootCoordinateSpace))
+                        presentOverlay(for: entry, sourceFrame: frame)
+                    } : nil,
+                    imageMap: [:],
+                    isEditable: false,
+                    shouldBecomeFirstResponder: .constant(false),
+                    forceExpanded: false
                 )
-            )
-            .opacity(shouldHideForOverlay ? 0 : 1)
-            .allowsHitTesting(enableMatchedGeometry ? !shouldHideForOverlay : false)
-            .frame(height: 500, alignment: .top)
-            
-            Spacer(minLength: 0)
+                .padding(.horizontal, 8)
+                .id(entry.id)
+                .opacity(shouldHideForOverlay ? 0 : 1)
+                .allowsHitTesting(isActive ? !shouldHideForOverlay : false)
+                .frame(height: 500, alignment: .top)
+                
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // Update source frame when the active card's geometry changes
+            .onChange(of: geometry.frame(in: .named(rootCoordinateSpace))) { newFrame in
+                if isActive && presentedEntry?.id == entry.id {
+                    sourceCardFrame = newFrame
+                }
+            }
+            .onAppear {
+                // Capture initial frame for active card
+                if isActive && presentedEntry?.id == entry.id {
+                    sourceCardFrame = geometry.frame(in: .named(rootCoordinateSpace))
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
     func placeholderCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -203,10 +220,16 @@ private extension MainTabView {
             .padding(.vertical, 8)
     }
     
-    func presentOverlay(for entry: DiaryEntry) {
+    func presentOverlay(for entry: DiaryEntry, sourceFrame: CGRect? = nil) {
         shouldFocusEditor = false
         shouldHideSourceCard = true
         presentedBlocks = entry.blocks
+        
+        // Store the source frame for animation
+        if let frame = sourceFrame {
+            sourceCardFrame = frame
+        }
+        
         withAnimation(overlayAnimation) {
             presentedEntry = entry
             isOverlayVisible = true
@@ -381,11 +404,11 @@ private extension MainTabView {
     @ViewBuilder
     var overlayLayer: some View {
         if let entry = presentedEntry, isOverlayVisible {
-            EditorOverlay(
+            EditorOverlaySimple(
                 entry: entry,
                 blocks: $presentedBlocks,
                 shouldBecomeFirstResponder: $shouldFocusEditor,
-                namespace: editorNamespace,
+                sourceFrame: sourceCardFrame,
                 onClose: {
                     shouldHideSourceCard = false
                     DispatchQueue.main.async {
@@ -427,10 +450,531 @@ private extension MainTabView {
     }
 }
 
+// MARK: - Simple Editor Overlay (no matched geometry)
+struct EditorOverlaySimple: View {
+    let entry: DiaryEntry
+    @Binding var blocks: [Block]
+    @Binding var shouldBecomeFirstResponder: Bool
+    let sourceFrame: CGRect
+    let onClose: () -> Void
+    
+    @State private var canonicalEntryId: UUID
+    @State private var showImagePicker: Bool = false
+    @State private var pickedImage: UIImage? = nil
+    @GestureState private var dragOffset: CGSize = .zero
+    @State private var hasDismissedKeyboardForDrag: Bool = false
+    @State private var debounceWorkItem: DispatchWorkItem? = nil
+    @State private var lastSavedAt: Date? = nil
+    @State private var lastSavedContent: String? = nil
+    @State private var liveTotalCalories: Int? = nil
+    @State private var suppressRemoteBlockUpdates: Bool = false
+    @State private var pendingRemoteBlocks: [Block]? = nil
+    @State private var loadTask: Task<Void, Never>? = nil
+    @State private var autosaveTask: Task<Void, Error>? = nil
+    @State private var imageMap: [UUID: UIImage] = [:]
+    @State private var dimmingProgress: Double = 0
+    
+    // Animation state
+    @State private var animationProgress: CGFloat = 0
+    
+    init(entry: DiaryEntry,
+         blocks: Binding<[Block]>,
+         shouldBecomeFirstResponder: Binding<Bool>,
+         sourceFrame: CGRect,
+         onClose: @escaping () -> Void) {
+        self.entry = entry
+        self._blocks = blocks
+        self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self.sourceFrame = sourceFrame
+        self.onClose = onClose
+        _canonicalEntryId = State(initialValue: entry.id)
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let screenSize = geometry.size
+            let targetFrame = CGRect(
+                x: 8,
+                y: 0,
+                width: screenSize.width - 16,
+                height: screenSize.height
+            )
+            
+            ZStack(alignment: .top) {
+                // Dimmed background
+                let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
+                Color.black.opacity(0.20 * progress * dimmingProgress)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismissOverlay() }
+                
+                // Editor card with animated frame
+                VStack(spacing: 0) {
+                    DiaryEditorCard(
+                        entry: overlayEntry(),
+                        height: 550,
+                        cornerRadius: 24,
+                        showShadow: false,
+                        useExternalDecoration: true,
+                        onAddImage: { showImagePicker = true },
+                        imageMap: imageMap,
+                        isEditable: true,
+                        shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                        forceExpanded: true,
+                        onBlocksChange: { updated in
+                            blocks = updated
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
+                            scheduleAutosaveIfTextChanged(blocks: updated)
+                        },
+                        overrideTotalCalories: liveTotalCalories,
+                        externalBlocks: $blocks
+                    )
+                    .onChange(of: blocks) { newValue in
+                        let updatedBlocks = newValue.map { block in
+                            if block.stableId == nil {
+                                return block.withUpdatedChangeTracking()
+                            }
+                            return block
+                        }
+                        if updatedBlocks != newValue {
+                            blocks = updatedBlocks
+                        }
+                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
+                        scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
+                    }
+                    
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .frame(maxWidth: .infinity, alignment: .top)
+                .offset(y: max(0, dragOffset.height))
+                .overlay(alignment: .topTrailing) {
+                    Button(action: { dismissOverlay() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary)
+                            .padding(12)
+                    }
+                    .padding(.top, 4)
+                }
+                .gesture(
+                    DragGesture()
+                        .updating($dragOffset) { value, state, _ in
+                            state = value.translation
+                            if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
+                                shouldBecomeFirstResponder = false
+                                hasDismissedKeyboardForDrag = true
+                            }
+                        }
+                        .onEnded { value in
+                            let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
+                            if shouldDismiss {
+                                dismissOverlay()
+                            } else {
+                                if hasDismissedKeyboardForDrag {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        shouldBecomeFirstResponder = true
+                                        hasDismissedKeyboardForDrag = false
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(image: $pickedImage)
+                .onDisappear {
+                    handleImagePicked()
+                }
+        }
+        .onAppear {
+            setupOverlay()
+        }
+        .onDisappear {
+            cleanupOverlay()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorParagraphCommitted)) { _ in
+            scheduleAutosave(blocks: blocks)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editorSavedParagraphEdited)) { _ in
+            scheduleAutosave(blocks: blocks)
+        }
+    }
+    
+    private func dismissOverlay() {
+        withAnimation(.easeInOut(duration: 0.20)) {
+            dimmingProgress = 0
+        }
+        DispatchQueue.main.async {
+            onClose()
+        }
+    }
+    
+    private func overlayEntry() -> DiaryEntry {
+        DiaryEntry(
+            id: canonicalEntryId,
+            date: entry.date,
+            blocks: blocks,
+            totalCalories: liveTotalCalories ?? entry.totalCalories,
+            lastModified: entry.lastModified,
+            aiGeneratedSummary: entry.aiGeneratedSummary
+        )
+    }
+    
+    private func setupOverlay() {
+        dimmingProgress = 0
+        withAnimation(.easeInOut(duration: 0.25).delay(0.1)) {
+            dimmingProgress = 1
+        }
+        
+        liveTotalCalories = entry.totalCalories
+        
+        loadTask = Task {
+            do {
+                let dbBlocks = try await DiaryAPI.getBlocksById(canonicalEntryId.uuidString)
+                if Task.isCancelled { return }
+                
+                await MainActor.run {
+                    let payload: [[String: Any]] = dbBlocks.map { block in
+                        [
+                            "id": block.id ?? "",
+                            "position": block.position ?? 0,
+                            "content": block.content ?? "",
+                            "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
+                            "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
+                            "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
+                            "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
+                            "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
+                            "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
+                            "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                            "confidence": (block.confidence as Any?) ?? NSNull()
+                        ]
+                    }
+                    NotificationCenter.default.post(
+                        name: .editorApplyPerBlockMetadata,
+                        object: nil,
+                        userInfo: [
+                            "entryId": canonicalEntryId,
+                            "analyzedBlocks": payload
+                        ]
+                    )
+                    hydrateImagesForOverlay()
+                }
+            } catch {
+                // Best-effort
+            }
+        }
+        
+        Task {
+            await MainActor.run {
+                blocks = blocks.withStableIdsAndChangeTracking()
+            }
+        }
+        
+        let initial = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+        lastSavedContent = initial
+        hydrateImagesForOverlay()
+    }
+    
+    private func cleanupOverlay() {
+        loadTask?.cancel()
+        loadTask = nil
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        
+        flushSave()
+        
+        if let pending = pendingRemoteBlocks {
+            blocks = pending
+            pendingRemoteBlocks = nil
+        }
+        suppressRemoteBlockUpdates = false
+    }
+    
+    private func handleImagePicked() {
+        guard let image = pickedImage else { return }
+        let uuid = UUID()
+        let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
+        imageMap[uuid] = compressed.resizedImage
+        ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
+        
+        if let resizedPNG = compressed.resizedImage.pngData() {
+            let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
+            blocks.append(newBlock)
+            
+            let capturedUUID = uuid
+            let blockId = newBlock.id
+            
+            Task.detached(priority: .userInitiated) {
+                do {
+                    let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
+                    ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
+                    
+                    await MainActor.run {
+                        if let idx = blocks.firstIndex(where: { block in
+                            if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
+                            return false
+                        }) {
+                            var updated = blocks[idx]
+                            updated.imageUrl = upload.publicUrl
+                            updated.imageObjectKey = upload.objectKey
+                            blocks[idx] = updated
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                        }
+                    }
+                    
+                    let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: nil, blockId: blockId.uuidString)
+                    let nutrition = NutritionData(
+                        calories: analysis.calories,
+                        protein: analysis.macros?.protein,
+                        fat: analysis.macros?.fat,
+                        carbs: analysis.macros?.carbs,
+                        fiber: analysis.macros?.fiber,
+                        sugar: analysis.macros?.sugar,
+                        sodium: analysis.macros?.sodium,
+                        confidence: analysis.confidence
+                    )
+                    
+                    await MainActor.run {
+                        if let idx = blocks.firstIndex(where: { block in
+                            if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
+                            return false
+                        }) {
+                            var updated = blocks[idx]
+                            if case let .imageText(data, ref, _) = updated.type {
+                                updated.type = .imageText(data, ref, analysis.description)
+                            }
+                            updated.imageUrl = updated.imageUrl ?? upload.publicUrl
+                            updated.nutrition = nutrition
+                            if let cals = analysis.calories, cals > 0 {
+                                updated.calorieData = String(cals)
+                            }
+                            blocks[idx] = updated
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                        }
+                    }
+                } catch {
+                    #if DEBUG
+                    print("❌ Image pipeline error: \(error)")
+                    #endif
+                }
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            shouldBecomeFirstResponder = true
+        }
+        pickedImage = nil
+    }
+    
+    private func hydrateImagesForOverlay() {
+        for block in blocks {
+            switch block.type {
+            case .imageText(_, let ref, _):
+                if imageMap[ref] != nil { continue }
+                if let url = block.imageUrl, !url.isEmpty {
+                    if let cached = ImageCache.shared.imageIfCached(for: url) {
+                        imageMap[ref] = cached
+                    } else {
+                        Task.detached { @MainActor in
+                            if let fetched = await ImageCache.shared.fetch(url) {
+                                imageMap[ref] = fetched
+                            }
+                        }
+                    }
+                } else {
+                    if let cached = ImageCache.shared.localImage(ref: ref, legacyEntryId: entry.id) {
+                        imageMap[ref] = cached
+                    }
+                }
+            default:
+                continue
+            }
+        }
+    }
+}
+
+// MARK: - Autosave helpers for EditorOverlaySimple
+extension EditorOverlaySimple {
+    @MainActor
+    private func canonicalizeEntryIfNeeded(row: DiaryAPI.Row, blocks: [Block]) {
+        guard let serverUUID = UUID(uuidString: row.id) else { return }
+        if serverUUID == canonicalEntryId { return }
+        EntryIdentityCoordinator.shared.canonicalize(localId: canonicalEntryId, serverId: serverUUID, blocks: blocks)
+        canonicalEntryId = serverUUID
+    }
+    
+    private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
+        if suppressRemoteBlockUpdates { return }
+        let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+        if content == lastSavedContent { return }
+    }
+    
+    private func scheduleAutosave(blocks: [Block]) {
+        debounceWorkItem?.cancel()
+        autosaveTask?.cancel()
+        let workItem = DispatchWorkItem {
+            autosaveTask = Task { await save(blocks: blocks) }
+        }
+        debounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+    }
+    
+    private func flushSave() {
+        if let work = debounceWorkItem {
+            work.cancel()
+            debounceWorkItem = nil
+        }
+        autosaveTask?.cancel()
+        Task { await saveWithoutAIAnalysis(blocks: blocks) }
+    }
+    
+    private func save(blocks: [Block]) async {
+        if Task.isCancelled { return }
+        
+        let content = blocks.toContentString()
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let placeholders: Set<String> = ["write what you ate today", "write what you ate this day"]
+        if trimmed.isEmpty || placeholders.contains(trimmed) { return }
+        
+        let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
+        let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
+        
+        do {
+            guard let _ = try? KeychainManager.shared.loadTokens() else { return }
+            if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
+                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
+                await MainActor.run {
+                    canonicalizeEntryIfNeeded(row: row, blocks: blocks)
+                }
+                BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                
+                if Task.isCancelled { return }
+                
+                let payload = blocks.toAnalyzeBlocks()
+                let isContentEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                
+                autosaveTask = Task {
+                    do {
+                        if isContentEmpty {
+                            try await DiaryAPI.clearEntryNutrition(entryId: row.id)
+                            await MainActor.run {
+                                NotificationCenter.default.post(
+                                    name: .diaryEntryTotalsUpdated,
+                                    object: nil,
+                                    userInfo: ["entryId": canonicalEntryId, "totalCalories": 0]
+                                )
+                                self.liveTotalCalories = 0
+                            }
+                        } else {
+                            _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
+                            
+                            var hasReceivedNutritionData = false
+                            let delays: [Double] = [0.8, 1.2, 2.0, 2.8, 4.0, 5.5, 7.5, 10.0]
+                            for delay in delays {
+                                if hasReceivedNutritionData { break }
+                                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                                if Task.isCancelled { return }
+                                
+                                let refreshed = try? await DiaryAPI.getById(row.id)
+                                let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
+                                
+                                await MainActor.run {
+                                    if let refreshed {
+                                        NotificationCenter.default.post(
+                                            name: .diaryEntryTotalsUpdated,
+                                            object: nil,
+                                            userInfo: ["entryId": canonicalEntryId, "totalCalories": refreshed.total_calories as Any]
+                                        )
+                                        self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
+                                    }
+                                    
+                                    if let dbBlocks {
+                                        let nowHasNutritionData = dbBlocks.contains { ($0.calories ?? 0) > 0 }
+                                        if nowHasNutritionData {
+                                            hasReceivedNutritionData = true
+                                            let payload: [[String: Any]] = dbBlocks.map { block in
+                                                [
+                                                    "id": block.id ?? "",
+                                                    "position": block.position ?? 0,
+                                                    "content": block.content ?? "",
+                                                    "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
+                                                    "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
+                                                    "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
+                                                    "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
+                                                    "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
+                                                    "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
+                                                    "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                                    "confidence": (block.confidence as Any?) ?? NSNull()
+                                                ]
+                                            }
+                                            NotificationCenter.default.post(
+                                                name: .editorApplyPerBlockMetadata,
+                                                object: nil,
+                                                userInfo: ["entryId": canonicalEntryId, "analyzedBlocks": payload]
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .diaryEntryTotalsUpdated,
+                        object: nil,
+                        userInfo: ["entryId": canonicalEntryId, "totalCalories": row.total_calories as Any]
+                    )
+                }
+            }
+            lastSavedAt = Date()
+            lastSavedContent = trimmed
+        } catch {
+            #if DEBUG
+            print("❌ Autosave error: \(error)")
+            #endif
+        }
+    }
+    
+    private func saveWithoutAIAnalysis(blocks: [Block]) async {
+        let content = blocks.toContentString()
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let placeholders: Set<String> = ["write what you ate today", "write what you ate this day"]
+        if trimmed.isEmpty || placeholders.contains(trimmed) { return }
+        
+        let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
+        let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
+        
+        do {
+            guard let _ = try? KeychainManager.shared.loadTokens() else { return }
+            if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
+                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
+                await MainActor.run {
+                    canonicalizeEntryIfNeeded(row: row, blocks: blocks)
+                }
+                lastSavedAt = Date()
+                lastSavedContent = trimmed
+                BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+            }
+        } catch {
+            #if DEBUG
+            print("❌ Flush save error: \(error)")
+            #endif
+        }
+    }
+}
+
 struct MainTabView_Previews: PreviewProvider {
     static var previews: some View {
         MainTabView()
             .environmentObject(AppState())
     }
 }
-

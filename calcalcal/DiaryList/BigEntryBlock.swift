@@ -108,7 +108,10 @@ struct BigEntryBlock: View {
         .background(useExternalDecoration ? Color.clear : Color.white)
         .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
         .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-        .onTapGesture { onTap?() }
+        // Only add tap gesture when onTap is provided AND editing is disabled.
+        // When isEditable is true, we must NOT add a tap gesture because it would
+        // intercept taps meant for the UITextView and prevent text editing.
+        .modifier(ConditionalTapGesture(isEnabled: onTap != nil && !isEditable, action: { onTap?() }))
         // Keep internal editor blocks in sync with external model
         .onChange(of: entry.blocks) { newValue in
             // Only drive internal state if we're not using an external binding
@@ -163,6 +166,23 @@ extension BigEntryBlock {
 
 
 // MARK: - Preview
+
+/// A view modifier that conditionally applies a tap gesture.
+/// When disabled, no gesture is added so taps pass through to child views (like UITextView).
+struct ConditionalTapGesture: ViewModifier {
+    let isEnabled: Bool
+    let action: () -> Void
+    
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture { action() }
+        } else {
+            content
+        }
+    }
+}
 
 struct BigEntryBlock_Previews: PreviewProvider {
     static var previews: some View {

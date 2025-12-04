@@ -47,50 +47,54 @@ struct EditorOverlay: View {
                 .onTapGesture { dismissWithMatched() }
             
             // Wrapper that responds to keyboard. Keep matched view inside for stable geometry.
+            // IMPORTANT: The matched geometry must be on a view with a FIXED size that matches
+            // the source card's size. Using .frame(maxHeight: .infinity) after matchedGeometry
+            // causes the animation to target the center of a full-screen frame instead of the card.
             VStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    DiaryEditorCard(
-                        entry: overlayEntry(),
-                        height: 550,
-                        cornerRadius: 24,
-                        showShadow: false,
-                        useExternalDecoration: true,
-                        onAddImage: { showImagePicker = true },
-                        imageMap: imageMap,
-                        isEditable: true,
-                        shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                        forceExpanded: true,
-                        onBlocksChange: { updated in
-                            blocks = updated
-                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
-                            scheduleAutosaveIfTextChanged(blocks: updated)
-                        },
-                        overrideTotalCalories: liveTotalCalories,
-                        externalBlocks: $blocks
-                    )
-                    .onChange(of: blocks) { newValue in
-                        let updatedBlocks = newValue.map { block in
-                            if block.stableId == nil {
-                                return block.withUpdatedChangeTracking()
-                            }
-                            return block
-                        }
-                        if updatedBlocks != newValue {
-                            blocks = updatedBlocks
-                        }
-                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
-                        scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                DiaryEditorCard(
+                    entry: overlayEntry(),
+                    height: 550,
+                    cornerRadius: 24,
+                    showShadow: false,
+                    useExternalDecoration: true,
+                    onAddImage: { showImagePicker = true },
+                    imageMap: imageMap,
+                    isEditable: true,
+                    shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                    forceExpanded: true,
+                    onBlocksChange: { updated in
+                        blocks = updated
+                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
+                        scheduleAutosaveIfTextChanged(blocks: updated)
+                    },
+                    overrideTotalCalories: liveTotalCalories,
+                    externalBlocks: $blocks
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .modifier(ConditionalMatchedGeometry(enabled: useMatchedGeometry, id: entry.id, namespace: namespace))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .onChange(of: blocks) { newValue in
+                    let updatedBlocks = newValue.map { block in
+                        if block.stableId == nil {
+                            return block.withUpdatedChangeTracking()
+                        }
+                        return block
+                    }
+                    if updatedBlocks != newValue {
+                        blocks = updatedBlocks
+                    }
+                    BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
+                    scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
+                }
+                
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .modifier(ConditionalMatchedGeometry(enabled: useMatchedGeometry, id: entry.id, namespace: namespace))
+            .frame(maxWidth: .infinity, alignment: .top)
             .offset(y: max(0, dragOffset.height))
             .overlay(alignment: .topTrailing) {
                 // Close button
@@ -381,22 +385,25 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
     let id: ID
     let namespace: Namespace.ID
     let isSource: Bool
+    let anchor: UnitPoint
     
     init(
         enabled: Bool,
         id: ID,
         namespace: Namespace.ID,
-        isSource: Bool = true
+        isSource: Bool = true,
+        anchor: UnitPoint = .top  // Use .top anchor by default for proper animation alignment
     ) {
         self.enabled = enabled
         self.id = id
         self.namespace = namespace
         self.isSource = isSource
+        self.anchor = anchor
     }
     
     func body(content: Content) -> some View {
         if enabled {
-            content.matchedGeometryEffect(id: id, in: namespace, isSource: isSource)
+            content.matchedGeometryEffect(id: id, in: namespace, anchor: anchor, isSource: isSource)
         } else {
             content
         }

@@ -6,7 +6,7 @@ struct DiaryPagerItem: Identifiable, Equatable {
     let entry: DiaryEntry
 }
 
-/// Snapping carousel implementation derived from pdgna44’s “Snapping Carousel in SwiftUI, iOS 16”.
+/// Snapping carousel for displaying diary entries by day.
 struct DiaryPagerView<Content: View>: View {
     let items: [DiaryPagerItem]
     @Binding var selectedDate: Date
@@ -68,6 +68,7 @@ struct DiaryPagerView<Content: View>: View {
     }
 }
 
+/// Simple offset-based carousel (no matched geometry requirements)
 private struct SnapCarousel<Item: Identifiable, Content: View>: View {
     let list: [Item]
     var spacing: CGFloat
@@ -77,15 +78,13 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
     
     @State private var dragOffset: CGFloat = 0
     @State private var scrollOffset: CGFloat = 0
-    /// Flag to track when we're handling a gesture-initiated animation.
-    /// When true, onChange(of: index) should NOT animate (we handle it ourselves).
     @State private var isHandlingGesture: Bool = false
     
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = max(0, proxy.size.width - trailingSpace)
             let step = cardWidth + spacing
-            let centerAdjustment = (proxy.size.width - cardWidth) / 1.5
+            let centerAdjustment = (proxy.size.width - cardWidth) / 2
             
             HStack(spacing: spacing) {
                 ForEach(list) { item in
@@ -116,7 +115,6 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
                         }
                         
                         // Update index AFTER animation completes
-                        // This prevents parent state changes from interrupting the animation
                         if newIndex != index {
                             isHandlingGesture = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -130,8 +128,6 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
                 scrollOffset = targetOffset(for: index, step: step)
             }
             .onChange(of: index) { newValue in
-                // Only animate if this is an external change (e.g., tapping day strip)
-                // Skip if we're already handling a gesture-initiated animation
                 guard !isHandlingGesture else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
                     scrollOffset = targetOffset(for: newValue, step: step)
@@ -149,5 +145,3 @@ private struct SnapCarousel<Item: Identifiable, Content: View>: View {
         return min(max(value, 0), list.count - 1)
     }
 }
-
-
