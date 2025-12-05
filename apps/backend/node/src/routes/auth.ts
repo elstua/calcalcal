@@ -156,24 +156,100 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 // GET /api/auth/profile
-router.get('/profile', async (req: Request, res: Response) => {
+router.get('/profile', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing authorization header' });
-    }
-    const token = authHeader.substring(7);
-    const decoded = AuthService.verifySessionToken(token);
-    if (!decoded) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    const user = await UserModel.findById(decoded.userId);
+    const userId = req.userId!;
+    const user = await UserModel.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
     return res.json({ success: true, profile: user });
   } catch (_e) {
     return res.status(500).json({ error: 'Failed to get profile' });
+  }
+});
+
+// PUT /api/auth/profile - Update user profile
+router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const updates = req.body || {};
+
+    // Validate enum values if provided
+    if (updates.activity_level !== undefined) {
+      const validActivityLevels = ['small', 'moderate', 'active'];
+      if (!validActivityLevels.includes(updates.activity_level)) {
+        return res.status(400).json({
+          error: 'Invalid activity_level',
+          message: `activity_level must be one of: ${validActivityLevels.join(', ')}`,
+        });
+      }
+    }
+
+    if (updates.gender !== undefined && updates.gender !== null) {
+      const validGenders = ['male', 'female', 'other'];
+      if (!validGenders.includes(updates.gender)) {
+        return res.status(400).json({
+          error: 'Invalid gender',
+          message: `gender must be one of: ${validGenders.join(', ')}, or null`,
+        });
+      }
+    }
+
+    if (updates.weight_unit !== undefined) {
+      const validWeightUnits = ['kg', 'lbs'];
+      if (!validWeightUnits.includes(updates.weight_unit)) {
+        return res.status(400).json({
+          error: 'Invalid weight_unit',
+          message: `weight_unit must be one of: ${validWeightUnits.join(', ')}`,
+        });
+      }
+    }
+
+    if (updates.height_unit !== undefined) {
+      const validHeightUnits = ['cm', 'in'];
+      if (!validHeightUnits.includes(updates.height_unit)) {
+        return res.status(400).json({
+          error: 'Invalid height_unit',
+          message: `height_unit must be one of: ${validHeightUnits.join(', ')}`,
+        });
+      }
+    }
+
+    // Validate numeric fields
+    const numericFields = ['weight_kg', 'height_cm', 'age', 'target_weight_kg', 'daily_calorie_goal'];
+    for (const field of numericFields) {
+      if (updates[field] !== undefined && updates[field] !== null) {
+        const numValue = Number(updates[field]);
+        if (isNaN(numValue) || numValue < 0) {
+          return res.status(400).json({
+            error: `Invalid ${field}`,
+            message: `${field} must be a non-negative number`,
+          });
+        }
+        updates[field] = numValue;
+      }
+    }
+
+    // Update user profile (auto-calculation happens in UserModel.update)
+    const updatedUser = await UserModel.update(userId, updates);
+
+    // Ensure dates are serialized as strings for JSON
+    const userResponse = {
+      ...updatedUser,
+      created_at: typeof updatedUser.created_at === 'string'
+        ? updatedUser.created_at
+        : (updatedUser.created_at as any)?.toISOString?.() || String(updatedUser.created_at),
+      updated_at: typeof updatedUser.updated_at === 'string'
+        ? updatedUser.updated_at
+        : (updatedUser.updated_at as any)?.toISOString?.() || String(updatedUser.updated_at),
+    };
+
+    return res.json({ success: true, profile: userResponse });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Profile update error:', { message, error });
+    return res.status(500).json({ error: 'Failed to update profile', message });
   }
 });
 

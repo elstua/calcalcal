@@ -1,4 +1,5 @@
 import Database from '../services/database';
+import { calculateCalorieGoal, UserHealthData } from '../services/calorieCalculator';
 
 export interface User {
   id: string;
@@ -11,6 +12,15 @@ export interface User {
   daily_carb_goal: number;
   units: string;
   timezone_offset: number;
+  // Health and profile fields (all optional)
+  weight_kg?: number | null;
+  height_cm?: number | null;
+  age?: number | null;
+  activity_level?: 'small' | 'moderate' | 'active' | null;
+  target_weight_kg?: number | null;
+  gender?: 'male' | 'female' | 'other' | null;
+  weight_unit?: 'kg' | 'lbs';
+  height_unit?: 'cm' | 'in';
   created_at: string;
   updated_at: string;
 }
@@ -52,10 +62,48 @@ export class UserModel {
   }
 
   static async update(id: string, updates: Partial<User>): Promise<User> {
+    // Get existing user data for auto-calculation
+    const existing = await this.findById(id);
+    if (!existing) throw new Error('User not found');
+
+    // Fields that trigger calorie recalculation
+    const healthFields = [
+      'weight_kg',
+      'height_cm',
+      'age',
+      'activity_level',
+      'gender',
+      'weight_unit',
+      'height_unit',
+    ];
+
+    // Check if any health fields are being updated
+    const hasHealthFieldUpdate = healthFields.some((field) => field in updates);
+
+    // Check if daily_calorie_goal is explicitly provided (manual override)
+    const hasManualCalorieGoal = 'daily_calorie_goal' in updates;
+
+    // Auto-calculate calorie goal if health fields are updated and no manual override
+    if (hasHealthFieldUpdate && !hasManualCalorieGoal) {
+      // Merge existing data with updates for calculation
+      const healthData: UserHealthData = {
+        weight_kg: updates.weight_kg !== undefined ? updates.weight_kg : existing.weight_kg,
+        height_cm: updates.height_cm !== undefined ? updates.height_cm : existing.height_cm,
+        age: updates.age !== undefined ? updates.age : existing.age ?? undefined,
+        activity_level: updates.activity_level !== undefined
+          ? updates.activity_level
+          : existing.activity_level ?? undefined,
+        gender: updates.gender !== undefined ? updates.gender : existing.gender ?? undefined,
+        weight_unit: updates.weight_unit || existing.weight_unit || 'kg',
+        height_unit: updates.height_unit || existing.height_unit || 'cm',
+      };
+
+      const calculatedGoal = calculateCalorieGoal(healthData);
+      updates.daily_calorie_goal = calculatedGoal;
+    }
+
     const keys = Object.keys(updates).filter((k) => k !== 'id');
     if (keys.length === 0) {
-      const existing = await this.findById(id);
-      if (!existing) throw new Error('User not found');
       return existing;
     }
     const values = keys.map((k) => (updates as any)[k]);
