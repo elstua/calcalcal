@@ -29,11 +29,15 @@ struct Configuration {
     // 2. Enter your bundle ID: stua.calcalcal
     // 3. Copy the Client ID here
     static let googleClientId: String = {
+        // Try GIDClientID first (standard Google SDK key name)
+        if let clientId = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String, !clientId.isEmpty {
+            return clientId
+        }
+        // Fallback to GOOGLE_CLIENT_ID
         if let clientId = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLIENT_ID") as? String, !clientId.isEmpty {
             return clientId
         }
-        // TODO: Replace with your actual Google Client ID from Google Cloud Console
-        // Format: XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com
-        return ""
+        // Hardcoded fallback
+        return "719863771026-al64a24evjcndbtcn7395eqq1to8m5n2.apps.googleusercontent.com"
     }()
 }

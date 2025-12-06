@@ -1,6 +1,7 @@
 import SwiftUI
 import AuthenticationServices
 import GoogleSignIn
+import GoogleSignInSwift
 
 struct LoginView: View {
     @EnvironmentObject var appState: AppState
