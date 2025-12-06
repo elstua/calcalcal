@@ -25,6 +25,7 @@ let project = Project(
             ],
             entitlements: .file(path: "calcalcal/calcalcal.entitlements"),
             dependencies: [
+                .external(name: "GoogleSignIn"),
             ],
             settings: .settings(
                 configurations: [

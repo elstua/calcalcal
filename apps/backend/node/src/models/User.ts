@@ -6,6 +6,7 @@ export interface User {
   email: string | null;
   name: string | null;
   apple_id: string | null;
+  google_id: string | null;
   daily_calorie_goal: number;
   daily_protein_goal: number;
   daily_fat_goal: number;
@@ -34,6 +35,14 @@ export class UserModel {
     return result.rows[0] || null;
   }
 
+  static async findByGoogleId(googleId: string): Promise<User | null> {
+    const result = await Database.query<User>(
+      'SELECT * FROM user_profiles WHERE google_id = $1',
+      [googleId]
+    );
+    return result.rows[0] || null;
+  }
+
   static async findById(id: string): Promise<User | null> {
     const result = await Database.query<User>(
       'SELECT * FROM user_profiles WHERE id = $1',
@@ -46,17 +55,20 @@ export class UserModel {
     id: string,
     appleId: string | null,
     email?: string,
-    name?: string
+    name?: string,
+    googleId?: string | null
   ): Promise<User> {
     const result = await Database.query<User>(
-      `INSERT INTO user_profiles (id, apple_id, email, name, updated_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO user_profiles (id, apple_id, google_id, email, name, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (id) DO UPDATE 
        SET email = COALESCE(EXCLUDED.email, user_profiles.email),
            name = COALESCE(EXCLUDED.name, user_profiles.name),
+           apple_id = COALESCE(EXCLUDED.apple_id, user_profiles.apple_id),
+           google_id = COALESCE(EXCLUDED.google_id, user_profiles.google_id),
            updated_at = NOW()
        RETURNING *`,
-      [id, appleId, email ?? null, name ?? null]
+      [id, appleId, googleId ?? null, email ?? null, name ?? null]
     );
     return result.rows[0];
   }

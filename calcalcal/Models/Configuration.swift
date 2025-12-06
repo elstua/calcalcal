@@ -22,4 +22,18 @@ struct Configuration {
     }()
     
     static let appleClientId = "stua.calcalcal" // Your actual bundle identifier
+    
+    // Google Sign-In Client ID
+    // Get this from Google Cloud Console: https://console.cloud.google.com/apis/credentials
+    // 1. Create a new OAuth 2.0 Client ID (iOS application type)
+    // 2. Enter your bundle ID: stua.calcalcal
+    // 3. Copy the Client ID here
+    static let googleClientId: String = {
+        if let clientId = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLIENT_ID") as? String, !clientId.isEmpty {
+            return clientId
+        }
+        // TODO: Replace with your actual Google Client ID from Google Cloud Console
+        // Format: XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com
+        return ""
+    }()
 }

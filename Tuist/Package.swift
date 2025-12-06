@@ -12,6 +12,8 @@ let packageSettings = PackageSettings(
 let package = Package(
     name: "Calycal",
     dependencies: [
+        // Google Sign-In SDK for iOS
+        .package(url: "https://github.com/google/GoogleSignIn-iOS", from: "8.0.0"),
     ]
 )
 

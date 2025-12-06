@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import * as jose from 'jose';
 
 const APPLE_PUBLIC_KEYS_URL = 'https://appleid.apple.com/auth/keys';
+const GOOGLE_PUBLIC_KEYS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 
 export class AuthService {
   static async verifyAppleToken(identityToken: string) {
@@ -16,6 +17,35 @@ export class AuthService {
       return payload as any;
     } catch (_e) {
       throw new Error('Invalid Apple token');
+    }
+  }
+
+  /**
+   * Verify Google ID token using Google's public keys (JWKS)
+   * Returns the token payload containing user data:
+   * - sub: Google user ID (unique identifier)
+   * - email: User's email address
+   * - email_verified: Boolean indicating if email is verified
+   * - name: Full name
+   * - given_name: First name
+   * - family_name: Last name
+   * - picture: Profile picture URL
+   */
+  static async verifyGoogleToken(idToken: string) {
+    try {
+      const JWKS = jose.createRemoteJWKSet(new URL(GOOGLE_PUBLIC_KEYS_URL));
+      const googleClientId = process.env.GOOGLE_CLIENT_ID;
+      
+      // Google tokens can have two possible issuers
+      const verifyOptions: jose.JWTVerifyOptions = {
+        issuer: ['accounts.google.com', 'https://accounts.google.com'],
+        ...(googleClientId ? { audience: googleClientId } : {}),
+      };
+      
+      const { payload } = await jose.jwtVerify(idToken, JWKS, verifyOptions);
+      return payload as any;
+    } catch (_e) {
+      throw new Error('Invalid Google token');
     }
   }
 

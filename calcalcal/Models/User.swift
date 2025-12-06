@@ -5,6 +5,7 @@ struct User: Codable, Identifiable {
     let email: String?
     let name: String?
     let appleId: String?
+    let googleId: String?
     let dailyCalorieGoal: Int?
     let dailyProteinGoal: Double?
     let dailyFatGoal: Double?
@@ -19,6 +20,7 @@ struct User: Codable, Identifiable {
         case email = "email"
         case name = "name"
         case appleId = "apple_id"
+        case googleId = "google_id"
         case dailyCalorieGoal = "daily_calorie_goal"
         case dailyProteinGoal = "daily_protein_goal"
         case dailyFatGoal = "daily_fat_goal"
@@ -35,6 +37,7 @@ struct User: Codable, Identifiable {
         self.email = try container.decodeIfPresent(String.self, forKey: .email)
         self.name = try container.decodeIfPresent(String.self, forKey: .name)
         self.appleId = try container.decodeIfPresent(String.self, forKey: .appleId)
+        self.googleId = try container.decodeIfPresent(String.self, forKey: .googleId)
         self.dailyCalorieGoal = try container.decodeIfPresent(Int.self, forKey: .dailyCalorieGoal)
         self.dailyProteinGoal = try User.decodeLenientDouble(container: container, forKey: .dailyProteinGoal)
         self.dailyFatGoal = try User.decodeLenientDouble(container: container, forKey: .dailyFatGoal)

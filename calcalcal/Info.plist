@@ -47,5 +47,18 @@
 	</dict>
 	<key>API_URL</key>
 	<string>https://calycal-app-egy2b.ondigitalocean.app</string>
+	<key>GOOGLE_CLIENT_ID</key>
+	<string>719863771026-al64a24evjcndbtcn7395eqq1to8m5n2.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string></string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

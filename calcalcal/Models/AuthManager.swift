@@ -1,6 +1,7 @@
 import Foundation
 import AuthenticationServices
 import Combine
+import GoogleSignIn
 
 class AuthManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
@@ -94,10 +95,193 @@ class AuthManager: NSObject, ObservableObject {
         authenticateWithBackend(identityToken: identityTokenString, user: credential)
     }
     
+    // MARK: - Google Sign-In
+    
+    func signInWithGoogle() {
+        isLoading = true
+        error = nil
+        
+        // Clear any cached sessions before Google Sign-In
+        print("🧹 Clearing any cached sessions before Google Sign-In...")
+        do {
+            try KeychainManager.shared.deleteTokens()
+            print("✅ Cached sessions cleared")
+        } catch {
+            print("⚠️ Failed to clear cached sessions: \(error)")
+        }
+        
+        // Check if Google Sign-In is configured
+        guard !Configuration.googleClientId.isEmpty else {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.error = "Google Sign-In is not configured. Please set GOOGLE_CLIENT_ID."
+            }
+            return
+        }
+        
+        // Get the presenting view controller
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.error = "Unable to get root view controller for Google Sign-In"
+            }
+            return
+        }
+        
+        // Perform Google Sign-In
+        GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { [weak self] signInResult, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("❌ Google Sign-In error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = "Google Sign-In failed: \(error.localizedDescription)"
+                }
+                return
+            }
+            
+            guard let result = signInResult else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = "Google Sign-In failed: No result"
+                }
+                return
+            }
+            
+            // Extract user data and ID token
+            let user = result.user
+            guard let idToken = user.idToken?.tokenString else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = "Failed to get Google ID token"
+                }
+                return
+            }
+            
+            print("✅ Google Sign-In successful")
+            print("   - User ID: \(user.userID ?? "nil")")
+            print("   - Email: \(user.profile?.email ?? "nil")")
+            print("   - Name: \(user.profile?.name ?? "nil")")
+            
+            // Authenticate with backend
+            self.authenticateWithBackendGoogle(idToken: idToken, user: user)
+        }
+    }
+    
+    private func authenticateWithBackendGoogle(idToken: String, user: GIDGoogleUser) {
+        Task {
+            do {
+                let urlString = "\(Configuration.apiURL)/api/auth/signin-google"
+                print("🔍 === GOOGLE SIGN-IN DEBUG ===")
+                print("Attempting to connect to: \(urlString)")
+                
+                guard let url = URL(string: urlString) else {
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                        self.error = "Invalid backend URL"
+                    }
+                    return
+                }
+                
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                // Build user info from Google profile
+                let authRequest: [String: Any] = [
+                    "idToken": idToken,
+                    "user": [
+                        "id": user.userID ?? "",
+                        "email": user.profile?.email ?? "",
+                        "name": user.profile?.name ?? ""
+                    ]
+                ]
+                
+                print("📤 Request Body:")
+                print("   - ID Token: \(String(idToken.prefix(20)))...")
+                print("   - User ID: \(user.userID ?? "nil")")
+                print("   - Email: \(user.profile?.email ?? "nil")")
+                print("   - Name: \(user.profile?.name ?? "nil")")
+                
+                request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
+                
+                print("🌐 Sending request...")
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                        self.error = "Invalid response from server"
+                    }
+                    return
+                }
+                
+                print("📥 Response received:")
+                print("   - Status Code: \(httpResponse.statusCode)")
+                
+                guard httpResponse.statusCode == 200 else {
+                    let responseText = String(data: data, encoding: .utf8) ?? "No response data"
+                    print("❌ Backend error response: \(responseText)")
+                    print("🔍 === END GOOGLE SIGN-IN DEBUG ===")
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                        self.error = "Backend authentication failed (Status: \(httpResponse.statusCode)): \(responseText)"
+                    }
+                    return
+                }
+                
+                let decoder = AuthManager.makeJSONDecoder()
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
+                
+                print("✅ Google authentication successful!")
+                print("   - Success: \(authResponse.success)")
+                print("   - User: \(authResponse.user?.email ?? "nil")")
+                print("   - User ID: \(authResponse.user?.id ?? "nil")")
+                print("🔍 === END GOOGLE SIGN-IN DEBUG ===")
+                
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    
+                    if authResponse.success, let session = authResponse.session, let user = authResponse.user {
+                        // Save tokens securely
+                        do {
+                            try KeychainManager.shared.saveTokens(session)
+                            
+                            // Update APIClient with new session
+                            APIClient.shared.updateSession(session)
+                            
+                            self.currentUser = user
+                            self.isAuthenticated = true
+                            // Persist user id for DiaryAPI inserts
+                            UserDefaults.standard.set(user.id, forKey: "current_user_id")
+                            
+                            print("✅ Session saved and APIClient updated successfully")
+                        } catch {
+                            self.error = "Failed to save session: \(error.localizedDescription)"
+                        }
+                    } else {
+                        self.error = authResponse.error ?? "Google authentication failed"
+                    }
+                }
+            } catch {
+                print("Network error: \(error)")
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = "Network error: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
     func signOut() {
         do {
             try KeychainManager.shared.deleteTokens()
             clearAppleIDCredentials()
+            
+            // Sign out from Google Sign-In
+            GIDSignIn.sharedInstance.signOut()
             
             // Clear APIClient session
             APIClient.shared.clearSession()
@@ -107,7 +291,7 @@ class AuthManager: NSObject, ObservableObject {
                 self.currentUser = nil
             }
             
-            print("✅ Sign out completed - all sessions cleared")
+            print("✅ Sign out completed - all sessions cleared (including Google)")
         } catch {
             DispatchQueue.main.async {
                 self.error = "Failed to sign out: \(error.localizedDescription)"
@@ -123,14 +307,17 @@ class AuthManager: NSObject, ObservableObject {
             // Clear Apple ID credentials
             clearAppleIDCredentials()
             
+            // Sign out from Google Sign-In
+            GIDSignIn.sharedInstance.signOut()
+            
             // Reset app state
             DispatchQueue.main.async {
                 self.isAuthenticated = false
                 self.currentUser = nil
-                self.error = "✅ All authentication data cleared. You can now sign in fresh with Apple ID."
+                self.error = "✅ All authentication data cleared. You can now sign in fresh."
             }
             
-            print("✅ All authentication data cleared successfully")
+            print("✅ All authentication data cleared successfully (including Google)")
             print("ℹ️ Next time you try to sign in, you may see a 'canceled' error first - this is normal!")
         } catch {
             print("❌ Failed to clear authentication data: \(error)")
