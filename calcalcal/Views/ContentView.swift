@@ -6,9 +6,18 @@ struct ContentView: View {
     var body: some View {
         Group {
             if appState.isAuthenticated {
-                MainTabView()
-                    .environmentObject(appState)
+                // User is logged in - check if they need onboarding
+                if appState.hasCompletedOnboarding {
+                    // Onboarding done, show main app
+                    MainTabView()
+                        .environmentObject(appState)
+                } else {
+                    // Show onboarding flow
+                    OnboardingContainerView()
+                        .environmentObject(appState)
+                }
             } else {
+                // Not logged in, show login
                 LoginView()
                     .environmentObject(appState)
             }
