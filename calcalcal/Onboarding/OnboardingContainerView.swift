@@ -58,49 +58,25 @@ struct OnboardingContainerView: View {
     private func stepView(for step: OnboardingStepType) -> some View {
         switch step {
         case .welcome:
-            // TODO: Replace with actual WelcomeStepView
-            PlaceholderStepView(
-                step: step,
-                coordinator: coordinator,
-                title: "Welcome to Calcalcal!",
-                subtitle: "Track your calories effortlessly"
-            )
+            WelcomeStepView(coordinator: coordinator)
             
-        case .features:
-            // TODO: Replace with actual FeaturesStepView
-            PlaceholderStepView(
-                step: step,
-                coordinator: coordinator,
-                title: "Smart Food Logging",
-                subtitle: "Just describe what you ate in your own words"
-            )
+        case .aboutApp:
+            AboutAppStepView(coordinator: coordinator)
             
-        case .healthData:
-            // TODO: Replace with actual HealthDataStepView
-            PlaceholderStepView(
-                step: step,
-                coordinator: coordinator,
-                title: "Your Health Profile",
-                subtitle: "Help us personalize your experience"
-            )
+        case .healthKit:
+            HealthKitStepView(coordinator: coordinator)
             
         case .activityLevel:
-            // TODO: Replace with actual ActivityLevelStepView
-            PlaceholderStepView(
-                step: step,
-                coordinator: coordinator,
-                title: "Activity Level",
-                subtitle: "How active are you?"
-            )
+            ActivityLevelStepView(coordinator: coordinator)
             
-        case .goals:
-            // TODO: Replace with actual GoalsStepView
-            PlaceholderStepView(
-                step: step,
-                coordinator: coordinator,
-                title: "Your Goals",
-                subtitle: "What do you want to achieve?"
-            )
+        case .weight:
+            WeightStepView(coordinator: coordinator)
+            
+        case .height:
+            HeightStepView(coordinator: coordinator)
+            
+        case .ready:
+            ReadyStepView(coordinator: coordinator)
         }
     }
     
@@ -250,9 +226,9 @@ struct PlaceholderStepView: View {
             Button(action: {
                 withAnimation {
                     if step.isLast {
-                        coordinator.advance(.complete)
+                        _ = coordinator.advance(.complete)
                     } else {
-                        coordinator.advance(.next)
+                        _ = coordinator.advance(.next)
                     }
                 }
             }) {
@@ -270,7 +246,7 @@ struct PlaceholderStepView: View {
                 if coordinator.canGoBack {
                     Button(action: {
                         withAnimation {
-                            coordinator.advance(.goBack)
+                            _ = coordinator.advance(.goBack)
                         }
                     }) {
                         Text("Back")
@@ -284,7 +260,7 @@ struct PlaceholderStepView: View {
                 if step.canSkip && !step.isLast {
                     Button(action: {
                         withAnimation {
-                            coordinator.advance(.skip)
+                            _ = coordinator.advance(.skip)
                         }
                     }) {
                         Text("Skip")
@@ -299,7 +275,6 @@ struct PlaceholderStepView: View {
 
 // MARK: - Previews
 
-#if DEBUG
 struct OnboardingContainerView_Previews: PreviewProvider {
     static var previews: some View {
         OnboardingContainerView()
@@ -307,26 +282,4 @@ struct OnboardingContainerView_Previews: PreviewProvider {
     }
 }
 
-struct PlaceholderStepView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            PlaceholderStepView(
-                step: .welcome,
-                coordinator: OnboardingCoordinator(),
-                title: "Welcome!",
-                subtitle: "This is a test"
-            )
-            .previewDisplayName("Welcome Step")
-            
-            PlaceholderStepView(
-                step: .goals,
-                coordinator: OnboardingCoordinator.previewAtStep(.goals),
-                title: "Your Goals",
-                subtitle: "Last step"
-            )
-            .previewDisplayName("Goals Step (Last)")
-        }
-    }
-}
-#endif
 

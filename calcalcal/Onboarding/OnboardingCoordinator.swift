@@ -376,16 +376,17 @@ extension OnboardingCoordinator {
         return coordinator
     }
     
-    /// Create a coordinator that's almost complete (for testing goals screen)
+    /// Create a coordinator that's almost complete (for testing ready screen)
     static var previewAlmostComplete: OnboardingCoordinator {
         let coordinator = OnboardingCoordinator()
-        coordinator.currentStep = .goals
+        coordinator.currentStep = .ready
         coordinator.collectedData = OnboardingData(
             weightKg: 75.0,
             heightCm: 180.0,
             age: 30,
             gender: "male",
-            activityLevel: "moderate"
+            activityLevel: "moderate",
+            targetWeightKg: 70.0
         )
         return coordinator
     }

@@ -9,11 +9,13 @@ import Foundation
 /// 3. Create the step view
 /// 4. Add case to OnboardingContainerView factory switch
 enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
-    case welcome = 0
-    case features = 1
-    case healthData = 2
-    case activityLevel = 3
-    case goals = 4
+    case welcome = 0        // Greeting screen after sign-in
+    case aboutApp = 1       // Carousel with 3 feature highlights
+    case healthKit = 2      // HealthKit permission request (mocked for now)
+    case activityLevel = 3  // Activity level selection
+    case weight = 4         // Current and target weight pickers
+    case height = 5         // Height picker
+    case ready = 6          // Completion screen - all set!
     
     var id: Int { rawValue }
     
@@ -22,25 +24,32 @@ enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
         switch self {
         case .welcome:
             return "Welcome"
-        case .features:
-            return "Features"
-        case .healthData:
-            return "Health Data"
+        case .aboutApp:
+            return "About App"
+        case .healthKit:
+            return "HealthKit"
         case .activityLevel:
             return "Activity Level"
-        case .goals:
-            return "Goals"
+        case .weight:
+            return "Weight"
+        case .height:
+            return "Height"
+        case .ready:
+            return "Ready"
         }
     }
     
     /// Whether this step can be skipped by the user
     var canSkip: Bool {
         switch self {
-        case .welcome, .features:
-            // Informational screens can always be skipped
+        case .welcome, .aboutApp, .ready:
+            // Informational screens - no skip button needed (just continue)
+            return false
+        case .healthKit:
+            // User can skip HealthKit permission
             return true
-        case .healthData, .activityLevel, .goals:
-            // Data collection screens - user can skip but we want to encourage completion
+        case .activityLevel, .weight, .height:
+            // Data collection screens - user can skip but we encourage completion
             return true
         }
     }
