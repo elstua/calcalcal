@@ -993,6 +993,25 @@ extension EditorOverlaySimple {
                                                 object: nil,
                                                 userInfo: ["entryId": canonicalEntryId, "analyzedBlocks": payload]
                                             )
+                                            
+                                            // Sync nutrition data to HealthKit
+                                            if let refreshed = refreshed {
+                                                let totalCalories = refreshed.total_calories ?? 0
+                                                let totalProtein = refreshed.total_protein ?? 0.0
+                                                let totalCarbs = refreshed.total_carbs ?? 0.0
+                                                let totalFat = refreshed.total_fat ?? 0.0
+                                                
+                                                Task {
+                                                    await syncToHealthKit(
+                                                        calories: totalCalories,
+                                                        protein: totalProtein,
+                                                        carbs: totalCarbs,
+                                                        fat: totalFat,
+                                                        date: entry.date,
+                                                        entryId: row.id
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1042,6 +1061,60 @@ extension EditorOverlaySimple {
             #if DEBUG
             print("❌ Flush save error: \(error)")
             #endif
+        }
+    }
+    
+    // MARK: - HealthKit Sync
+    
+    /// Sync nutrition data to HealthKit after AI analysis completes
+    private func syncToHealthKit(
+        calories: Int,
+        protein: Double,
+        carbs: Double,
+        fat: Double,
+        date: Date,
+        entryId: String
+    ) async {
+        let healthKitManager = HealthKitManager.shared
+        
+        // Only sync if HealthKit is available and sync is enabled
+        guard healthKitManager.isAvailable && healthKitManager.isSyncEnabled else {
+            print("[HealthKit] Sync skipped - not available or disabled")
+            return
+        }
+        
+        // Skip if all values are zero
+        guard calories > 0 || protein > 0 || carbs > 0 || fat > 0 else {
+            print("[HealthKit] Sync skipped - no nutrition data")
+            return
+        }
+        
+        do {
+            // First, request write permissions if not already granted
+            // This will show the permission sheet if needed
+            let hasWritePermission = try await healthKitManager.requestWritePermissions()
+            guard hasWritePermission else {
+                print("[HealthKit] Write permission denied")
+                return
+            }
+            
+            // Delete existing data for this date (from our app) to avoid duplicates
+            try await healthKitManager.deleteNutritionData(for: date)
+            
+            // Write new nutrition data
+            try await healthKitManager.writeNutritionData(
+                calories: calories,
+                protein: protein,
+                carbs: carbs,
+                fat: fat,
+                date: date,
+                entryId: entryId
+            )
+            
+            print("[HealthKit] Successfully synced: \(calories) kcal, \(protein)g protein, \(carbs)g carbs, \(fat)g fat")
+        } catch {
+            // Log error but don't interrupt user experience
+            print("[HealthKit] Sync error: \(error.localizedDescription)")
         }
     }
 }

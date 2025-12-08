@@ -544,6 +544,53 @@ class AuthManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Profile Management
+    
+    /// Update user profile on the backend
+    /// - Parameter updates: Dictionary of fields to update (e.g., ["onboarding_completed": false])
+    func updateProfile(_ updates: [String: Any]) async throws -> User {
+        guard let session = try? KeychainManager.shared.loadTokens() else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        let urlString = "\(Configuration.apiURL)/api/auth/profile"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: updates)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let responseText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw NSError(domain: "AuthManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Profile update failed: \(responseText)"])
+        }
+        
+        let decoder = AuthManager.makeJSONDecoder()
+        struct ProfileResponse: Codable {
+            let success: Bool
+            let profile: User
+        }
+        let profileResponse = try decoder.decode(ProfileResponse.self, from: data)
+        
+        // Update current user
+        DispatchQueue.main.async {
+            self.currentUser = profileResponse.profile
+        }
+        
+        return profileResponse.profile
+    }
+    
     // MARK: - Backend Integration
     
     private func authenticateWithBackend(identityToken: String, user: ASAuthorizationAppleIDCredential) {
@@ -576,20 +623,38 @@ class AuthManager: NSObject, ObservableObject {
                 
                 // No authorization header needed for sign-in - backend validates Apple token directly
                 
-                let authRequest = [
+                // Extract name components - Apple only provides this on FIRST sign-in
+                let fullNameString: String?
+                if let fullName = user.fullName {
+                    // Format PersonNameComponents to a string
+                    let formatter = PersonNameComponentsFormatter()
+                    formatter.style = .long
+                    fullNameString = formatter.string(from: fullName)
+                    print("📋 Name components received from Apple:")
+                    print("   - Given name: \(fullName.givenName ?? "nil")")
+                    print("   - Family name: \(fullName.familyName ?? "nil")")
+                    print("   - Middle name: \(fullName.middleName ?? "nil")")
+                    print("   - Formatted: \(fullNameString ?? "nil")")
+                } else {
+                    fullNameString = nil
+                    print("⚠️ No name components received - this is normal for subsequent sign-ins")
+                    print("   Apple only provides name on the FIRST sign-in for privacy reasons")
+                }
+                
+                let authRequest: [String: Any] = [
                     "identityToken": identityToken,
                     "user": [
                         "id": user.user,
-                        "email": user.email,
-                        "name": user.fullName?.formatted()
+                        "email": user.email as Any? ?? NSNull(),
+                        "name": fullNameString as Any? ?? NSNull()
                     ]
-                ] as [String: Any]
+                ]
                 
                 print("📤 Request Body:")
                 print("   - Identity Token: \(String(identityToken.prefix(20)))...")
                 print("   - User ID: \(user.user)")
                 print("   - Email: \(user.email ?? "nil")")
-                print("   - Name: \(user.fullName?.formatted() ?? "nil")")
+                print("   - Name: \(fullNameString ?? "nil")")
                 
                 request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
                 

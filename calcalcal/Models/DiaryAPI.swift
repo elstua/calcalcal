@@ -10,7 +10,29 @@ struct DiaryAPI {
         let content: String?
         let images: [String]?
         let total_calories: Int?
+        let total_protein: Double?
+        let total_fat: Double?
+        let total_carbs: Double?
         let updated_at: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id, user_id, date, content, images, total_calories, total_protein, total_fat, total_carbs, updated_at
+        }
+        
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try c.decode(String.self, forKey: .id)
+            self.user_id = try c.decode(String.self, forKey: .user_id)
+            self.date = try c.decode(String.self, forKey: .date)
+            self.content = try? c.decode(String.self, forKey: .content)
+            self.images = try? c.decode([String].self, forKey: .images)
+            self.total_calories = c.decodeIntForgiving(forKey: .total_calories)
+            // Handle PostgreSQL numeric types that may come as strings
+            self.total_protein = c.decodeDoubleForgiving(forKey: .total_protein)
+            self.total_fat = c.decodeDoubleForgiving(forKey: .total_fat)
+            self.total_carbs = c.decodeDoubleForgiving(forKey: .total_carbs)
+            self.updated_at = try? c.decode(String.self, forKey: .updated_at)
+        }
     }
 
     struct DBBlock: Codable {

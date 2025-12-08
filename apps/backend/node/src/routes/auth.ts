@@ -24,8 +24,12 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     let applePayload: any;
     try {
       applePayload = await AuthService.verifyAppleToken(identityToken);
+      console.log('📋 Apple JWT payload keys:', Object.keys(applePayload || {}));
+      console.log('📋 Apple JWT payload email:', applePayload?.email || 'not present');
+      console.log('📋 Apple JWT payload name:', applePayload?.name || 'not present');
     } catch (error) {
       // Best-effort: allow sign-in to proceed for MVP
+      console.warn('⚠️ Apple token verification failed, using userInfo fallback');
       applePayload = { sub: userInfo?.id };
     }
 
@@ -33,6 +37,19 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     if (!appleId) {
       return res.status(400).json({ error: 'Unable to get Apple user ID' });
     }
+
+    // Extract user info: prioritize userInfo (from iOS credential) over JWT payload
+    // Apple only provides name/email in userInfo on FIRST sign-in, not in JWT after that
+    const email = userInfo?.email || applePayload?.email;
+    const name = userInfo?.name || applePayload?.name;
+    
+    console.log('👤 Extracted user info:');
+    console.log('   - Email from userInfo:', userInfo?.email || 'not provided');
+    console.log('   - Email from JWT:', applePayload?.email || 'not provided');
+    console.log('   - Email final:', email || 'not available');
+    console.log('   - Name from userInfo:', userInfo?.name || 'not provided');
+    console.log('   - Name from JWT:', applePayload?.name || 'not provided');
+    console.log('   - Name final:', name || 'not available');
 
     // Find or create user
     console.log('🔍 Looking up user with appleId:', appleId);
@@ -43,18 +60,25 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
       dbUser = await UserModel.upsertUser(
         userId,
         appleId,
-        userInfo?.email || applePayload?.email,
-        userInfo?.name || applePayload?.name
+        email,
+        name
       );
       console.log('✅ User created:', dbUser.id);
+      console.log('   - Stored email:', dbUser.email || 'none');
+      console.log('   - Stored name:', dbUser.name || 'none');
     } else {
       console.log('✅ User found:', dbUser.id);
-      // Optional: fill missing fields on existing user
-      if (userInfo?.email && !dbUser.email) {
-        dbUser = await UserModel.update(dbUser.id, { email: userInfo.email });
+      console.log('   - Current email:', dbUser.email || 'none');
+      console.log('   - Current name:', dbUser.name || 'none');
+      // Fill missing fields on existing user (only if we have new data)
+      // Prioritize userInfo over JWT payload, but use either if field is missing
+      if (email && !dbUser.email) {
+        console.log('   - Updating missing email');
+        dbUser = await UserModel.update(dbUser.id, { email });
       }
-      if (userInfo?.name && !dbUser.name) {
-        dbUser = await UserModel.update(dbUser.id, { name: userInfo.name });
+      if (name && !dbUser.name) {
+        console.log('   - Updating missing name');
+        dbUser = await UserModel.update(dbUser.id, { name });
       }
     }
 
@@ -339,6 +363,16 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
           });
         }
         updates[field] = numValue;
+      }
+    }
+
+    // Validate boolean fields
+    if (updates.onboarding_completed !== undefined && updates.onboarding_completed !== null) {
+      if (typeof updates.onboarding_completed !== 'boolean') {
+        return res.status(400).json({
+          error: 'Invalid onboarding_completed',
+          message: 'onboarding_completed must be a boolean value',
+        });
       }
     }
 

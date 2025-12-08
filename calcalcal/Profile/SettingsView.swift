@@ -2,20 +2,42 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState
+    
+    @State private var isResettingOnboarding = false
+    @State private var resetMessage: String?
     
     var body: some View {
         NavigationView {
-            VStack {
-                Text("Settings")
-                    .font(.title)
-                    .padding()
+            List {
+                Section {
+                    Text("Settings functionality coming soon...")
+                        .foregroundColor(.secondary)
+                }
                 
-                Spacer()
-                
-                Text("Settings functionality coming soon...")
-                    .foregroundColor(.secondary)
-                
-                Spacer()
+                #if DEBUG
+                Section(header: Text("Debug")) {
+                    Button(action: resetOnboarding) {
+                        HStack {
+                            if isResettingOnboarding {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "arrow.counterclockwise")
+                            }
+                            Text("Reset Onboarding")
+                        }
+                    }
+                    .disabled(isResettingOnboarding)
+                    
+                    if let message = resetMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                #endif
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -24,6 +46,25 @@ struct SettingsView: View {
                     Button("Done") {
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+    
+    private func resetOnboarding() {
+        isResettingOnboarding = true
+        resetMessage = nil
+        
+        Task {
+            await appState.resetOnboarding()
+            
+            await MainActor.run {
+                isResettingOnboarding = false
+                resetMessage = "Onboarding reset successfully. Restart the app to see onboarding again."
+                
+                // Clear message after 5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    resetMessage = nil
                 }
             }
         }

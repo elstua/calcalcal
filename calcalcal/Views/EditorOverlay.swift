@@ -239,7 +239,7 @@ struct EditorOverlay: View {
                         }
                     }
                     // Ensure keyboard focuses after insert
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now()) {
                         shouldBecomeFirstResponder = true
                     }
                     pickedImage = nil

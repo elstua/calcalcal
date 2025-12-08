@@ -46,6 +46,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>We need access to your health data to automatically sync your weight, height, and activity levels for accurate calorie tracking.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>We need permission to save your calorie intake and nutrition data to Apple Health so you can track your nutrition in one place.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Need to get the images for calorie tracking.</string>
 	<key>UIApplicationSceneManifest</key>

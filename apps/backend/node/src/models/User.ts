@@ -22,6 +22,7 @@ export interface User {
   gender?: 'male' | 'female' | 'other' | null;
   weight_unit?: 'kg' | 'lbs';
   height_unit?: 'cm' | 'in';
+  onboarding_completed?: boolean | null;
   created_at: string;
   updated_at: string;
 }
