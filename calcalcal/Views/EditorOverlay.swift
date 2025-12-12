@@ -149,7 +149,7 @@ struct EditorOverlay: View {
                     ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
                     // Store PNG data of resized image in the model for stable internal rendering
                     if let resizedPNG = compressed.resizedImage.pngData() {
-                        let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
+                        let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil, nutrition: nil)
                         blocks.append(newBlock)
                         
                         // Kick off upload + analyze pipeline

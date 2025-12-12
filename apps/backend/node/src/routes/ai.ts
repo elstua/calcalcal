@@ -277,6 +277,173 @@ If uncertain, provide your best estimate. Always return valid JSON.
   }
 });
 
+// POST /api/ai/calories-popup-update
+router.post('/calories-popup-update', async (req: AuthRequest, res) => {
+  try {
+    const { text, calories, weight, entryId, blockId } = req.body;
+    const userId = req.userId!;
+
+    if (!text || !entryId || !blockId) {
+      return res.status(400).json({
+        error: 'text, entryId, and blockId are required',
+      });
+    }
+
+    if (!calories && !weight) {
+      return res.status(400).json({
+        error: 'Either calories or weight must be provided',
+      });
+    }
+
+    // Verify entry ownership
+    const entry = await DiaryEntryModel.getById(entryId);
+    if (!entry || entry.user_id !== userId) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    console.log(`[calories-popup-update] user=${userId} entry=${entryId} block=${blockId} calories=${calories} weight=${weight}`);
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('[calories-popup-update] Missing OPENAI_API_KEY');
+      return res.status(500).json({ error: 'AI provider not configured' });
+    }
+
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 45_000 });
+    const model = process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+    const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+
+    // Build prompt based on what user changed
+    let prompt = '';
+    if (weight && !calories) {
+      // User changed weight, recalculate calories
+      prompt = `
+You are a nutrition expert. The user has updated the weight of a food item.
+
+Original food description: "${text}"
+New weight: ${weight}g
+
+Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
+{
+  "calories": <number>,
+  "protein": <grams>,
+  "fat": <grams>, 
+  "carbs": <grams>,
+  "fiber": <grams>,
+  "sugar": <grams>,
+  "sodium": <mg>,
+  "confidence": <0..1>
+}
+
+Base the calculation on the new weight of ${weight}g. If uncertain, provide your best estimate. Always return valid JSON.
+`.trim();
+    } else if (calories && weight) {
+      // User changed both calories and weight
+      prompt = `
+You are a nutrition expert. The user has updated both the calories and weight of a food item.
+
+Original food description: "${text}"
+New calories: ${calories}kcal
+New weight: ${weight}g
+
+Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
+{
+  "calories": <number>,
+  "protein": <grams>,
+  "fat": <grams>,
+  "carbs": <grams>, 
+  "fiber": <grams>,
+  "sugar": <grams>,
+  "sodium": <mg>,
+  "confidence": <0..1>
+}
+
+Use the provided values of ${calories} calories and ${weight}g weight. Adjust other macros proportionally. Always return valid JSON.
+`.trim();
+    } else if (calories && !weight) {
+      // User changed calories only, adjust macros proportionally
+      prompt = `
+You are a nutrition expert. The user has updated the calories of a food item while keeping the same weight.
+
+Original food description: "${text}"
+New calories: ${calories}kcal
+
+Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
+{
+  "calories": <number>,
+  "protein": <grams>,
+  "fat": <grams>,
+  "carbs": <grams>,
+  "fiber": <grams>,
+  "sugar": <grams>,
+  "sodium": <mg>,
+  "confidence": <0..1>
+}
+
+Use exactly ${calories} calories and adjust other macros proportionally to match this calorie count. Always return valid JSON.
+`.trim();
+    } else {
+      return res.status(400).json({
+        error: 'Invalid combination of calories and weight',
+      });
+    }
+
+    console.time('[calories-popup-update] openai_call');
+    const completion = await client.chat.completions.create({
+      model,
+      temperature,
+      messages: [
+        { role: 'system', content: prompt },
+        {
+          role: 'user',
+          content: `Analyze this food and return JSON as specified: ${text}`,
+        },
+      ],
+    });
+    console.timeEnd('[calories-popup-update] openai_call');
+
+    const responseText = completion.choices[0]?.message?.content?.trim();
+    if (!responseText) {
+      console.error('[calories-popup-update] Empty response from AI provider');
+      return res.status(500).json({ error: 'Empty response from AI provider' });
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // If not pure JSON, try to extract JSON block (best-effort)
+      const match = responseText.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { parsed = undefined; }
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      console.error('[calories-popup-update] Failed to parse AI response:', responseText);
+      return res.status(500).json({ error: 'Failed to parse AI response', message: responseText });
+    }
+
+    // Normalize and coerce to numbers
+    const result = {
+      blockId: blockId,
+      calories: Number(parsed.calories ?? 0),
+      protein: Number(parsed.protein ?? 0),
+      fat: Number(parsed.fat ?? 0),
+      carbs: Number(parsed.carbs ?? 0),
+      fiber: Number(parsed.fiber ?? 0),
+      sugar: Number(parsed.sugar ?? 0),
+      sodium: Number(parsed.sodium ?? 0),
+      confidence: Number(parsed.confidence ?? 0.5),
+    };
+
+    console.log(
+      `[calories-popup-update] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs}`
+    );
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('/calories-popup-update error', error?.response?.data || error?.message || error);
+    res.status(500).json({ error: 'Internal server error', message: error?.message });
+  }
+});
+
 export default router;
-
-

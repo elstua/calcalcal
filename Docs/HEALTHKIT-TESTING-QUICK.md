@@ -128,3 +128,4 @@ If all 3 pass → ✅ HealthKit integration is working!
 
 **Full testing guide:** See `HEALTHKIT-TESTING.md` for detailed scenarios
 
+

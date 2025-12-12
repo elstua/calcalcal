@@ -68,6 +68,46 @@ class APIClient {
     func clearSession() {
         session = nil
     }
+    
+    // MARK: - Calorie Popup Update
+    
+    func updateCaloriePopup(
+        entryId: String,
+        blockId: String,
+        text: String,
+        calories: Int? = nil,
+        weight: Double? = nil
+    ) -> AnyPublisher<CaloriePopupUpdateResponse, Error> {
+        var body: [String: Any] = [
+            "entryId": entryId,
+            "blockId": blockId,
+            "text": text
+        ]
+        
+        if let calories = calories {
+            body["calories"] = calories
+        }
+        
+        if let weight = weight {
+            body["weight"] = weight
+        }
+        
+        return request("/api/ai/calories-popup-update", method: "POST", body: body)
+    }
+}
+
+// MARK: - Response Models
+
+struct CaloriePopupUpdateResponse: Codable {
+    let blockId: String
+    let calories: Int
+    let protein: Double
+    let fat: Double
+    let carbs: Double
+    let fiber: Double
+    let sugar: Double
+    let sodium: Double
+    let confidence: Double
 }
 
 enum APIError: Error {
@@ -75,4 +115,4 @@ enum APIError: Error {
     case noData
     case decodingError
     case networkError(Error)
-} 
+}
