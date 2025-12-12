@@ -30,38 +30,30 @@ struct CalorieContextMenuView: View {
         var body: some View {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 12) {
                         // Header
                         Text("Nutrition Details")
                             .font(.headline)
-                            .fontWeight(.semibold)
-
-                        Divider()
+                            .fontWeight(.regular)
 
                         // Calories Section
-                        VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+
+                            TextField("0", text: $caloriesText)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .disabled(isUpdating)
+
+
                             Text("Calories")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.secondary)
 
-                            HStack {
-                                TextField("0", text: $caloriesText)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .disabled(isUpdating)
 
-                                Text("kcal")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
+
                         }
 
                         // Weight Section
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Weight")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
 
                             HStack {
                                 TextField("0", text: $weightText)
@@ -72,7 +64,6 @@ struct CalorieContextMenuView: View {
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
-                        }
 
                         Divider()
 
@@ -89,7 +80,7 @@ struct CalorieContextMenuView: View {
                         }
                     }
                     .padding()
-                    .padding(.bottom, 60) // Space for the floating button
+                    .padding(.bottom, 72) // Space for the floating button
                 }
 
                 // Sticky Update button
@@ -102,23 +93,22 @@ struct CalorieContextMenuView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else if showUpdateSuccess {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(size: 17, weight: .bold))
                         } else {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(size: 17, weight: .bold))
                         }
                     }
-                    .frame(width: 56, height: 56)
+                    .frame(width: 48, height: 48)
                     .background(Color.accentColor)
                     .foregroundColor(.white)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.2), radius: 5, y: 5)
                 }
-                .padding(.trailing, 24)
-                .padding(.bottom, 24)
+                .padding(.trailing, 6)
+                .padding(.bottom, 8)
                 .disabled(isUpdating || !hasValidChanges())
             }
-            .frame(width: 280, height: 450)
         }
     private func nutritionRow(label: String, value: Double?, unit: String) -> some View {
         HStack {

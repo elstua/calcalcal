@@ -40,14 +40,14 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     
     func updateUIView(_ uiView: BlockEditorTextView, context: Context) {
         context.coordinator.parent = self
-        #if DEBUG
-        print("🔧 BlockEditorRepresentable.updateUIView - isEditable: \(isEditable), uiView.isEditable before: \(uiView.isEditable)")
-        #endif
+//        #if DEBUG
+//        print("🔧 BlockEditorRepresentable.updateUIView - isEditable: \(isEditable), uiView.isEditable before: \(uiView.isEditable)")
+//        #endif
         uiView.isEditable = isEditable
         uiView.isUserInteractionEnabled = true // Ensure interaction is enabled
-        #if DEBUG
-        print("🔧 BlockEditorRepresentable.updateUIView - uiView.isEditable after: \(uiView.isEditable)")
-        #endif
+//        #if DEBUG
+//        print("🔧 BlockEditorRepresentable.updateUIView - uiView.isEditable after: \(uiView.isEditable)")
+//        #endif
         uiView.entryIdentifier = entryId
         context.coordinator.applyIfNeeded(blocks: blocks, imageMap: imageMap)
         context.coordinator.handleFirstResponderIfNeeded(textView: uiView)

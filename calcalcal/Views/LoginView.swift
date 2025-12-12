@@ -10,9 +10,6 @@ struct LoginView: View {
         VStack(spacing: 30) {
             // App Logo and Title
             VStack(spacing: 20) {
-                Image(systemName: "leaf.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.green)
                 
                 Text("Calcalcal")
                     .font(.largeTitle)
