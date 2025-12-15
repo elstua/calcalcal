@@ -231,4 +231,5 @@ struct NutritionData: Codable, Equatable {
     var sugar: Double?
     var sodium: Double?
     var confidence: Double?
+    var userModified: Bool?
 }

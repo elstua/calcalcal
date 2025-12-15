@@ -1040,7 +1040,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             fiber: response.fiber,
             sugar: response.sugar,
             sodium: response.sodium,
-            confidence: response.confidence
+            confidence: response.confidence,
+            userModified: true
         )
 
         // Update the block document controller
