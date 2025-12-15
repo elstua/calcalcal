@@ -194,6 +194,8 @@ You are a nutrition expert. Look at the image and return ONLY a valid JSON objec
   "fiber": <grams>,
   "sugar": <grams>,
   "sodium": <mg>,
+  "weight": <number in grams, optional but recommended>,
+  "metric_description": <string with weight unit, e.g., "100 g", "1 cup", "1 serving">,
   "confidence": <0..1>
 }
 If uncertain, provide your best estimate. Always return valid JSON.
@@ -297,12 +299,14 @@ If uncertain, provide your best estimate. Always return valid JSON.
         fiber: Number(parsed.fiber ?? 0),
         sugar: Number(parsed.sugar ?? 0),
         sodium: Number(parsed.sodium ?? 0),
+        weight: parsed.weight ? Number(parsed.weight) : undefined,
+        metric_description: parsed.metric_description || undefined,
       },
       confidence: Number(parsed.confidence ?? 0.5),
     };
 
     console.log(
-      `[analyze-image] success calories=${result.calories} protein=${result.macros.protein} fat=${result.macros.fat} carbs=${result.macros.carbs}`,
+      `[analyze-image] success calories=${result.calories} protein=${result.macros.protein} fat=${result.macros.fat} carbs=${result.macros.carbs} weight=${result.macros.weight || "N/A"} metric_description=${result.macros.metric_description || "N/A"}`,
     );
     // v1: client merges into the block and totals
     // (optional future: server-side merge into db when entryId/blockId are provided)
@@ -377,6 +381,8 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
   "fiber": <grams>,
   "sugar": <grams>,
   "sodium": <mg>,
+  "weight": <number in grams>,
+  "metric_description": <string with weight unit, e.g., "${weight} g">,
   "confidence": <0..1>
 }
 
@@ -400,6 +406,8 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
   "fiber": <grams>,
   "sugar": <grams>,
   "sodium": <mg>,
+  "weight": <number in grams>,
+  "metric_description": <string with weight unit, e.g., "${weight} g">,
   "confidence": <0..1>
 }
 
@@ -422,9 +430,12 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
   "fiber": <grams>,
   "sugar": <grams>,
   "sodium": <mg>,
+  "weight": <number in grams, keep original if possible>,
+  "metric_description": <string with weight unit, e.g., "100 g">,
   "confidence": <0..1>
 }
 
+Use the provided value of ${calories} calories. Keep the original weight but adjust macros proportionally. Always return valid JSON.
 Use exactly ${calories} calories and adjust other macros proportionally to match this calorie count. Always return valid JSON.
 `.trim();
     } else {
@@ -487,11 +498,12 @@ Use exactly ${calories} calories and adjust other macros proportionally to match
       fiber: Number(parsed.fiber ?? 0),
       sugar: Number(parsed.sugar ?? 0),
       sodium: Number(parsed.sodium ?? 0),
-      confidence: Number(parsed.confidence ?? 0.5),
+      weight: parsed.weight ? Number(parsed.weight) : undefined,
+      metric_description: parsed.metric_description || undefined,
     };
 
     console.log(
-      `[calories-popup-update] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs}`,
+      `[calories-popup-update] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs} weight=${result.weight || "N/A"} metric_description=${result.metric_description || "N/A"}`,
     );
 
     res.json(result);

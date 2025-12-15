@@ -381,7 +381,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             let nutritionData = self.nutritionData(for: block.id)
             overlay.configureContextMenu(
                 calories: nutritionData?.calories ?? 0,
-                weight: nil, // We'll extract this from text or add it later
+                weight: nutritionData?.weight, // Use weight from nutrition data if available
                 nutrition: nutritionData,
                 blockID: block.id,
                 presentingViewController: self.findViewController() ?? UIViewController(),

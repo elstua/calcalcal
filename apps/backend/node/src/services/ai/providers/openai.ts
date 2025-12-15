@@ -1,17 +1,23 @@
-import { OpenAI } from 'openai';
-import { NutritionAnalysisResult, NutritionProvider } from './types';
-import { loadPrompt } from '../prompt';
+import { OpenAI } from "openai";
+import { NutritionAnalysisResult, NutritionProvider } from "./types";
+import { loadPrompt } from "../prompt";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export class OpenAINutritionProvider implements NutritionProvider {
   async analyze(
     content: string,
-    options?: { temperature?: number; model?: string; prompt?: string; promptVersion?: string }
+    options?: {
+      temperature?: number;
+      model?: string;
+      prompt?: string;
+      promptVersion?: string;
+    },
   ): Promise<NutritionAnalysisResult> {
-    const model = options?.model || process.env.AI_OPENAI_MODEL || 'gpt-5-nano';
-    const temperature = options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
-    const loaded = loadPrompt('nutrition');
+    const model = options?.model || process.env.AI_OPENAI_MODEL || "gpt-5-nano";
+    const temperature =
+      options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
+    const loaded = loadPrompt("nutrition");
     const systemPrompt = options?.prompt || loaded.text;
     const promptVersion = options?.promptVersion || loaded.version;
 
@@ -21,44 +27,44 @@ export class OpenAINutritionProvider implements NutritionProvider {
         model,
         temperature,
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Analyze this food: ${content}` },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Analyze this food: ${content}` },
         ],
       });
     } catch (err: any) {
       const status = err?.status || err?.response?.status;
       const errData = err?.response?.data ?? err?.data ?? null;
       const safeData =
-        typeof errData === 'string'
+        typeof errData === "string"
           ? errData
           : errData
-          ? (() => {
-              try {
-                return JSON.stringify(errData);
-              } catch {
-                return '[unserializable error data]';
-              }
-            })()
-          : null;
-      console.error('[OpenAI] chat.completions.create failed', {
+            ? (() => {
+                try {
+                  return JSON.stringify(errData);
+                } catch {
+                  return "[unserializable error data]";
+                }
+              })()
+            : null;
+      console.error("[OpenAI] chat.completions.create failed", {
         model,
         temperature,
         status,
         message: err?.message,
         data: safeData,
       });
-      throw new Error(err?.message || 'OpenAI chat.completions error');
+      throw new Error(err?.message || "OpenAI chat.completions error");
     }
 
     const responseText = completion.choices[0]?.message?.content?.trim();
     if (!responseText) {
-      console.error('[OpenAI] Empty response', {
+      console.error("[OpenAI] Empty response", {
         model,
         temperature,
         choices: completion.choices?.length,
         usage: completion.usage,
       });
-      throw new Error('Empty response from OpenAI');
+      throw new Error("Empty response from OpenAI");
     }
 
     let parsed: any;
@@ -79,6 +85,8 @@ export class OpenAINutritionProvider implements NutritionProvider {
       fiber: Number(parsed.fiber || 0),
       sugar: Number(parsed.sugar || 0),
       sodium: Number(parsed.sodium || 0),
+      weight: parsed.weight ? Number(parsed.weight) : undefined,
+      metric_description: parsed.metric_description || undefined,
       confidence: Number(parsed.confidence ?? 0.5),
       rawResponseText: responseText,
       usage: {
@@ -95,7 +103,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
   }
 }
 
-const defaultSystemPrompt = `Analyze the food description from the nutrition point of view and return ONLY a valid JSON object with these exact fields (all numbers):
+const defaultSystemPrompt = `Analyze the food description from the nutrition point of view and return ONLY a valid JSON object with these exact fields:
 {
   "calories": <number>,
   "protein": <number in grams>,
@@ -104,9 +112,9 @@ const defaultSystemPrompt = `Analyze the food description from the nutrition poi
   "fiber": <number in grams>,
   "sugar": <number in grams>,
   "sodium": <number in mg>,
+  "weight": <number in grams, optional but recommended>,
+  "metric_description": <string with weight unit, e.g., "100 g", "1 cup", "1 serving">,
   "confidence": <number between 0 and 1>
 }
 
 If you cannot determine the nutrition, use your best estimate. If the food description is not clear or very broad, like "dinner/breakfast/my lunch" without any specific description, return null. Try to split complex dishes into main ingredients and the way they are cooked, it will help you to get the correct nutrition. Always return valid JSON.`;
-
-

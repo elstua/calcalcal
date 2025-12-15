@@ -75,7 +75,8 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
         onUpdate: @escaping (Int?, Double?, BlockID) -> Void
     ) {
         self.currentCalories = calories
-        self.currentWeight = weight
+        // Use weight from nutrition data if available, otherwise use the weight parameter
+        self.currentWeight = nutrition?.weight ?? weight
         self.currentNutrition = nutrition
         self.blockID = blockID
         self.presentingViewController = presentingViewController

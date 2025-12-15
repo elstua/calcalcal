@@ -237,6 +237,8 @@ struct NutritionData: Codable, Equatable {
     var fiber: Double?
     var sugar: Double?
     var sodium: Double?
+    var weight: Double?
+    var metric_description: String?
     var confidence: Double?
     var userModified: Bool?
 }

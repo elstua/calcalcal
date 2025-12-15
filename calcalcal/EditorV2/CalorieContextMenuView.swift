@@ -19,10 +19,12 @@ struct CalorieContextMenuView: View {
         nutrition: NutritionData? = nil,
         onUpdate: @escaping (Int?, Double?) -> Void
     ) {
+        // Use weight from nutrition data if available, otherwise use the weight parameter
+        let effectiveWeight = nutrition?.weight ?? weight
         self._caloriesText = State(initialValue: calories > 0 ? String(calories) : "")
-        self._weightText = State(initialValue: weight != nil ? String(format: "%.1f", weight!) : "")
+        self._weightText = State(initialValue: effectiveWeight != nil ? String(format: "%.1f", effectiveWeight!) : "")
         self.originalCalories = calories
-        self.originalWeight = weight
+        self.originalWeight = effectiveWeight
         self.nutrition = nutrition
         self.onUpdate = onUpdate
     }
@@ -54,16 +56,23 @@ struct CalorieContextMenuView: View {
                         }
 
                         // Weight Section
+                        HStack {
+                            TextField("0", text: $weightText)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .disabled(isUpdating)
 
-                            HStack {
-                                TextField("0", text: $weightText)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .disabled(isUpdating)
+                            Text(getWeightUnit())
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
 
-                                Text("g")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
+                        // Display metric description if available
+                        if let metricDescription = nutrition?.metric_description, !metricDescription.isEmpty {
+                            Text("Serving size: \(metricDescription)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.top, -4)
+                        }
 
                         Divider()
 
@@ -191,6 +200,22 @@ struct CalorieContextMenuView: View {
             }
         }
     }
+
+    // Helper function to determine weight unit based on metric description
+    private func getWeightUnit() -> String {
+        if let metricDescription = nutrition?.metric_description, !metricDescription.isEmpty {
+            // Extract unit from metric description if it contains "g" for grams
+            if metricDescription.lowercased().contains("g") {
+                return "g"
+            } else if metricDescription.lowercased().contains("oz") {
+                return "oz"
+            } else if metricDescription.lowercased().contains("lb") {
+                return "lb"
+            }
+        }
+        // Default to grams
+        return "g"
+    }
 }
 
 // MARK: - Preview
@@ -218,4 +243,6 @@ struct CalorieContextMenuView_Previews: PreviewProvider {
         }
         .previewDisplayName("Calorie Context Menu")
     }
+
+
 }

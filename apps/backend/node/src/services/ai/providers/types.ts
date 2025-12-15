@@ -6,6 +6,8 @@ export interface NutritionAnalysisResult {
   fiber: number;
   sugar: number;
   sodium: number;
+  weight?: number;
+  metric_description?: string;
   confidence: number;
   // Optional usage/metadata for caching/observability
   rawResponseText?: string;
@@ -20,7 +22,13 @@ export interface NutritionAnalysisResult {
 }
 
 export interface NutritionProvider {
-  analyze(content: string, options?: { temperature?: number; model?: string; prompt?: string; promptVersion?: string }): Promise<NutritionAnalysisResult>;
+  analyze(
+    content: string,
+    options?: {
+      temperature?: number;
+      model?: string;
+      prompt?: string;
+      promptVersion?: string;
+    },
+  ): Promise<NutritionAnalysisResult>;
 }
-
-
