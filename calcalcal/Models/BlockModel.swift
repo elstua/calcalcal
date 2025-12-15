@@ -83,32 +83,39 @@ extension Array where Element == Block {
         var position = 0
         var result: [[String: Any]] = []
         for block in self {
+            var dict: [String: Any] = [:]
+
             switch block.type {
             case .text(let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    position += 1
-                    result.append([
-                        "id": block.id.uuidString,
-                        "position": position,
-                        "type": "text",
-                        "content": trimmed
-                    ])
-                }
+                if trimmed.isEmpty { continue }
+                position += 1
+                dict = [
+                    "id": block.id.uuidString,
+                    "position": position,
+                    "type": "text",
+                    "content": trimmed
+                ]
             case .imageText(_, _, let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    position += 1
-                    result.append([
-                        "id": block.id.uuidString,
-                        "position": position,
-                        "type": "text",
-                        "content": trimmed
-                    ])
-                }
+                if trimmed.isEmpty { continue }
+                position += 1
+                dict = [
+                    "id": block.id.uuidString,
+                    "position": position,
+                    "type": "text",
+                    "content": trimmed
+                ]
             case .image, .spacer:
                 continue
             }
+
+            // IMPORTANT: Include the userModified flag so the backend can skip re-analysis
+            if block.nutrition?.userModified == true {
+                dict["userModified"] = true
+            }
+
+            result.append(dict)
         }
         return result
     }
