@@ -11,22 +11,22 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// We use the object replacement character (U+FFFC) which is what
     /// NSTextAttachment normally uses, but we don't actually attach anything.
     static let imageMarker: String = "\u{FFFC}"
-    
+
     // MARK: - Spacing Constants (centralized to avoid inconsistency)
-    
+
     /// Spacing for regular paragraph blocks
     private static let paragraphSpacing: CGFloat = 10
     private static let paragraphSpacingBefore: CGFloat = 10
-    
+
     /// Spacing for image blocks when text is shorter than image (push next content below the image)
     private static let imageSpacingLarge: CGFloat = 88
     /// Spacing for image blocks when text is taller than image (text already pushed content down)
     private static let imageSpacingSmall: CGFloat = 10
     private static let imageSpacingBefore: CGFloat = 8
-    
+
     /// Max number of text lines that still use the larger spacing.
     private static let imageLineThreshold: Int = 2
-    
+
     // Lazily constructed after TextKit 2 stack is available.
     lazy var blockDocumentController: BlockDocumentController = {
         guard
@@ -39,7 +39,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return BlockDocumentController(textStorage: textStorage, contentManager: contentManager)
     }()
-    
+
     lazy var blockLayoutController: BlockTextLayoutController = {
         let controller = BlockTextLayoutController(documentController: blockDocumentController)
         if let textLayoutManager = self.textLayoutManager {
@@ -47,7 +47,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return controller
     }()
-    
+
     /// Maps BlockID to the overlay hosting controller for image blocks.
     private var imageOverlays: [BlockID: UIHostingController<ImageComponent>] = [:]
     /// Maps BlockID to calorie overlay views.
@@ -56,50 +56,50 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private var cachedImageExclusionPaths: [UIBezierPath] = []
     /// Tracks whether a deferred calorie overlay update is already scheduled.
     private var isCalorieOverlayUpdateScheduled = false
-    
+
     /// Images associated with block IDs (set when inserting image blocks).
     private var imagesByBlockID: [BlockID: UIImage] = [:]
-    
+
     /// Cached spacing decisions for image blocks: BlockID -> (lineCount, spacing).
     /// Only recalculate when the number of visual lines changes.
     private var imageSpacingCache: [BlockID: (lineCount: Int, spacing: CGFloat)] = [:]
-    
+
     /// Entry identifier used to scope metadata notifications and backend synchronization.
     var entryIdentifier: UUID?
-    
+
     /// Flag to prevent re-entry during style application.
     private var isApplyingStyles = false
     /// Tracks pending block-style applications to avoid running while TextKit is mid-edit.
     private var isBlockStyleUpdateScheduled = false
     /// Store for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
-    
+
     init(configuration: BlockEditorConfiguration = BlockEditorConfiguration()) {
         super.init(frame: .zero, textContainer: nil)
-        
+
         // Force lazy properties to initialize so our controllers are ready.
         _ = blockDocumentController
         _ = blockLayoutController
-        
+
         // Observe layout changes to reposition image overlays.
         blockDocumentController.onDocumentChange = { [weak self] in
             guard let self else { return }
-            
+
             // Clean up spacing cache for deleted blocks
             self.cleanupSpacingCache()
-            
+
             // Re-apply paragraph styles after the document is rebuilt so every block
             // picks up the correct spacing for its kind. Defer onto the next run loop
             // so we don't touch text storage while TextKit is still mutating it.
             self.scheduleBlockStyleApplication()
-            
+
             self.updateImageOverlays()
             self.scheduleCalorieOverlayUpdate()
         }
-        
+
         textContainer.widthTracksTextView = true
         textContainer.heightTracksTextView = false
-        
+
         backgroundColor = .clear
         alwaysBounceVertical = true
         contentInsetAdjustmentBehavior = .automatic
@@ -109,7 +109,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         smartInsertDeleteType = .yes
         spellCheckingType = .yes
         autocorrectionType = .yes
-        
+
         // Build a paragraph style with spacing that will be inherited by every
         // new paragraph as the user types. This keeps the storage and layout in
         // sync so caret/selection geometry matches what's drawn on screen.
@@ -119,7 +119,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
         paragraphStyle.lineHeightMultiple = 1.14
-        
+
         let attrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
             .foregroundColor: baseColor,
@@ -128,28 +128,28 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         attributedText = NSAttributedString(string: configuration.initialText, attributes: attrs)
         typingAttributes = attrs
         blockDocumentController.forceRebuild()
-        
+
         // Set self as delegate to intercept text changes (Enter key handling).
         delegate = self
-        
+
         // Force layout invalidation so our custom layout fragments are created.
         textLayoutManager?.textViewportLayoutController.layoutViewport()
-        
+
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(handleMetadataNotification(_:)),
                                                name: .editorApplyPerBlockMetadata,
                                                object: nil)
     }
-    
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
-    
+
     func updateTextIfNeeded(_ text: String) {
         guard self.text != text else { return }
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
@@ -158,7 +158,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
         paragraphStyle.lineHeightMultiple = 1.14
-        
+
         let attrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
             .foregroundColor: baseColor,
@@ -168,7 +168,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         typingAttributes = attrs
         blockDocumentController.forceRebuild()
     }
-    
+
     /// Helper to insert an image block at the current cursor position.
     /// Instead of using an attachment (which would affect caret size), we insert
     /// a marker character and overlay `ImageComponent` as a subview.
@@ -177,10 +177,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Generate a new block ID for this image.
         let blockID = BlockID()
         imagesByBlockID[blockID] = image
-        
+
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
         let baseColor = UIColor.label
-        
+
         // Paragraph style for image block - NO headIndent!
         // Text will flow around the image via exclusion paths.
         // Start with large spacing (new image blocks have short text).
@@ -188,7 +188,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         imageParagraphStyle.paragraphSpacingBefore = Self.imageSpacingBefore
         imageParagraphStyle.paragraphSpacing = Self.imageSpacingLarge
         imageParagraphStyle.lineHeightMultiple = 1.14
-        
+
         // Attributes for the marker character (invisible, tags the block).
         let markerAttrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
@@ -196,56 +196,56 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             .paragraphStyle: imageParagraphStyle,
             BlockAttributeKeys.imageBlockID: blockID.rawValue
         ]
-        
+
         // Attributes for text in the image block (same style, no indent).
         let imageTextAttrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
             .foregroundColor: baseColor,
             .paragraphStyle: imageParagraphStyle
         ]
-        
+
         // Normal paragraph style for text after the image block
         let normalParagraphStyle = NSMutableParagraphStyle()
         normalParagraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         normalParagraphStyle.paragraphSpacing = Self.paragraphSpacing
         normalParagraphStyle.lineHeightMultiple = 1.14
-        
+
         let normalAttrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
             .foregroundColor: baseColor,
             .paragraphStyle: normalParagraphStyle
         ]
-        
+
         // Build: marker + sample text + newline (newline uses NORMAL style so next paragraph has normal spacing)
         let markerPart = NSAttributedString(string: Self.imageMarker, attributes: markerAttrs)
         let sampleText = NSAttributedString(string: "Description here", attributes: imageTextAttrs)
         let newlinePart = NSAttributedString(string: "\n", attributes: normalAttrs)
-        
+
         let mutable = NSMutableAttributedString(attributedString: attributedText ?? NSAttributedString())
         let insertionIndex = max(0, min(selectedRange.location, mutable.length))
-        
+
         mutable.insert(markerPart, at: insertionIndex)
         mutable.insert(sampleText, at: insertionIndex + 1)
         mutable.insert(newlinePart, at: insertionIndex + 1 + sampleText.length)
-        
+
         attributedText = mutable
         blockDocumentController.forceRebuild()
-        
+
         // Place cursor at the end of the sample text so user can edit it.
         let cursorPosition = insertionIndex + 1 + sampleText.length
         selectedRange = NSRange(location: min(cursorPosition, mutable.length), length: 0)
-        
+
         // Set typing attributes - same style, no indent
         typingAttributes = imageTextAttrs
-        
+
         // Trigger overlay and exclusion path update.
         updateImageOverlays()
     }
-    
+
     func setCalorieLabel(_ label: String?, for blockID: BlockID) {
         blockDocumentController.setCalorieLabel(label, for: blockID)
     }
-    
+
     func setCalorieLabels(_ labels: [BlockID: String]) {
         blockDocumentController.setCalorieLabels(labels)
     }
@@ -264,38 +264,38 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     func image(for blockID: BlockID) -> UIImage? {
         imagesByBlockID[blockID]
     }
-    
+
     // MARK: - Layout
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
         updateImageOverlays()
         scheduleCalorieOverlayUpdate()
     }
-    
+
     /// Size of the image component in "small" mode
     private let imageComponentSize = CGSize(width: 72, height: 80)
-    
+
     /// Positions `ImageComponent` overlays and sets up exclusion paths so text flows around images.
     private func updateImageOverlays() {
         // Collect current image blocks from the document.
         let imageBlocks = blockDocumentController.document.blocks.filter { $0.kind.isImage }
-        
+
         // Remove overlays for blocks that no longer exist.
         let currentIDs = Set(imageBlocks.map { $0.id })
         for (id, host) in imageOverlays where !currentIDs.contains(id) {
             host.view.removeFromSuperview()
             imageOverlays.removeValue(forKey: id)
         }
-        
+
         // Build exclusion paths for all image blocks
         var imageExclusionPaths: [UIBezierPath] = []
-        
+
         // Create or update overlays for each image block.
         for block in imageBlocks {
             guard let uiImage = imageForBlock(block) else { continue }
             guard let rect = rectForBlock(block) else { continue }
-            
+
             let host: UIHostingController<ImageComponent>
             if let existing = imageOverlays[block.id] {
                 host = existing
@@ -311,7 +311,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 addSubview(host.view)
                 imageOverlays[block.id] = host
             }
-            
+
             // Position the overlay at the left edge of the text container,
             // aligned vertically with the marker's line.
             let imageFrame = CGRect(
@@ -321,7 +321,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 height: imageComponentSize.height
             )
             host.view.frame = imageFrame
-            
+
             // Create exclusion path for this image in text container coordinates.
             // The exclusion path is relative to the text container, not the view.
             let exclusionRect = CGRect(
@@ -333,40 +333,40 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             let exclusionPath = UIBezierPath(rect: exclusionRect)
             imageExclusionPaths.append(exclusionPath)
         }
-        
+
         cachedImageExclusionPaths = imageExclusionPaths
         applyExclusionPaths(with: imageExclusionPaths)
     }
-    
+
     /// Positions calorie overlays on the last visible line for each text block.
     private func updateCalorieOverlays() {
         isCalorieOverlayUpdateScheduled = false
-        
+
         guard
             let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage,
             textStorage.length > 0
         else {
             return
         }
-        
+
         let labeledBlocks = blockDocumentController.document.blocks.filter { block in
             guard let text = block.calorieLabel else { return false }
             return !text.isEmpty
         }
-        
+
         let activeIDs = Set(labeledBlocks.map { $0.id })
         for (id, view) in calorieOverlays where !activeIDs.contains(id) {
             view.removeFromSuperview()
             calorieOverlays.removeValue(forKey: id)
         }
-        
+
         for block in labeledBlocks {
             guard block.range.location < textStorage.length else { continue }
             guard let labelText = block.calorieLabel,
                   let lineRect = lastLineRect(for: block) else {
                 continue
             }
-            
+
             let overlay: CalorieBlockView
             if let existing = calorieOverlays[block.id] {
                 overlay = existing
@@ -376,7 +376,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 calorieOverlays[block.id] = view
                 overlay = view
             }
-            
+
             // Configure context menu
             let nutritionData = self.nutritionData(for: block.id)
             overlay.configureContextMenu(
@@ -393,9 +393,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                     )
                 }
             )
-            
+
             overlay.setCaloriesAnimated(labelText)
-            
+
             let width = CalorieOverlayMetrics.labelMaxWidth
             let height = CalorieOverlayMetrics.labelHeight
             let x = bounds.width
@@ -405,10 +405,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             let y = lineRect.midY - (height / 2.0)
             overlay.frame = CGRect(x: x, y: y, width: width, height: height)
         }
-        
+
         applyExclusionPaths(with: cachedImageExclusionPaths)
     }
-    
+
     private func applyExclusionPaths(with imagePaths: [UIBezierPath]) {
         var paths = imagePaths
         if shouldReserveCalorieColumn, let caloriePath = makeCalorieReservedPath() {
@@ -416,7 +416,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         textContainer.exclusionPaths = paths
     }
-    
+
     private func makeCalorieReservedPath() -> UIBezierPath? {
         let reservedWidth = CalorieOverlayMetrics.reservedColumnWidth
         guard reservedWidth > 0 else { return nil }
@@ -427,13 +427,13 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let height = max(bounds.height, max(contentSize.height, 1))
         return UIBezierPath(rect: CGRect(x: x, y: 0, width: width, height: height))
     }
-    
+
     private var shouldReserveCalorieColumn: Bool {
         blockDocumentController.document.blocks.contains {
             $0.calorieLabel?.isEmpty == false
         }
     }
-    
+
     /// Returns the image associated with a block (looked up by custom attribute
     /// or by our local map).
     private func imageForBlock(_ block: BlockMetadata) -> UIImage? {
@@ -444,12 +444,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Fallback: check if BlockMetadata carries the image.
         return block.image
     }
-    
+
     /// Returns the bounding rect for the first character of a block's range.
     private func rectForBlock(_ block: BlockMetadata) -> CGRect? {
         guard let textLayoutManager = textLayoutManager else { return nil }
         guard let contentManager = textLayoutManager.textContentManager else { return nil }
-        
+
         let docRange = contentManager.documentRange
         guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location) else {
             return nil
@@ -460,7 +460,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         guard let textRange = NSTextRange(location: startLocation, end: endLocation) else {
             return nil
         }
-        
+
         var rect: CGRect?
         textLayoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, segmentRect, _, _ in
             rect = segmentRect
@@ -468,7 +468,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return rect
     }
-    
+
     private func textRange(for block: BlockMetadata) -> UITextRange? {
         guard block.range.length > 0 else { return nil }
         guard
@@ -478,38 +478,38 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         else {
             return nil
         }
-        
+
         let availableLength = storage.length - block.range.location
         guard availableLength > 0 else { return nil }
         let safeLength = min(block.range.length, availableLength)
         guard safeLength > 0 else { return nil }
-        
+
         guard
             let start = position(from: beginningOfDocument, offset: block.range.location),
             let end = position(from: start, offset: safeLength)
         else {
             return nil
         }
-        
+
         return textRange(from: start, to: end)
     }
-    
+
     private func lastLineRect(for block: BlockMetadata) -> CGRect? {
         guard let range = textRange(for: block) else {
             return caretRectFallback(for: block)
         }
-        
+
         let usableRects = selectionRects(for: range)
             .map(\.rect)
             .filter { isUsable(rect: $0) && $0.width > 0.5 && $0.height > 0.5 }
-        
+
         if let rect = usableRects.last {
             return rect
         }
-        
+
         return caretRectFallback(for: block)
     }
-    
+
     private func caretRectFallback(for block: BlockMetadata) -> CGRect? {
         guard
             let contentStorage = textLayoutManager?.textContentManager as? NSTextContentStorage,
@@ -519,21 +519,21 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         else {
             return nil
         }
-        
+
         let availableLength = storage.length - block.range.location
         let safeOffset = max(min(block.range.length, availableLength) - 1, 0)
-        
+
         guard
             let start = position(from: beginningOfDocument, offset: block.range.location),
             let target = position(from: start, offset: safeOffset)
         else {
             return nil
         }
-        
+
         let caret = caretRect(for: target)
         return isUsable(rect: caret) ? caret : nil
     }
-    
+
     private func isUsable(rect: CGRect) -> Bool {
         guard !rect.isNull else { return false }
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
@@ -542,7 +542,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return rect.width > 0 && rect.height > 0
     }
-    
+
     /// Schedules calorie overlay updates on the next run loop tick to avoid racing
     /// with TextKit while it is mutating the text storage during editing.
     private func scheduleCalorieOverlayUpdate() {
@@ -563,9 +563,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             self.applyBlockStyles()
         }
     }
-    
+
     // MARK: - Text Input Handling (UITextViewDelegate)
-    
+
     /// Intercept text changes to fix paragraph style inheritance.
     /// When Enter is pressed, reset typingAttributes to standard BEFORE the newline is inserted.
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -577,7 +577,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return true
     }
-    
+
     /// Standard paragraph attributes (no indent needed since we use exclusion paths).
     private var standardParagraphAttributes: [NSAttributedString.Key: Any] {
         let baseFont = UIFont.preferredFont(forTextStyle: .body)
@@ -586,14 +586,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
         paragraphStyle.lineHeightMultiple = 1.14
-        
+
         return [
             .font: baseFont,
             .foregroundColor: baseColor,
             .paragraphStyle: paragraphStyle
         ]
     }
-    
+
     /// Called after text changes - update exclusion paths (styles are handled by document change callback).
     func textViewDidChange(_ textView: UITextView) {
         updateImageOverlays()
@@ -615,50 +615,50 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         guard !analyzedBlocks.isEmpty else { return }
         applyAnalyzedMetadata(analyzedBlocks)
     }
-    
+
     /// Called when cursor moves - set typing attributes based on current block type.
     func textViewDidChangeSelection(_ textView: UITextView) {
         let cursorLocation = selectedRange.location
         let currentBlock = blockDocumentController.block(containing: NSRange(location: cursorLocation, length: 0))
-        
+
         // If NOT in an image block, reset typing attributes to normal
         if currentBlock == nil || !currentBlock!.kind.isImage {
             typingAttributes = standardParagraphAttributes
         }
     }
-    
+
     /// Apply the correct paragraph style to EACH block independently.
     /// This normalizes paragraph styles after text changes (e.g., when pressing Enter
     /// splits a paragraph, the new paragraph inherits the old style and needs fixing).
     private func applyBlockStyles() {
         // Prevent re-entry
         guard !isApplyingStyles else { return }
-        
+
         guard let textStorage = textLayoutManager?.textContentManager as? NSTextContentStorage,
               let storage = textStorage.textStorage,
               storage.length > 0 else { return }
-        
+
         let blocks = blockDocumentController.document.blocks
         guard !blocks.isEmpty else { return }
-        
+
         isApplyingStyles = true
         defer { isApplyingStyles = false }
-        
+
         storage.beginEditing()
-        
+
         for block in blocks {
             let range = block.range
             guard range.location < storage.length else { continue }
-            
+
             // Clamp range to valid bounds
             let safeLength = min(range.length, storage.length - range.location)
             guard safeLength > 0 else { continue }
             let safeRange = NSRange(location: range.location, length: safeLength)
-            
+
             // Determine target spacing based on block type
             let targetSpacing: CGFloat
             let targetSpacingBefore: CGFloat
-            
+
             if block.kind.isImage {
                 // For image blocks, use cached spacing or calculate if content changed
                 targetSpacing = cachedSpacing(for: block)
@@ -667,7 +667,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 targetSpacing = Self.paragraphSpacing
                 targetSpacingBefore = Self.paragraphSpacingBefore
             }
-            
+
             // Check if this range already has the correct spacing
             if let existingStyle = storage.attribute(.paragraphStyle, at: safeRange.location, effectiveRange: nil) as? NSParagraphStyle {
                 // Only update if spacing is wrong (tolerance of 1 to avoid floating point issues)
@@ -679,7 +679,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                     storage.addAttribute(.paragraphStyle, value: newStyle, range: safeRange)
                 }
             }
-            
+
             let existingBlockID = storage.attribute(BlockAttributeKeys.blockIdentifier,
                                                     at: safeRange.location,
                                                     effectiveRange: nil)
@@ -691,38 +691,38 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             } else {
                 existingUUID = nil
             }
-            
+
             if existingUUID != block.id.rawValue {
                 storage.addAttribute(BlockAttributeKeys.blockIdentifier, value: block.id.rawValue, range: safeRange)
             }
         }
-        
+
         storage.endEditing()
-        
+
         // Also update typing attributes for current position
         updateTypingAttributesForCurrentBlock()
     }
-    
+
     /// Returns cached spacing for an image block.
     /// Spacing only changes when the rendered text crosses the line threshold.
     private func cachedSpacing(for block: BlockMetadata) -> CGFloat {
         let currentLineCount = lineCount(for: block)
-        
+
         if let cached = imageSpacingCache[block.id], cached.lineCount == currentLineCount {
             return cached.spacing
         }
-        
+
         let spacing = currentLineCount <= Self.imageLineThreshold ? Self.imageSpacingLarge : Self.imageSpacingSmall
         imageSpacingCache[block.id] = (lineCount: currentLineCount, spacing: spacing)
         return spacing
     }
-    
+
     /// Removes stale entries from the spacing cache (blocks that no longer exist).
     private func cleanupSpacingCache() {
         let currentImageBlockIDs = Set(blockDocumentController.document.blocks.filter { $0.kind.isImage }.map { $0.id })
         imageSpacingCache = imageSpacingCache.filter { currentImageBlockIDs.contains($0.key) }
     }
-    
+
     /// Returns the rendered line count for a block's text content.
     /// Uses TextKit 2 layout fragments to count actual line fragments.
     private func lineCount(for block: BlockMetadata) -> Int {
@@ -731,55 +731,55 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
               let textStorage = (contentManager as? NSTextContentStorage)?.textStorage else {
             return 1
         }
-        
+
         // Ensure layout reflects the latest edits.
         textLayoutManager.textViewportLayoutController.layoutViewport()
-        
+
         guard block.range.location < textStorage.length else { return 1 }
         let availableLength = textStorage.length - block.range.location
         guard availableLength > 0 else { return 1 }
         let safeLength = max(1, min(block.range.length, availableLength))
-        
+
         let docRange = contentManager.documentRange
         guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location),
               let endLocation = contentManager.location(startLocation, offsetBy: safeLength),
               let textRange = NSTextRange(location: startLocation, end: endLocation) else {
             return 1
         }
-        
+
         var totalLines = 0
         textLayoutManager.enumerateTextLayoutFragments(from: textRange.location,
                                                        options: [.ensuresLayout, .ensuresExtraLineFragment]) { fragment in
             let fragmentRange = fragment.rangeInElement
             let fragmentEnd = fragmentRange.endLocation
-            
+
             guard fragmentEnd.compare(textRange.endLocation) != .orderedDescending else {
                 return false
             }
-            
+
             totalLines += fragment.textLineFragments.count
             return true
         }
-        
+
         return max(totalLines, 1)
     }
-    
+
     /// Set typing attributes based on current block type.
     private func updateTypingAttributesForCurrentBlock() {
         let cursorLocation = selectedRange.location
         let currentBlock = blockDocumentController.block(containing: NSRange(location: cursorLocation, length: 0))
-        
+
         if let block = currentBlock, block.kind.isImage {
             // In image block - use cached spacing
             let spacing = cachedSpacing(for: block)
-            
+
             let baseFont = UIFont.preferredFont(forTextStyle: .body)
             let baseColor = UIColor.label
             let style = NSMutableParagraphStyle()
             style.paragraphSpacingBefore = Self.imageSpacingBefore
             style.paragraphSpacing = spacing
             style.lineHeightMultiple = 1.14
-            
+
             typingAttributes = [
                 .font: baseFont,
                 .foregroundColor: baseColor,
@@ -830,7 +830,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             )
         }
     }
-    
+
     private func applyAnalyzedMetadata(_ analyzedBlocks: [AnalyzedBlock]) {
         guard
             let textLayoutManager = textLayoutManager,
@@ -839,11 +839,11 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         else {
             return
         }
-        
+
         let backingString = textStorage.string as NSString
         let metadataBlocks = blockDocumentController.document.blocks
         guard !metadataBlocks.isEmpty else { return }
-        
+
         var paragraphs: [(index: Int, metadata: BlockMetadata, text: String)] = []
         for block in metadataBlocks {
             var text = textForBlock(block, in: backingString)
@@ -853,14 +853,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             }
             paragraphs.append((paragraphs.count, block, text))
         }
-        
+
         guard !paragraphs.isEmpty else { return }
-        
+
         var calorieMap = currentCalorieMap()
         var nutritionMap = currentNutritionMap()
         var matchedParagraphIndices = Set<Int>()
         var unmatchedAnalyzed: [AnalyzedBlock] = []
-        
+
         for analyzed in analyzedBlocks {
             let trimmedServer = analyzed.content.trimmingCharacters(in: .whitespacesAndNewlines)
             var matched = false
@@ -877,20 +877,20 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 unmatchedAnalyzed.append(analyzed)
             }
         }
-        
+
         let remainingParagraphIndices = paragraphs.enumerated()
             .filter { !matchedParagraphIndices.contains($0.offset) }
             .map(\.offset)
-        
+
         for (analyzed, paragraphIndex) in zip(unmatchedAnalyzed, remainingParagraphIndices) {
             let metadata = paragraphs[paragraphIndex].metadata
             apply(analyzed, to: metadata.id, calorieMap: &calorieMap, nutritionMap: &nutritionMap)
         }
-        
+
         blockDocumentController.setCalorieLabels(calorieMap)
         blockDocumentController.setNutritionData(nutritionMap)
     }
-    
+
     private func apply(_ analyzed: AnalyzedBlock,
                        to blockID: BlockID,
                        calorieMap: inout [BlockID: String],
@@ -902,7 +902,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             nutritionMap[blockID] = nutrition
         }
     }
-    
+
     private func textForBlock(_ metadata: BlockMetadata, in backingString: NSString) -> String {
         guard metadata.range.location < backingString.length else { return "" }
         var text = backingString.substring(with: metadata.range)
@@ -914,7 +914,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return text
     }
-    
+
     private func currentCalorieMap() -> [BlockID: String] {
         var map: [BlockID: String] = [:]
         for block in blockDocumentController.document.blocks {
@@ -924,7 +924,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return map
     }
-    
+
     private func currentNutritionMap() -> [BlockID: NutritionData] {
         var map: [BlockID: NutritionData] = [:]
         for block in blockDocumentController.document.blocks {
@@ -934,7 +934,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return map
     }
-    
+
     private func derivedCalories(from analyzed: AnalyzedBlock) -> Int? {
         if let calories = analyzed.calories, calories > 0 {
             return calories
@@ -947,7 +947,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return nil
     }
-    
+
     private func nutritionData(from analyzed: AnalyzedBlock) -> NutritionData? {
         let hasMeaningfulData = (analyzed.calories ?? 0) > 0
             || (analyzed.protein ?? 0) > 0
@@ -968,9 +968,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             confidence: analyzed.confidence
         )
     }
-    
+
     // MARK: - Helper Methods for Context Menu
-    
+
     private func findViewController() -> UIViewController? {
         var responder: UIResponder? = self
         while responder != nil {
@@ -981,27 +981,27 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         }
         return nil
     }
-    
+
     private func handleCalorieUpdate(calories: Int?, weight: Double?, blockID: BlockID) {
         guard let entryIdentifier = entryIdentifier else {
             print("Error: No entry identifier available for calorie update")
             return
         }
-        
+
         // Get the text content for this block
         guard let block = blockDocumentController.document.blocks.first(where: { $0.id == blockID }),
               let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage else {
             print("Error: Could not find block or text storage")
             return
         }
-        
+
         let text = getBlockText(block: block, textStorage: textStorage)
-        
+
         print("Updating calories for block \(blockID): calories=\(calories ?? -1), weight=\(weight ?? -1), text=\(text)")
-        
+
         // Show loading state
         // TODO: Add loading indicator to UI
-        
+
         // Make API call
         APIClient.shared.updateCaloriePopup(
             entryId: entryIdentifier.uuidString,
@@ -1027,10 +1027,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         )
         .store(in: &cancellables)
     }
-    
+
     private func handleCalorieUpdateResponse(response: CaloriePopupUpdateResponse, blockID: BlockID) {
         print("Successfully updated nutrition for block \(blockID): \(response)")
-        
+
         // Update local nutrition data
         let updatedNutrition = NutritionData(
             calories: response.calories,
@@ -1042,35 +1042,45 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             sodium: response.sodium,
             confidence: response.confidence
         )
-        
+
         // Update the block document controller
         blockDocumentController.setNutritionData([blockID: updatedNutrition])
-        
+
         // Update the calorie overlay to show new calories
         if let calorieOverlay = calorieOverlays[blockID] {
             calorieOverlay.setCaloriesAnimated(String(response.calories))
         }
-        
+
         // Update the calorie label in the document
         blockDocumentController.setCalorieLabel(String(response.calories), for: blockID)
-        
+
         // Trigger a layout update
         scheduleCalorieOverlayUpdate()
+
+        // Notify the coordinator to create a new snapshot and propagate changes,
+        // which will trigger the correct HealthKit sync.
+        if let entryId = self.entryIdentifier {
+            NotificationCenter.default.post(
+                name: .editorApplyPerBlockMetadata,
+                object: nil,
+                userInfo: ["entryId": entryId]
+            )
+        }
     }
-    
+
     private func getBlockText(block: BlockMetadata, textStorage: NSTextStorage) -> String {
         guard block.range.location < textStorage.length else { return "" }
         var text = textStorage.attributedSubstring(from: block.range).string
-        
+
         // Remove image markers
         text = text.replacingOccurrences(of: Self.imageMarker, with: "")
-        
+
         // Trim whitespace and newlines
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         return text
     }
-    
+
     private func nutritionData(for blockID: BlockID) -> NutritionData? {
         return blockDocumentController.document.blocks.first { $0.id == blockID }?.nutrition
     }

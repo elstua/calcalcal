@@ -516,6 +516,7 @@ Use exactly ${calories} calories and adjust other macros proportionally to match
           sugar: result.sugar,
           sodium: result.sodium,
           confidence: result.confidence,
+          userModified: true, // Mark this block as manually modified
         };
 
         // Recalculate totals for the entire entry

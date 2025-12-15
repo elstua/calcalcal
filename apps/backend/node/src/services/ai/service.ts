@@ -1,28 +1,32 @@
-import crypto from 'crypto';
-import Database from '../../services/database';
-import { AIAnalysisCacheModel } from '../../models/AIAnalysisCache';
-import { getNutritionProvider } from './providers';
-import { NutritionAnalysisResult, NutritionProvider } from './providers/types';
+import crypto from "crypto";
+import Database from "../../services/database";
+import { AIAnalysisCacheModel } from "../../models/AIAnalysisCache";
+import { getNutritionProvider } from "./providers";
+import { NutritionAnalysisResult, NutritionProvider } from "./providers/types";
 
 export class AIService {
   static async analyzeBlocks(blocks: any[]) {
     const provider = getNutritionProvider();
-    const promptVersion = process.env.AI_PROMPT_VERSION || 'v1';
+    const promptVersion = process.env.AI_PROMPT_VERSION || "v1";
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
-    const providerName = (process.env.AI_PROVIDER || 'openai').toLowerCase();
+    const providerName = (process.env.AI_PROVIDER || "openai").toLowerCase();
     const model =
-      providerName === 'gemini'
-        ? process.env.AI_GEMINI_MODEL || 'gemini-2.5-flash'
-        : process.env.AI_OPENAI_MODEL || 'gpt-4o-mini';
+      providerName === "gemini"
+        ? process.env.AI_GEMINI_MODEL || "gemini-2.5-flash"
+        : process.env.AI_OPENAI_MODEL || "gpt-4o-mini";
     const concurrencyEnv = Number(process.env.AI_MAX_CONCURRENCY ?? 3);
-    const concurrency = Number.isFinite(concurrencyEnv) && concurrencyEnv > 0 ? concurrencyEnv : 3;
+    const concurrency =
+      Number.isFinite(concurrencyEnv) && concurrencyEnv > 0
+        ? concurrencyEnv
+        : 3;
 
-    const tasks = blocks.map((block) => () =>
-      AIService.analyzeSingleBlock(block, provider, {
-        temperature,
-        model,
-        promptVersion,
-      })
+    const tasks = blocks.map(
+      (block) => () =>
+        AIService.analyzeSingleBlock(block, provider, {
+          temperature,
+          model,
+          promptVersion,
+        }),
     );
 
     return AIService.runWithConcurrency(tasks, concurrency);
@@ -47,20 +51,24 @@ export class AIService {
         total_fiber: 0,
         total_sugar: 0,
         total_sodium: 0,
-      }
+      },
     );
   }
 
   static hashContent(content: string): string {
-    return crypto.createHash('sha256').update(content).digest('hex');
+    return crypto.createHash("sha256").update(content).digest("hex");
   }
 
-  private static async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  private static async runWithConcurrency<T>(
+    tasks: Array<() => Promise<T>>,
+    limit: number,
+  ): Promise<T[]> {
     if (tasks.length === 0) {
       return [];
     }
     const results: T[] = new Array(tasks.length);
-    const workerCount = Math.min(Math.max(1, Math.floor(limit) || 1), tasks.length) || 1;
+    const workerCount =
+      Math.min(Math.max(1, Math.floor(limit) || 1), tasks.length) || 1;
     let nextIndex = 0;
 
     const workers = Array.from({ length: workerCount }, async () => {
@@ -80,9 +88,14 @@ export class AIService {
   private static async analyzeSingleBlock(
     block: any,
     provider: NutritionProvider,
-    options: { temperature: number; model: string; promptVersion: string }
+    options: { temperature: number; model: string; promptVersion: string },
   ) {
-    const content = (block?.content || '').toString().trim();
+    // If block was manually modified by the user, do not re-analyze.
+    if (block.userModified) {
+      return block;
+    }
+
+    const content = (block?.content || "").toString().trim();
     if (!content) {
       return block;
     }
@@ -98,11 +111,14 @@ export class AIService {
     }
 
     try {
-      const analysis: NutritionAnalysisResult = await provider.analyze(content, {
-        temperature: options.temperature,
-        model: options.model,
-        promptVersion: options.promptVersion,
-      });
+      const analysis: NutritionAnalysisResult = await provider.analyze(
+        content,
+        {
+          temperature: options.temperature,
+          model: options.model,
+          promptVersion: options.promptVersion,
+        },
+      );
 
       await AIAnalysisCacheModel.insert({
         contentHash: hash,
@@ -115,7 +131,7 @@ export class AIService {
         promptVersion: analysis.promptVersion,
         parseOk: true,
         parseErrorText: null,
-        attempt: 'primary',
+        attempt: "primary",
         usagePromptTokens: analysis.usage?.promptTokens,
         usageCompletionTokens: analysis.usage?.completionTokens,
         usageTotalTokens: analysis.usage?.totalTokens,
@@ -126,7 +142,7 @@ export class AIService {
         ...analysis,
       };
     } catch (error: any) {
-      console.error('[AIService] analyzeSingleBlock failed', {
+      console.error("[AIService] analyzeSingleBlock failed", {
         message: error?.message,
       });
       return {
@@ -143,5 +159,3 @@ export class AIService {
     }
   }
 }
-
-
