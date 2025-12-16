@@ -1077,26 +1077,26 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 userInfo: ["entryId": entryId]
             )
         }
+    }
 
-        // MARK: - Helper Methods
+    // MARK: - Helper Methods
 
-        private func showErrorAlert(message: String) {
-            let alert = UIAlertController(
-                title: "Error",
-                message: message,
-                preferredStyle: .alert
-            )
+    private func showErrorAlert(message: String) {
+        let alert = UIAlertController(
+            title: "Error",
+            message: message,
+            preferredStyle: .alert
+        )
 
-            alert.addAction(UIAlertAction(
-                title: "OK",
-                style: .default,
-                handler: nil
-            ))
+        alert.addAction(UIAlertAction(
+            title: "OK",
+            style: .default,
+            handler: nil
+        ))
 
-            // Find the view controller to present the alert
-            if let viewController = self.findViewController() {
-                viewController.present(alert, animated: true)
-            }
+        // Find the view controller to present the alert
+        if let viewController = self.findViewController() {
+            viewController.present(alert, animated: true)
         }
     }
 

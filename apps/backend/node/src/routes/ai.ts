@@ -460,7 +460,7 @@ Use exactly ${calories} calories and adjust other macros proportionally to match
 
     console.time("[calories-popup-update] ai_call");
 
-    let analysis;
+    let analysis: unknown;
 
     try {
       // Add timeout to the request
@@ -505,19 +505,32 @@ Use exactly ${calories} calories and adjust other macros proportionally to match
 
     console.timeEnd("[calories-popup-update] ai_call");
 
+    if (typeof analysis !== "object" || analysis === null) {
+      console.error(
+        "[calories-popup-update] Invalid analysis result:",
+        analysis,
+      );
+      return res.status(500).json({
+        error: "AI analysis failed",
+        message: "Invalid analysis result from AI provider",
+      });
+    }
+
+    const typedAnalysis = analysis as Record<string, any>;
+
     // Create result object with all nutrition data
     const result = {
       blockId: blockId,
-      calories: Number(analysis.calories ?? 0),
-      protein: Number(analysis.protein ?? 0),
-      fat: Number(analysis.fat ?? 0),
-      carbs: Number(analysis.carbs ?? 0),
-      fiber: Number(analysis.fiber ?? 0),
-      sugar: Number(analysis.sugar ?? 0),
-      sodium: Number(analysis.sodium ?? 0),
-      weight: analysis.weight ? Number(analysis.weight) : undefined,
-      metric_description: analysis.metric_description || undefined,
-      confidence: Number(analysis.confidence ?? 0.5),
+      calories: Number(typedAnalysis.calories ?? 0),
+      protein: Number(typedAnalysis.protein ?? 0),
+      fat: Number(typedAnalysis.fat ?? 0),
+      carbs: Number(typedAnalysis.carbs ?? 0),
+      fiber: Number(typedAnalysis.fiber ?? 0),
+      sugar: Number(typedAnalysis.sugar ?? 0),
+      sodium: Number(typedAnalysis.sodium ?? 0),
+      weight: typedAnalysis.weight ? Number(typedAnalysis.weight) : undefined,
+      metric_description: typedAnalysis.metric_description || undefined,
+      confidence: Number(typedAnalysis.confidence ?? 0.5),
     };
 
     console.log(

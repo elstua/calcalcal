@@ -197,8 +197,8 @@ struct EditorOverlay: View {
                                     fiber: analysis.macros?.fiber,
                                     sugar: analysis.macros?.sugar,
                                     sodium: analysis.macros?.sodium,
-                                    weight: analysis.weight,
-                                    metric_description: analysis.metric_description,
+                                    weight: analysis.macros?.weight,
+                                    metric_description: analysis.macros?.metric_description,
                                     confidence: analysis.confidence
                                 )
 
