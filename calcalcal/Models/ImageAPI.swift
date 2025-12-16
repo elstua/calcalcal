@@ -8,7 +8,7 @@ struct ImageAPI {
         let size: Int?
         let contentType: String?
     }
-    
+
     struct AnalyzeImageResponse: Codable {
         struct Macros: Codable {
             let protein: Double?
@@ -17,13 +17,15 @@ struct ImageAPI {
             let fiber: Double?
             let sugar: Double?
             let sodium: Double?
+            let weight: Double?
+            let metric_description: String?
         }
         let description: String
         let calories: Int?
         let macros: Macros?
         let confidence: Double?
     }
-    
+
     private static func authorizedRequest(url: URL, method: String) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -34,16 +36,16 @@ struct ImageAPI {
         }
         return request
     }
-    
+
     static func uploadJPEG(data: Data, filename: String = "image.jpg", contentType: String = "image/jpeg") async throws -> UploadResponse {
         let base = Configuration.apiURL
         guard let url = URL(string: "\(base)/api/storage/upload") else { throw URLError(.badURL) }
-        
+
         var request = try authorizedRequest(url: url, method: "POST")
-        
+
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        
+
         var body = Data()
         let disposition = "form-data; name=\"file\"; filename=\"\(filename)\""
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -53,11 +55,11 @@ struct ImageAPI {
         body.append("\r\n".data(using: .utf8)!)
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         request.httpBody = body
-        
+
         #if DEBUG
         print("📤 Upload start -> \(filename) (\(data.count) bytes)")
         #endif
-        
+
         let (respData, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
@@ -76,11 +78,11 @@ struct ImageAPI {
         #endif
         return decoded
     }
-    
+
     /// Ensure we send an absolute URL to the backend (required by server to fetch or inline the image)
     private static func normalizeImageURL(_ imageUrl: String) -> String {
         var trimmed = imageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         // Strip any trailing dots that might have been incorrectly added after the file extension
         // (defensive fix for URL corruption bug - e.g., ".jpg." -> ".jpg")
         let validExtensions = [".jpg.", ".jpeg.", ".png.", ".webp.", ".gif."]
@@ -93,7 +95,7 @@ struct ImageAPI {
                 break
             }
         }
-        
+
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
             return trimmed
         }
@@ -106,7 +108,7 @@ struct ImageAPI {
             return "\(base)/\(trimmed)"
         }
     }
-    
+
     static func analyzeImage(imageUrl: String, entryId: String? = nil, blockId: String? = nil) async throws -> AnalyzeImageResponse {
         let base = Configuration.apiURL
         guard let url = URL(string: "\(base)/api/ai/analyze-image") else { throw URLError(.badURL) }
@@ -117,7 +119,7 @@ struct ImageAPI {
         if let entryId = entryId { payload["entryId"] = entryId }
         if let blockId = blockId { payload["blockId"] = blockId }
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        
+
         #if DEBUG
         print("🤖 Analyze start imageUrl=\(absoluteImageUrl)")
         print("🤖 Analyze input imageUrl=\(imageUrl), length=\(imageUrl.count), last10='\(String(imageUrl.suffix(10)))'")
@@ -126,7 +128,7 @@ struct ImageAPI {
             print("⚠️ WARNING: imageUrl ends with a trailing dot!")
         }
         #endif
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
@@ -142,5 +144,3 @@ struct ImageAPI {
         return result
     }
 }
-
-

@@ -6,6 +6,7 @@ import Database from "../services/database";
 import { OpenAI } from "openai";
 import fs from "fs";
 import path from "path";
+import { getNutritionProvider } from "../services/ai/providers";
 
 const router = Router();
 
@@ -292,21 +293,19 @@ If uncertain, provide your best estimate. Always return valid JSON.
     const result = {
       description: String(parsed.description ?? "").slice(0, 200),
       calories: Number(parsed.calories ?? 0),
-      macros: {
-        protein: Number(parsed.protein ?? 0),
-        fat: Number(parsed.fat ?? 0),
-        carbs: Number(parsed.carbs ?? 0),
-        fiber: Number(parsed.fiber ?? 0),
-        sugar: Number(parsed.sugar ?? 0),
-        sodium: Number(parsed.sodium ?? 0),
-        weight: parsed.weight ? Number(parsed.weight) : undefined,
-        metric_description: parsed.metric_description || undefined,
-      },
+      protein: Number(parsed.protein ?? 0),
+      fat: Number(parsed.fat ?? 0),
+      carbs: Number(parsed.carbs ?? 0),
+      fiber: Number(parsed.fiber ?? 0),
+      sugar: Number(parsed.sugar ?? 0),
+      sodium: Number(parsed.sodium ?? 0),
+      weight: parsed.weight ? Number(parsed.weight) : undefined,
+      metric_description: parsed.metric_description || undefined,
       confidence: Number(parsed.confidence ?? 0.5),
     };
 
     console.log(
-      `[analyze-image] success calories=${result.calories} protein=${result.macros.protein} fat=${result.macros.fat} carbs=${result.macros.carbs} weight=${result.macros.weight || "N/A"} metric_description=${result.macros.metric_description || "N/A"}`,
+      `[analyze-image] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs} weight=${result.weight || "N/A"} metric_description=${result.metric_description || "N/A"}`,
     );
     // v1: client merges into the block and totals
     // (optional future: server-side merge into db when entryId/blockId are provided)
@@ -350,23 +349,33 @@ router.post("/calories-popup-update", async (req: AuthRequest, res) => {
       `[calories-popup-update] user=${userId} entry=${entryId} block=${blockId} calories=${calories} weight=${weight}`,
     );
 
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("[calories-popup-update] Missing OPENAI_API_KEY");
-      return res.status(500).json({ error: "AI provider not configured" });
-    }
+    // Import AIService to use its analyzeSingleBlock method
+    const { AIService } = await import("../services/ai/service");
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: 45_000,
-    });
-    const model = process.env.AI_OPENAI_MODEL || "gpt-4o-mini";
-    const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+    // Create a specialized block-like object with custom analysis method
+    const blockData = {
+      id: blockId,
+      content: text,
+      userModified: true, // Mark as user-modified to prevent re-analysis
+    };
 
-    // Build prompt based on what user changed
-    let prompt = "";
-    if (weight && !calories) {
-      // User changed weight, recalculate calories
-      prompt = `
+    // Create a custom analyze method that will handle the popup update logic
+    const customAnalyze = async (content: string) => {
+      const { getNutritionProvider } = await import("../services/ai/providers");
+      const provider = getNutritionProvider();
+      const model =
+        process.env.AI_MODEL ||
+        (process.env.AI_PROVIDER === "gemini"
+          ? process.env.AI_GEMINI_MODEL
+          : process.env.AI_OPENAI_MODEL) ||
+        "gpt-4o-mini";
+      const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+
+      // Build custom prompt based on what user changed
+      let prompt = "";
+      if (weight && !calories) {
+        // User changed weight, recalculate calories
+        prompt = `
 You are a nutrition expert. The user has updated the weight of a food item.
 
 Original food description: "${text}"
@@ -388,9 +397,9 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
 
 Base the calculation on the new weight of ${weight}g. If uncertain, provide your best estimate. Always return valid JSON.
 `.trim();
-    } else if (calories && weight) {
-      // User changed both calories and weight
-      prompt = `
+      } else if (calories && weight) {
+        // User changed both calories and weight
+        prompt = `
 You are a nutrition expert. The user has updated both the calories and weight of a food item.
 
 Original food description: "${text}"
@@ -413,9 +422,9 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
 
 Use the provided values of ${calories} calories and ${weight}g weight. Adjust other macros proportionally. Always return valid JSON.
 `.trim();
-    } else if (calories && !weight) {
-      // User changed calories only, adjust macros proportionally
-      prompt = `
+      } else if (calories && !weight) {
+        // User changed calories only, adjust macros proportionally
+        prompt = `
 You are a nutrition expert. The user has updated the calories of a food item while keeping the same weight.
 
 Original food description: "${text}"
@@ -435,71 +444,80 @@ Please analyze this food and return ONLY a valid JSON object with updated nutrit
   "confidence": <0..1>
 }
 
-Use the provided value of ${calories} calories. Keep the original weight but adjust macros proportionally. Always return valid JSON.
 Use exactly ${calories} calories and adjust other macros proportionally to match this calorie count. Always return valid JSON.
 `.trim();
-    } else {
-      return res.status(400).json({
-        error: "Invalid combination of calories and weight",
+      } else {
+        throw new Error("Invalid combination of calories and weight");
+      }
+
+      // Use the provider with our custom prompt
+      return provider.analyze(content, {
+        temperature,
+        model,
+        prompt,
+      });
+    };
+
+    console.time("[calories-popup-update] ai_call");
+
+    let analysis;
+
+    try {
+      // Add timeout to the request
+      const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 60_000);
+      const timeout =
+        Number.isFinite(timeoutEnv) && timeoutEnv > 0
+          ? Math.floor(timeoutEnv)
+          : 60_000;
+
+      // Create a timeout promise to ensure the request doesn't hang indefinitely
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timeout")), timeout);
+      });
+
+      try {
+        analysis = await Promise.race([customAnalyze(text), timeoutPromise]);
+      } catch (error: any) {
+        if (error.message === "Request timeout") {
+          console.error(
+            "[calories-popup-update] Request timed out after",
+            timeout,
+            "ms",
+          );
+          return res.status(408).json({
+            error: "Request timeout",
+            message:
+              "The nutrition analysis took too long to complete. Please try again.",
+          });
+        }
+        throw error;
+      }
+    } catch (error: any) {
+      console.error("[calories-popup-update] Provider call failed", {
+        message: error?.message,
+      });
+
+      return res.status(500).json({
+        error: "AI analysis failed",
+        message: error?.message || "Unknown error",
       });
     }
 
-    console.time("[calories-popup-update] openai_call");
-    const completion = await client.chat.completions.create({
-      model,
-      temperature,
-      messages: [
-        { role: "system", content: prompt },
-        {
-          role: "user",
-          content: `Analyze this food and return JSON as specified: ${text}`,
-        },
-      ],
-    });
-    console.timeEnd("[calories-popup-update] openai_call");
+    console.timeEnd("[calories-popup-update] ai_call");
 
-    const responseText = completion.choices[0]?.message?.content?.trim();
-    if (!responseText) {
-      console.error("[calories-popup-update] Empty response from AI provider");
-      return res.status(500).json({ error: "Empty response from AI provider" });
-    }
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      // If not pure JSON, try to extract JSON block (best-effort)
-      const match = responseText.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch {
-          parsed = undefined;
-        }
-      }
-    }
-    if (!parsed || typeof parsed !== "object") {
-      console.error(
-        "[calories-popup-update] Failed to parse AI response:",
-        responseText,
-      );
-      return res
-        .status(500)
-        .json({ error: "Failed to parse AI response", message: responseText });
-    }
-
-    // Normalize and coerce to numbers
+    // Create result object with all nutrition data
     const result = {
       blockId: blockId,
-      calories: Number(parsed.calories ?? 0),
-      protein: Number(parsed.protein ?? 0),
-      fat: Number(parsed.fat ?? 0),
-      carbs: Number(parsed.carbs ?? 0),
-      fiber: Number(parsed.fiber ?? 0),
-      sugar: Number(parsed.sugar ?? 0),
-      sodium: Number(parsed.sodium ?? 0),
-      weight: parsed.weight ? Number(parsed.weight) : undefined,
-      metric_description: parsed.metric_description || undefined,
+      calories: Number(analysis.calories ?? 0),
+      protein: Number(analysis.protein ?? 0),
+      fat: Number(analysis.fat ?? 0),
+      carbs: Number(analysis.carbs ?? 0),
+      fiber: Number(analysis.fiber ?? 0),
+      sugar: Number(analysis.sugar ?? 0),
+      sodium: Number(analysis.sodium ?? 0),
+      weight: analysis.weight ? Number(analysis.weight) : undefined,
+      metric_description: analysis.metric_description || undefined,
+      confidence: Number(analysis.confidence ?? 0.5),
     };
 
     console.log(

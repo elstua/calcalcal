@@ -14,11 +14,11 @@ struct DiaryAPI {
         let total_fat: Double?
         let total_carbs: Double?
         let updated_at: String?
-        
+
         enum CodingKeys: String, CodingKey {
             case id, user_id, date, content, images, total_calories, total_protein, total_fat, total_carbs, updated_at
         }
-        
+
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             self.id = try c.decode(String.self, forKey: .id)
@@ -46,13 +46,15 @@ struct DiaryAPI {
         let fiber: Double?
         let sugar: Double?
         let sodium: Double?
+        let weight: Double?
+        let metric_description: String?
         let confidence: Double?
 
         enum CodingKeys: String, CodingKey {
-            case id, position, content, calories, protein, fat, carbs, fiber, sugar, sodium, confidence
+            case id, position, content, calories, protein, fat, carbs, fiber, sugar, sodium, weight, metric_description, confidence
         }
 
-        init(id: String?, position: Int?, content: String?, calories: Int?, protein: Double?, fat: Double?, carbs: Double?, fiber: Double?, sugar: Double?, sodium: Double?, confidence: Double?) {
+        init(id: String?, position: Int?, content: String?, calories: Int?, protein: Double?, fat: Double?, carbs: Double?, fiber: Double?, sugar: Double?, sodium: Double?, weight: Double?, metric_description: String?, confidence: Double?) {
             self.id = id
             self.position = position
             self.content = content
@@ -63,6 +65,8 @@ struct DiaryAPI {
             self.fiber = fiber
             self.sugar = sugar
             self.sodium = sodium
+            self.weight = weight
+            self.metric_description = metric_description
             self.confidence = confidence
         }
 
@@ -78,6 +82,8 @@ struct DiaryAPI {
             self.fiber = c.decodeDoubleForgiving(forKey: .fiber)
             self.sugar = c.decodeDoubleForgiving(forKey: .sugar)
             self.sodium = c.decodeDoubleForgiving(forKey: .sodium)
+            self.weight = c.decodeDoubleForgiving(forKey: .weight)
+            self.metric_description = try? c.decode(String.self, forKey: .metric_description)
             self.confidence = c.decodeDoubleForgiving(forKey: .confidence)
         }
 
@@ -93,6 +99,8 @@ struct DiaryAPI {
             try c.encodeIfPresent(fiber, forKey: .fiber)
             try c.encodeIfPresent(sugar, forKey: .sugar)
             try c.encodeIfPresent(sodium, forKey: .sodium)
+            try c.encodeIfPresent(weight, forKey: .weight)
+            try c.encodeIfPresent(metric_description, forKey: .metric_description)
             try c.encodeIfPresent(confidence, forKey: .confidence)
         }
 
@@ -414,5 +422,3 @@ extension DiaryAPI.Row {
         )
     }
 }
-
-

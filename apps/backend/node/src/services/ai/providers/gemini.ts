@@ -41,7 +41,10 @@ export class GeminiNutritionProvider implements NutritionProvider {
     },
   ): Promise<NutritionAnalysisResult> {
     const model =
-      options?.model || process.env.AI_GEMINI_MODEL || "gemini-2.5-flash";
+      options?.model ||
+      process.env.AI_MODEL ||
+      process.env.AI_GEMINI_MODEL ||
+      "gemini-2.5-flash";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
     const loaded = loadPrompt("nutrition");

@@ -3,18 +3,18 @@ import Combine
 
 class APIClient {
     static let shared = APIClient()
-    
+
     private let baseURL = Configuration.apiURL
     private var session: Session?
-    
+
     private init() {
         loadSession()
     }
-    
+
     private func loadSession() {
         session = try? KeychainManager.shared.loadTokens()
     }
-    
+
     func request<T: Codable>(_ endpoint: String, method: String = "GET", body: [String: Any]? = nil) -> AnyPublisher<T, Error> {
         let fullURLString = "\(baseURL)\(endpoint)"
         guard let url = URL(string: fullURLString) else {
@@ -24,23 +24,26 @@ class APIClient {
             return Fail(error: APIError.invalidURL)
                 .eraseToAnyPublisher()
         }
-        
+
         #if DEBUG
         print("🌐 APIClient: Requesting \(method) \(fullURLString)")
         #endif
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
+        // Set timeout for the request
+        request.timeoutInterval = 60.0 // 60 seconds timeout
+
         if let session = session {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         }
-        
+
         if let body = body {
             request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         }
-        
+
         return URLSession.shared.dataTaskPublisher(for: request)
             .mapError { error -> APIError in
                 #if DEBUG
@@ -48,6 +51,13 @@ class APIClient {
                 print("   Base URL: \(self.baseURL)")
                 print("   Endpoint: \(endpoint)")
                 #endif
+
+                // Check if it's a timeout error
+                if let urlError = error as? URLError,
+                   urlError.code == .timedOut {
+                    return APIError.timeout
+                }
+
                 return APIError.networkError(error)
             }
             .map(\.data)
@@ -60,17 +70,17 @@ class APIClient {
             }
             .eraseToAnyPublisher()
     }
-    
+
     func updateSession(_ newSession: Session) {
         session = newSession
     }
-    
+
     func clearSession() {
         session = nil
     }
-    
+
     // MARK: - Calorie Popup Update
-    
+
     func updateCaloriePopup(
         entryId: String,
         blockId: String,
@@ -83,15 +93,15 @@ class APIClient {
             "blockId": blockId,
             "text": text
         ]
-        
+
         if let calories = calories {
             body["calories"] = calories
         }
-        
+
         if let weight = weight {
             body["weight"] = weight
         }
-        
+
         return request("/api/ai/calories-popup-update", method: "POST", body: body)
     }
 }
@@ -107,12 +117,30 @@ struct CaloriePopupUpdateResponse: Codable {
     let fiber: Double
     let sugar: Double
     let sodium: Double
+    let weight: Double?
+    let metric_description: String?
     let confidence: Double
 }
 
-enum APIError: Error {
+enum APIError: Error, LocalizedError {
     case invalidURL
     case noData
     case decodingError
     case networkError(Error)
+    case timeout
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL"
+        case .noData:
+            return "No data received"
+        case .decodingError:
+            return "Failed to decode response"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .timeout:
+            return "Request timed out. Please try again."
+        }
+    }
 }

@@ -3,9 +3,9 @@ import Foundation
 final class BlocksCache {
     static let shared = BlocksCache()
     private init() {}
-    
+
     private let ioQueue = DispatchQueue(label: "blocks-cache-io")
-    
+
     private func cacheDirectory() -> URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let dir = base.appendingPathComponent("BlocksCache", isDirectory: true)
@@ -14,11 +14,11 @@ final class BlocksCache {
         }
         return dir
     }
-    
+
     private func fileURL(for entryId: UUID) -> URL {
         return cacheDirectory().appendingPathComponent(entryId.uuidString).appendingPathExtension("json")
     }
-    
+
     // MARK: - DTOs
     private struct CachedNutritionData: Codable {
         var calories: Int?
@@ -28,9 +28,11 @@ final class BlocksCache {
         var fiber: Double?
         var sugar: Double?
         var sodium: Double?
+        var weight: Double?
+        var metric_description: String?
         var confidence: Double?
     }
-    
+
     private struct CachedBlock: Codable {
         var id: String?
         var type: String // "text" | "imageText" | "spacer"
@@ -41,13 +43,13 @@ final class BlocksCache {
         var imageUrl: String?
         var imageObjectKey: String?
     }
-    
+
     private struct CachedEntry: Codable {
         var entryId: String
         var updatedAt: String
         var blocks: [CachedBlock]
     }
-    
+
     private func encodeBlocks(_ blocks: [Block]) -> [CachedBlock] {
         return blocks.map { block in
             switch block.type {
@@ -67,6 +69,8 @@ final class BlocksCache {
                             fiber: n.fiber,
                             sugar: n.sugar,
                             sodium: n.sodium,
+                            weight: n.weight,
+                            metric_description: n.metric_description,
                             confidence: n.confidence
                         )
                     },
@@ -89,6 +93,8 @@ final class BlocksCache {
                             fiber: n.fiber,
                             sugar: n.sugar,
                             sodium: n.sodium,
+                            weight: n.weight,
+                            metric_description: n.metric_description,
                             confidence: n.confidence
                         )
                     },
@@ -112,6 +118,8 @@ final class BlocksCache {
                             fiber: n.fiber,
                             sugar: n.sugar,
                             sodium: n.sodium,
+                            weight: n.weight,
+                            metric_description: n.metric_description,
                             confidence: n.confidence
                         )
                     },
@@ -132,7 +140,7 @@ final class BlocksCache {
             }
         }
     }
-    
+
     private func decodeBlocks(_ cached: [CachedBlock]) -> [Block] {
         return cached.compactMap { cb in
             switch cb.type {
@@ -187,7 +195,7 @@ final class BlocksCache {
             }
         }
     }
-    
+
     // MARK: - API
     func save(entryId: UUID, blocks: [Block]) {
         let url = fileURL(for: entryId)
@@ -205,7 +213,7 @@ final class BlocksCache {
             }
         }
     }
-    
+
     func load(entryId: UUID) -> [Block]? {
         let url = fileURL(for: entryId)
         guard let data = try? Data(contentsOf: url) else { return nil }
@@ -222,10 +230,10 @@ final class BlocksCache {
             let oldURL = self.fileURL(for: oldId)
             let newURL = self.fileURL(for: newId)
             guard fm.fileExists(atPath: oldURL.path) else { return }
-            
+
             let decoder = JSONDecoder()
             let isoFormatter = ISO8601DateFormatter()
-            
+
             do {
                 if fm.fileExists(atPath: newURL.path) {
                     let oldData = try Data(contentsOf: oldURL)
@@ -234,7 +242,7 @@ final class BlocksCache {
                     let newEntry = try decoder.decode(CachedEntry.self, from: newData)
                     let oldDate = isoFormatter.date(from: oldEntry.updatedAt) ?? .distantPast
                     let newDate = isoFormatter.date(from: newEntry.updatedAt) ?? .distantPast
-                    
+
                     if oldDate > newDate {
                         try fm.removeItem(at: newURL)
                         try oldData.write(to: newURL, options: .atomic)
@@ -252,5 +260,3 @@ final class BlocksCache {
         }
     }
 }
-
-

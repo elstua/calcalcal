@@ -3,25 +3,25 @@ import UIKit
 
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
-    
+
     @State private var presentedEntry: DiaryEntry? = nil
     @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
     @State private var isOverlayVisible: Bool = false
     @State private var shouldHideSourceCard: Bool = false
-    
+
     // Source card frame tracking for custom animation
     @State private var sourceCardFrame: CGRect = .zero
     @State private var overlayScale: CGFloat = 1.0
     @State private var overlayOffset: CGSize = .zero
-    
+
     @State private var selectedDay: Date = Calendar.current.startOfDay(for: Date())
     @State private var anchorDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var dayEntryStates: [String: DayEntryState] = [:]
     @State private var showAllDaysSheet: Bool = false
     @State private var isLoadingRecentDays: Bool = false
     @State private var pendingEntryFromSheet: DiaryEntry? = nil
-    
+
     private let overlayAnimation = Animation.easeInOut(duration: 0.35)
     private let overlayAnimationDuration: Double = 0.35
     private let stripDayCount: Int = 6
@@ -30,10 +30,10 @@ struct MainTabView: View {
         "write what you ate today",
         "write what you ate this day"
     ]
-    
+
     // Named coordinate space for tracking card positions
     private let rootCoordinateSpace = "rootCoordinateSpace"
-    
+
     var body: some View {
         ZStack(alignment: .top) {
             TabView {
@@ -42,14 +42,14 @@ struct MainTabView: View {
                         Image(systemName: "book.fill")
                         Text("Diary")
                     }
-                
+
                 ProfileView()
                     .tabItem {
                         Image(systemName: "person.fill")
                         Text("Profile")
                     }
             }
-            
+
             overlayLayer
         }
         .coordinateSpace(name: rootCoordinateSpace)
@@ -106,7 +106,7 @@ private extension MainTabView {
                     Text("Diary")
                         .font(.largeTitle.bold())
                         .padding(.horizontal, 24)
-                    
+
                     DayStripView(
                         items: dayStripItems(),
                         selectedDate: selectedDay,
@@ -116,7 +116,7 @@ private extension MainTabView {
                     .padding(.horizontal, 16)
                 }
                 .padding(.top, 2)
-                
+
                 dayPager
                     .padding(.top, 12)
                     .padding(.bottom, 2)
@@ -146,7 +146,7 @@ private extension MainTabView {
             )
         }
     }
-    
+
     @ViewBuilder
     var dayPager: some View {
         if pagerItems.isEmpty {
@@ -175,10 +175,10 @@ private extension MainTabView {
             }
         }
     }
-    
+
     func cardView(for entry: DiaryEntry, isActive: Bool) -> some View {
         let shouldHideForOverlay = isOverlayVisible && presentedEntry?.id == entry.id
-        
+
         return GeometryReader { geometry in
             VStack(spacing: 0) {
                 BigEntryBlock(
@@ -188,7 +188,7 @@ private extension MainTabView {
                     showShadow: true,
                     useExternalDecoration: false,
                     onAddImage: nil,
-                    onTap: isActive ? { 
+                    onTap: isActive ? {
                         // Capture the card's frame in root coordinate space before opening
                         let frame = geometry.frame(in: .named(rootCoordinateSpace))
                         presentOverlay(for: entry, sourceFrame: frame)
@@ -203,7 +203,7 @@ private extension MainTabView {
                 .opacity(shouldHideForOverlay ? 0 : 1)
                 .allowsHitTesting(isActive ? !shouldHideForOverlay : false)
                 .frame(height: 500, alignment: .top)
-                
+
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -221,7 +221,7 @@ private extension MainTabView {
             }
         }
     }
-    
+
     func placeholderCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         RoundedRectangle(cornerRadius: 32, style: .continuous)
             .fill(Color(.systemBackground))
@@ -230,23 +230,23 @@ private extension MainTabView {
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
     }
-    
+
     func presentOverlay(for entry: DiaryEntry, sourceFrame: CGRect? = nil) {
         shouldFocusEditor = false
         shouldHideSourceCard = true
         presentedBlocks = entry.blocks
-        
+
         // Store the source frame for animation
         if let frame = sourceFrame {
             sourceCardFrame = frame
         }
-        
+
         // Show overlay immediately - the overlay handles its own animation
         presentedEntry = entry
         isOverlayVisible = true
         // Note: shouldFocusEditor is set by EditorOverlaySimple after morph animation completes
     }
-    
+
     func dayStripItems() -> [DayStripItemModel] {
         visibleDates.reversed().map { date in
             let key = dayKey(for: date)
@@ -259,7 +259,7 @@ private extension MainTabView {
             )
         }
     }
-    
+
     var pagerItems: [DiaryPagerItem] {
         visibleDates
             .reversed()
@@ -272,22 +272,22 @@ private extension MainTabView {
             )
         }
     }
-    
+
     func selectDay(_ date: Date, animated: Bool) {
         let normalized = calendar.startOfDay(for: date)
         guard isDateVisible(normalized) else { return }
         guard normalized != selectedDay else { return }
         selectedDay = normalized
     }
-    
+
     func state(for date: Date) -> DayEntryState? {
         dayEntryStates[dayKey(for: date)]
     }
-    
+
     func isDateVisible(_ date: Date) -> Bool {
         visibleDates.contains { calendar.isDate($0, inSameDayAs: date) }
     }
-    
+
     func ensurePlaceholdersForVisibleDays() {
         var updated = dayEntryStates
         for date in visibleDates {
@@ -298,7 +298,7 @@ private extension MainTabView {
         }
         dayEntryStates = updated
     }
-    
+
     func refreshVisibleEntries() {
         anchorDate = calendar.startOfDay(for: Date())
         clampSelectedDayIfNeeded()
@@ -327,7 +327,7 @@ private extension MainTabView {
             }
         }
     }
-    
+
     func apply(entries: [DiaryEntry]) {
         var updated = dayEntryStates
         let offset = effectiveOffsetMinutes()
@@ -345,30 +345,30 @@ private extension MainTabView {
         }
         dayEntryStates = updated
     }
-    
+
     func clampSelectedDayIfNeeded() {
         guard !isDateVisible(selectedDay), let fallback = visibleDates.first else { return }
         selectedDay = fallback
     }
-    
+
     var visibleDates: [Date] {
         (0..<stripDayCount).compactMap { offset in
             calendar.date(byAdding: .day, value: -offset, to: anchorDate)
         }
     }
-    
+
     func dayKey(for date: Date) -> String {
         LocalDayMath.yyyymmdd(for: date, offsetMinutes: effectiveOffsetMinutes())
     }
-    
+
     func effectiveOffsetMinutes() -> Int {
         TimeZone.current.secondsFromGMT() / 60
     }
-    
+
     func placeholderPrompt(isToday: Bool) -> String {
         isToday ? "write what you ate today" : "write what you ate this day"
     }
-    
+
     func placeholderEntry(for date: Date) -> DiaryEntry {
         DiaryEntry(
             id: UUID(),
@@ -384,7 +384,7 @@ private extension MainTabView {
             aiGeneratedSummary: nil
         )
     }
-    
+
     func updateDayEntry(entryId: UUID, update: (inout DayEntryState) -> Void) {
         for key in dayEntryStates.keys {
             guard var state = dayEntryStates[key], state.entry.id == entryId else { continue }
@@ -393,7 +393,7 @@ private extension MainTabView {
             break
         }
     }
-    
+
     func replaceEntryId(localId: UUID, with serverId: UUID) {
         for key in dayEntryStates.keys {
             guard var state = dayEntryStates[key], state.entry.id == localId else { continue }
@@ -401,14 +401,14 @@ private extension MainTabView {
             dayEntryStates[key] = state
         }
     }
-    
+
     func isPlaceholderContent(_ blocks: [Block]) -> Bool {
         let trimmed = blocks.toContentString()
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         return placeholderPrompts.contains(trimmed)
     }
-    
+
     @ViewBuilder
     var overlayLayer: some View {
         if let entry = presentedEntry, isOverlayVisible {
@@ -421,7 +421,7 @@ private extension MainTabView {
                     // Show source card again (overlay animates back to it)
                     shouldHideSourceCard = false
                     shouldFocusEditor = false
-                    
+
                     // Update entry data
                     updateDayEntry(entryId: entry.id) { state in
                         state.entry.blocks = presentedBlocks
@@ -436,7 +436,7 @@ private extension MainTabView {
                             "blocks": presentedBlocks
                         ]
                     )
-                    
+
                     // Remove overlay from view hierarchy after morph animation
                     isOverlayVisible = false
                     presentedEntry = nil
@@ -445,7 +445,7 @@ private extension MainTabView {
             .zIndex(100)
         }
     }
-    
+
     struct DayEntryState {
         var entry: DiaryEntry
         var isPlaceholder: Bool
@@ -459,7 +459,7 @@ struct EditorOverlaySimple: View {
     @Binding var shouldBecomeFirstResponder: Bool
     let sourceFrame: CGRect
     let onClose: () -> Void
-    
+
     @State private var canonicalEntryId: UUID
     @State private var showImagePicker: Bool = false
     @State private var pickedImage: UIImage? = nil
@@ -475,13 +475,13 @@ struct EditorOverlaySimple: View {
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
     @State private var dimmingProgress: Double = 0
-    
+
     // Morphing animation state: 0 = at source card, 1 = expanded to full screen
     @State private var morphProgress: CGFloat = 0
     @State private var isClosing: Bool = false
-    
+
     private let morphDuration: Double = 0.35
-    
+
     init(entry: DiaryEntry,
          blocks: Binding<[Block]>,
          shouldBecomeFirstResponder: Binding<Bool>,
@@ -494,12 +494,12 @@ struct EditorOverlaySimple: View {
         self.onClose = onClose
         _canonicalEntryId = State(initialValue: entry.id)
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
             let screenSize = geometry.size
             let safeSource = validSourceFrame(screenSize: screenSize)
-            
+
             // Target frame: full width with padding, full height
             let targetFrame = CGRect(
                 x: 8,
@@ -507,18 +507,18 @@ struct EditorOverlaySimple: View {
                 width: screenSize.width - 16,
                 height: screenSize.height
             )
-            
+
             // Interpolated values based on morphProgress
             let currentFrame = interpolateFrame(from: safeSource, to: targetFrame, progress: morphProgress)
             let currentCornerRadius = interpolate(from: 24, to: 24, progress: morphProgress)
-            
+
             ZStack(alignment: .topLeading) {
                 // Dimmed background - fades with morph progress
                 let dragDimming = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
                 Color.black.opacity(0.25 * morphProgress * dragDimming)
                     .ignoresSafeArea()
                     .onTapGesture { dismissOverlay() }
-                
+
                 // Editor card with morphing frame
                 VStack(spacing: 0) {
                     DiaryEditorCard(
@@ -553,7 +553,7 @@ struct EditorOverlaySimple: View {
                         BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
                         scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
                     }
-                    
+
                     Spacer(minLength: 0)
                 }
                 .frame(width: currentFrame.width, height: currentFrame.height)
@@ -627,25 +627,25 @@ struct EditorOverlaySimple: View {
             scheduleAutosave(blocks: blocks)
         }
     }
-    
+
     private func dismissOverlay() {
         guard !isClosing else { return }
         isClosing = true
-        
+
         // Dismiss keyboard first
         shouldBecomeFirstResponder = false
-        
+
         // Animate back to source position
         withAnimation(.easeInOut(duration: morphDuration)) {
             morphProgress = 0
         }
-        
+
         // Call onClose after animation completes
         DispatchQueue.main.asyncAfter(deadline: .now() + morphDuration) {
             onClose()
         }
     }
-    
+
     // Ensure source frame is valid (has reasonable size and position)
     private func validSourceFrame(screenSize: CGSize) -> CGRect {
         // If source frame is invalid or too small, use a centered default
@@ -663,12 +663,12 @@ struct EditorOverlaySimple: View {
         }
         return sourceFrame
     }
-    
+
     // Linear interpolation between two CGFloat values
     private func interpolate(from: CGFloat, to: CGFloat, progress: CGFloat) -> CGFloat {
         from + (to - from) * progress
     }
-    
+
     // Interpolate between two CGRect frames
     private func interpolateFrame(from: CGRect, to: CGRect, progress: CGFloat) -> CGRect {
         CGRect(
@@ -678,7 +678,7 @@ struct EditorOverlaySimple: View {
             height: interpolate(from: from.height, to: to.height, progress: progress)
         )
     }
-    
+
     private func overlayEntry() -> DiaryEntry {
         DiaryEntry(
             id: canonicalEntryId,
@@ -689,31 +689,31 @@ struct EditorOverlaySimple: View {
             aiGeneratedSummary: entry.aiGeneratedSummary
         )
     }
-    
+
     private func setupOverlay() {
         // Start at source position (morphProgress = 0)
         morphProgress = 0
         isClosing = false
-        
+
         // Animate to full screen
         withAnimation(.easeInOut(duration: morphDuration)) {
             morphProgress = 1
         }
-        
+
         // Focus editor after animation
         DispatchQueue.main.asyncAfter(deadline: .now() + morphDuration) {
             if !isClosing {
                 shouldBecomeFirstResponder = true
             }
         }
-        
+
         liveTotalCalories = entry.totalCalories
-        
+
         loadTask = Task {
             do {
                 let dbBlocks = try await DiaryAPI.getBlocksById(canonicalEntryId.uuidString)
                 if Task.isCancelled { return }
-                
+
                 await MainActor.run {
                     let payload: [[String: Any]] = dbBlocks.map { block in
                         [
@@ -727,6 +727,8 @@ struct EditorOverlaySimple: View {
                             "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
                             "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
                             "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                            "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
+                            "metric_description": (block.metric_description as Any?) ?? NSNull(),
                             "confidence": (block.confidence as Any?) ?? NSNull()
                         ]
                     }
@@ -744,52 +746,52 @@ struct EditorOverlaySimple: View {
                 // Best-effort
             }
         }
-        
+
         Task {
             await MainActor.run {
                 blocks = blocks.withStableIdsAndChangeTracking()
             }
         }
-        
+
         let initial = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
         lastSavedContent = initial
         hydrateImagesForOverlay()
     }
-    
+
     private func cleanupOverlay() {
         loadTask?.cancel()
         loadTask = nil
         autosaveTask?.cancel()
         autosaveTask = nil
-        
+
         flushSave()
-        
+
         if let pending = pendingRemoteBlocks {
             blocks = pending
             pendingRemoteBlocks = nil
         }
         suppressRemoteBlockUpdates = false
     }
-    
+
     private func handleImagePicked() {
         guard let image = pickedImage else { return }
         let uuid = UUID()
         let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
         imageMap[uuid] = compressed.resizedImage
         ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
-        
+
         if let resizedPNG = compressed.resizedImage.pngData() {
             let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil)
             blocks.append(newBlock)
-            
+
             let capturedUUID = uuid
             let blockId = newBlock.id
-            
+
             Task.detached(priority: .userInitiated) {
                 do {
                     let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
                     ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
-                    
+
                     await MainActor.run {
                         if let idx = blocks.firstIndex(where: { block in
                             if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
@@ -802,7 +804,7 @@ struct EditorOverlaySimple: View {
                             BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                         }
                     }
-                    
+
                     let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: nil, blockId: blockId.uuidString)
                     let nutrition = NutritionData(
                         calories: analysis.calories,
@@ -812,9 +814,11 @@ struct EditorOverlaySimple: View {
                         fiber: analysis.macros?.fiber,
                         sugar: analysis.macros?.sugar,
                         sodium: analysis.macros?.sodium,
+                        weight: analysis.weight,
+                        metric_description: analysis.metric_description,
                         confidence: analysis.confidence
                     )
-                    
+
                     await MainActor.run {
                         if let idx = blocks.firstIndex(where: { block in
                             if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
@@ -840,13 +844,13 @@ struct EditorOverlaySimple: View {
                 }
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             shouldBecomeFirstResponder = true
         }
         pickedImage = nil
     }
-    
+
     private func hydrateImagesForOverlay() {
         for block in blocks {
             switch block.type {
@@ -883,13 +887,13 @@ extension EditorOverlaySimple {
         EntryIdentityCoordinator.shared.canonicalize(localId: canonicalEntryId, serverId: serverUUID, blocks: blocks)
         canonicalEntryId = serverUUID
     }
-    
+
     private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
         if suppressRemoteBlockUpdates { return }
         let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
         if content == lastSavedContent { return }
     }
-    
+
     private func scheduleAutosave(blocks: [Block]) {
         debounceWorkItem?.cancel()
         autosaveTask?.cancel()
@@ -899,7 +903,7 @@ extension EditorOverlaySimple {
         debounceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
-    
+
     private func flushSave() {
         if let work = debounceWorkItem {
             work.cancel()
@@ -908,18 +912,18 @@ extension EditorOverlaySimple {
         autosaveTask?.cancel()
         Task { await saveWithoutAIAnalysis(blocks: blocks) }
     }
-    
+
     private func save(blocks: [Block]) async {
         if Task.isCancelled { return }
-        
+
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let placeholders: Set<String> = ["write what you ate today", "write what you ate this day"]
         if trimmed.isEmpty || placeholders.contains(trimmed) { return }
-        
+
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        
+
         do {
             guard let _ = try? KeychainManager.shared.loadTokens() else { return }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
@@ -928,12 +932,12 @@ extension EditorOverlaySimple {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
                 }
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
-                
+
                 if Task.isCancelled { return }
-                
+
                 let payload = blocks.toAnalyzeBlocks()
                 let isContentEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                
+
                 autosaveTask = Task {
                     do {
                         if isContentEmpty {
@@ -948,17 +952,17 @@ extension EditorOverlaySimple {
                             }
                         } else {
                             _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
-                            
+
                             var hasReceivedNutritionData = false
                             let delays: [Double] = [0.8, 1.2, 2.0, 2.8, 4.0, 5.5, 7.5, 10.0]
                             for delay in delays {
                                 if hasReceivedNutritionData { break }
                                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                                 if Task.isCancelled { return }
-                                
+
                                 let refreshed = try? await DiaryAPI.getById(row.id)
                                 let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
-                                
+
                                 await MainActor.run {
                                     if let refreshed {
                                         NotificationCenter.default.post(
@@ -968,7 +972,7 @@ extension EditorOverlaySimple {
                                         )
                                         self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
                                     }
-                                    
+
                                     if let dbBlocks {
                                         let nowHasNutritionData = dbBlocks.contains { ($0.calories ?? 0) > 0 }
                                         if nowHasNutritionData {
@@ -985,6 +989,8 @@ extension EditorOverlaySimple {
                                                     "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
                                                     "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
                                                     "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                                    "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
+                                                    "metric_description": (block.metric_description as Any?) ?? NSNull(),
                                                     "confidence": (block.confidence as Any?) ?? NSNull()
                                                 ]
                                             }
@@ -993,14 +999,14 @@ extension EditorOverlaySimple {
                                                 object: nil,
                                                 userInfo: ["entryId": canonicalEntryId, "analyzedBlocks": payload]
                                             )
-                                            
+
                                             // Sync nutrition data to HealthKit
                                             if let refreshed = refreshed {
                                                 let totalCalories = refreshed.total_calories ?? 0
                                                 let totalProtein = refreshed.total_protein ?? 0.0
                                                 let totalCarbs = refreshed.total_carbs ?? 0.0
                                                 let totalFat = refreshed.total_fat ?? 0.0
-                                                
+
                                                 Task {
                                                     await syncToHealthKit(
                                                         calories: totalCalories,
@@ -1019,7 +1025,7 @@ extension EditorOverlaySimple {
                         }
                     }
                 }
-                
+
                 await MainActor.run {
                     NotificationCenter.default.post(
                         name: .diaryEntryTotalsUpdated,
@@ -1036,16 +1042,16 @@ extension EditorOverlaySimple {
             #endif
         }
     }
-    
+
     private func saveWithoutAIAnalysis(blocks: [Block]) async {
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let placeholders: Set<String> = ["write what you ate today", "write what you ate this day"]
         if trimmed.isEmpty || placeholders.contains(trimmed) { return }
-        
+
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        
+
         do {
             guard let _ = try? KeychainManager.shared.loadTokens() else { return }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
@@ -1063,9 +1069,9 @@ extension EditorOverlaySimple {
             #endif
         }
     }
-    
+
     // MARK: - HealthKit Sync
-    
+
     /// Sync nutrition data to HealthKit after AI analysis completes
     private func syncToHealthKit(
         calories: Int,
@@ -1076,19 +1082,19 @@ extension EditorOverlaySimple {
         entryId: String
     ) async {
         let healthKitManager = HealthKitManager.shared
-        
+
         // Only sync if HealthKit is available and sync is enabled
         guard healthKitManager.isAvailable && healthKitManager.isSyncEnabled else {
             print("[HealthKit] Sync skipped - not available or disabled")
             return
         }
-        
+
         // Skip if all values are zero
         guard calories > 0 || protein > 0 || carbs > 0 || fat > 0 else {
             print("[HealthKit] Sync skipped - no nutrition data")
             return
         }
-        
+
         do {
             // First, request write permissions if not already granted
             // This will show the permission sheet if needed
@@ -1097,10 +1103,10 @@ extension EditorOverlaySimple {
                 print("[HealthKit] Write permission denied")
                 return
             }
-            
+
             // Delete existing data for this date (from our app) to avoid duplicates
             try await healthKitManager.deleteNutritionData(for: date)
-            
+
             // Write new nutrition data
             try await healthKitManager.writeNutritionData(
                 calories: calories,
@@ -1110,7 +1116,7 @@ extension EditorOverlaySimple {
                 date: date,
                 entryId: entryId
             )
-            
+
             print("[HealthKit] Successfully synced: \(calories) kcal, \(protein)g protein, \(carbs)g carbs, \(fat)g fat")
         } catch {
             // Log error but don't interrupt user experience

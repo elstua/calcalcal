@@ -8,7 +8,7 @@ struct EditorOverlay: View {
     let namespace: Namespace.ID
     let onClose: () -> Void
     @State private var canonicalEntryId: UUID
-    
+
     @State private var showImagePicker: Bool = false
     @State private var pickedImage: UIImage? = nil
     @GestureState private var dragOffset: CGSize = .zero
@@ -24,7 +24,7 @@ struct EditorOverlay: View {
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
     @State private var dimmingProgress: Double = 0
-    
+
     init(entry: DiaryEntry,
          blocks: Binding<[Block]>,
          shouldBecomeFirstResponder: Binding<Bool>,
@@ -37,7 +37,7 @@ struct EditorOverlay: View {
         self.onClose = onClose
         _canonicalEntryId = State(initialValue: entry.id)
     }
-    
+
     var body: some View {
         ZStack(alignment: .top) {
             // Dimmed background with interactive opacity
@@ -45,7 +45,7 @@ struct EditorOverlay: View {
             Color.black.opacity(0.20 * progress * dimmingProgress)
                 .ignoresSafeArea()
                 .onTapGesture { dismissWithMatched() }
-            
+
             // Wrapper that responds to keyboard. Keep matched view inside for stable geometry.
             // IMPORTANT: The matched geometry must be on a view with a FIXED size that matches
             // the source card's size. Using .frame(maxHeight: .infinity) after matchedGeometry
@@ -83,7 +83,7 @@ struct EditorOverlay: View {
                     BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
                     scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
                 }
-                
+
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
@@ -151,7 +151,7 @@ struct EditorOverlay: View {
                     if let resizedPNG = compressed.resizedImage.pngData() {
                         let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil, nutrition: nil)
                         blocks.append(newBlock)
-                        
+
                         // Kick off upload + analyze pipeline
                         let capturedUUID = uuid
                         let blockId = newBlock.id
@@ -162,7 +162,7 @@ struct EditorOverlay: View {
                                 print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
                                 #endif
                                 let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
-                                
+
                                 #if DEBUG
                                 print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
                                 #endif
@@ -183,11 +183,11 @@ struct EditorOverlay: View {
                                     }
                                 }
                                 let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
-                                
+
                                 #if DEBUG
                                 print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
                                 #endif
-                                
+
                                 // Build nutrition model
                                 let nutrition = NutritionData(
                                     calories: analysis.calories,
@@ -197,9 +197,11 @@ struct EditorOverlay: View {
                                     fiber: analysis.macros?.fiber,
                                     sugar: analysis.macros?.sugar,
                                     sodium: analysis.macros?.sodium,
+                                    weight: analysis.weight,
+                                    metric_description: analysis.metric_description,
                                     confidence: analysis.confidence
                                 )
-                                
+
                                 // Apply to the inserted block (by imageRef match)
                                 await MainActor.run {
                                     if let idx = blocks.firstIndex(where: { block in
@@ -262,13 +264,13 @@ struct EditorOverlay: View {
                     print("🐛 DEBUG: Loading blocks for entry.id=\(canonicalEntryId.uuidString)")
                     let dbBlocks = try await DiaryAPI.getBlocksById(canonicalEntryId.uuidString)
                     print("🐛 DEBUG: getBlocksById returned \(dbBlocks.count) blocks: \(dbBlocks.map { $0.content ?? "nil" })")
-                    
+
                     // Check if task was cancelled before applying results
                     if Task.isCancelled {
                         print("🐛 DEBUG: Load task cancelled, not applying blocks")
                         return
                     }
-                    
+
                     await MainActor.run {
                         // Post per-block metadata for this entry using NSDictionary-friendly payload
                         let payload: [[String: Any]] = dbBlocks.map { block in
@@ -283,6 +285,8 @@ struct EditorOverlay: View {
                                     "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
                                     "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
                                     "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                    "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
+                                    "metric_description": (block.metric_description as Any?) ?? NSNull(),
                                     "confidence": (block.confidence as Any?) ?? NSNull()
                             ]
                         }
@@ -322,7 +326,7 @@ struct EditorOverlay: View {
             print("🐛 DEBUG: EditorOverlay dismissed, calling cancel() on autosaveTask for entry.id=\(canonicalEntryId.uuidString)")
             autosaveTask = nil
             print("🐛 DEBUG: EditorOverlay dismissed, cancelled load and autosave tasks for entry.id=\(canonicalEntryId.uuidString)")
-            
+
             flushSave()
             // Apply any queued remote updates only after editor closes
             if let pending = pendingRemoteBlocks {
@@ -347,11 +351,11 @@ struct EditorOverlay: View {
 struct ImagePicker: UIViewControllerRepresentable {
     @Environment(\.presentationMode) var presentationMode
     @Binding var image: UIImage?
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
@@ -359,9 +363,9 @@ struct ImagePicker: UIViewControllerRepresentable {
         picker.sourceType = .photoLibrary
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
+
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: ImagePicker
         init(_ parent: ImagePicker) { self.parent = parent }
@@ -390,7 +394,7 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
     let namespace: Namespace.ID
     let isSource: Bool
     let anchor: UnitPoint
-    
+
     init(
         enabled: Bool,
         id: ID,
@@ -404,7 +408,7 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
         self.isSource = isSource
         self.anchor = anchor
     }
-    
+
     func body(content: Content) -> some View {
         if enabled {
             content.matchedGeometryEffect(id: id, in: namespace, anchor: anchor, isSource: isSource)
@@ -480,7 +484,7 @@ extension EditorOverlay {
         EntryIdentityCoordinator.shared.canonicalize(localId: canonicalEntryId, serverId: serverUUID, blocks: blocks)
         canonicalEntryId = serverUUID
     }
-    
+
     private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
         // Only autosave on explicit paragraph commit or when editing a previously saved paragraph.
         // Routine text changes are ignored; notifications will trigger scheduleAutosave(blocks:).
@@ -523,7 +527,7 @@ extension EditorOverlay {
             print("🐛 DEBUG: Save task cancelled for entry.id=\(canonicalEntryId.uuidString)")
             return
         }
-        
+
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let placeholders: Set<String> = [
@@ -552,13 +556,13 @@ extension EditorOverlay {
                 }
                 // Save blocks cache after successful upsert
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
-                
+
                 // Check if task was cancelled before starting AI analysis
                 if Task.isCancelled {
                     print("🐛 DEBUG: Save task cancelled before AI analysis for entry.id=\(canonicalEntryId.uuidString)")
                     return
                 }
-                
+
                 // Trigger AI analysis after successful upsert (incremental when possible)
                 let payload = blocks.toAnalyzeBlocks()
                 let isContentEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -647,13 +651,13 @@ extension EditorOverlay {
                                 }
 
                                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                                
+
                                 // Check if task was cancelled before making database calls
                                 if Task.isCancelled {
                                     print("🐛 DEBUG: Autosave polling cancelled for entry \(row.id)")
                                     return
                                 }
-                                
+
                                 let refreshed = try? await DiaryAPI.getById(row.id)
                                 let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
                                 print("🐛 DEBUG: Polling call getBlocksById(\(row.id)) returned \(dbBlocks?.count ?? 0) blocks: \(dbBlocks?.map { $0.content ?? "nil" } ?? [])")
@@ -694,6 +698,8 @@ extension EditorOverlay {
                                                     "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
                                                     "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
                                                     "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                                    "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
+                                                    "metric_description": (block.metric_description as Any?) ?? NSNull(),
                                                     "confidence": (block.confidence as Any?) ?? NSNull()
                                                 ]
                                             }
@@ -735,7 +741,7 @@ extension EditorOverlay {
             print("❌ Autosave error: \(error)")
         }
     }
-    
+
     /// Save content to database without triggering AI analysis (used during overlay dismissal)
     private func saveWithoutAIAnalysis(blocks: [Block]) async {
         let content = blocks.toContentString()
@@ -750,7 +756,7 @@ extension EditorOverlay {
         }
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        
+
         do {
             guard let _ = try? KeychainManager.shared.loadTokens() else {
                 print("⚠️ Missing auth session; flush save deferred")
@@ -763,7 +769,7 @@ extension EditorOverlay {
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
                 }
-                
+
                 lastSavedAt = Date()
                 lastSavedContent = trimmed
                 print("✅ Flush save success (no AI analysis)")
@@ -777,5 +783,3 @@ extension EditorOverlay {
         }
     }
 }
-
-

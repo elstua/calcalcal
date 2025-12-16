@@ -1018,7 +1018,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                     break
                 case .failure(let error):
                     print("Error updating calorie popup: \(error)")
-                    // TODO: Show error to user
+
+                    // Show appropriate error message to user
+                    DispatchQueue.main.async {
+                        if let apiError = error as? APIError {
+                            self?.showErrorAlert(message: apiError.localizedDescription)
+                        } else {
+                            self?.showErrorAlert(message: "Failed to update nutrition information. Please try again.")
+                        }
+                    }
                 }
             },
             receiveValue: { [weak self] response in
@@ -1040,6 +1048,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             fiber: response.fiber,
             sugar: response.sugar,
             sodium: response.sodium,
+            weight: response.weight,
+            metric_description: response.metric_description,
             confidence: response.confidence,
             userModified: true
         )
@@ -1066,6 +1076,27 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 object: nil,
                 userInfo: ["entryId": entryId]
             )
+        }
+
+        // MARK: - Helper Methods
+
+        private func showErrorAlert(message: String) {
+            let alert = UIAlertController(
+                title: "Error",
+                message: message,
+                preferredStyle: .alert
+            )
+
+            alert.addAction(UIAlertAction(
+                title: "OK",
+                style: .default,
+                handler: nil
+            ))
+
+            // Find the view controller to present the alert
+            if let viewController = self.findViewController() {
+                viewController.present(alert, animated: true)
+            }
         }
     }
 

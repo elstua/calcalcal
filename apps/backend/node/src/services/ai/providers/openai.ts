@@ -2,7 +2,11 @@ import { OpenAI } from "openai";
 import { NutritionAnalysisResult, NutritionProvider } from "./types";
 import { loadPrompt } from "../prompt";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Create OpenAI client with default timeout
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 45_000),
+});
 
 export class OpenAINutritionProvider implements NutritionProvider {
   async analyze(
@@ -14,18 +18,30 @@ export class OpenAINutritionProvider implements NutritionProvider {
       promptVersion?: string;
     },
   ): Promise<NutritionAnalysisResult> {
-    const model = options?.model || process.env.AI_OPENAI_MODEL || "gpt-5-nano";
+    const model =
+      options?.model ||
+      process.env.AI_MODEL ||
+      process.env.AI_OPENAI_MODEL ||
+      "gpt-4o-mini";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
     const loaded = loadPrompt("nutrition");
     const systemPrompt = options?.prompt || loaded.text;
     const promptVersion = options?.promptVersion || loaded.version;
 
+    // Get timeout from options or environment
+    const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 45_000);
+    const timeout =
+      Number.isFinite(timeoutEnv) && timeoutEnv > 0
+        ? Math.floor(timeoutEnv)
+        : 45_000;
+
     let completion;
     try {
       completion = await client.chat.completions.create({
         model,
         temperature,
+        max_tokens: 1000, // Limit tokens to prevent long responses
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analyze this food: ${content}` },
