@@ -30,11 +30,11 @@ export class OpenAINutritionProvider implements NutritionProvider {
       "gpt-4o-mini";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
-    
+
     // Determine system prompt based on context or fallback to legacy
     let systemPrompt: string;
     let promptVersion: string;
-    
+
     if (options?.context) {
       systemPrompt = options?.prompt || PromptTemplateBuilder.buildPrompt(options.context);
       promptVersion = options?.promptVersion || "unified-v1";
@@ -67,26 +67,26 @@ export class OpenAINutritionProvider implements NutritionProvider {
       if (imageForOpenAI) {
         // Multimodal message with both image and text
         const userContent: any[] = [];
-        
+
         if (content && content.trim()) {
           userContent.push({
             type: "text",
-            text: options?.context?.scenario === 'image-only' 
+            text: options?.context?.scenario === 'image-only'
               ? "Analyze this food photo and return JSON as specified."
               : `Analyze this food: ${content}`
           });
         } else {
           userContent.push({
-            type: "text", 
+            type: "text",
             text: "Analyze this food photo and return JSON as specified."
           });
         }
-        
+
         userContent.push({
           type: "image_url",
           image_url: { url: imageForOpenAI }
         });
-        
+
         messages.push({
           role: "user",
           content: userContent
@@ -113,12 +113,12 @@ export class OpenAINutritionProvider implements NutritionProvider {
           ? errData
           : errData
             ? (() => {
-                try {
-                  return JSON.stringify(errData);
-                } catch {
-                  return "[unserializable error data]";
-                }
-              })()
+              try {
+                return JSON.stringify(errData);
+              } catch {
+                return "[unserializable error data]";
+              }
+            })()
             : null;
       console.error("[OpenAI] chat.completions.create failed", {
         model,
@@ -161,6 +161,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
       sodium: Number(parsed.sodium || 0),
       weight: parsed.weight ? Number(parsed.weight) : undefined,
       metric_description: parsed.metric_description || undefined,
+      description: parsed.description || undefined,
       confidence: Number(parsed.confidence ?? 0.5),
       rawResponseText: responseText,
       usage: {
@@ -181,7 +182,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
       const u = new URL(imageUrl);
       const isLocalHost =
         u.hostname === "localhost" || u.hostname === "127.0.0.1";
-      
+
       if (isLocalHost && u.pathname.startsWith("/uploads/")) {
         const uploadsDir = path.resolve(
           process.cwd(),
@@ -192,7 +193,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
         );
         const relative = u.pathname.replace(/^\/uploads\//, "");
         const filePath = path.resolve(uploadsDir, relative);
-        
+
         if (fs.existsSync(filePath)) {
           const buf = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase();
@@ -209,7 +210,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
           console.warn("[OpenAINutritionProvider] Local file not found for", filePath);
         }
       }
-      
+
       // Return original URL if not local or no conversion needed
       return imageUrl;
     } catch (_e) {

@@ -295,6 +295,7 @@ export class GeminiNutritionProvider implements NutritionProvider {
       sodium: Number(parsed?.sodium || 0),
       weight: parsed?.weight ? Number(parsed?.weight) : undefined,
       metric_description: parsed?.metric_description || undefined,
+      description: parsed?.description || undefined,
       confidence: Number(parsed?.confidence ?? 0.5),
       rawResponseText: responseText,
       usage: usage

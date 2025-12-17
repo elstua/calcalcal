@@ -25,6 +25,7 @@ export interface NutritionAnalysisResult {
   sodium: number;
   weight?: number;
   metric_description?: string;
+  description?: string;
   confidence: number;
   // Optional usage/metadata for caching/observability
   rawResponseText?: string;
