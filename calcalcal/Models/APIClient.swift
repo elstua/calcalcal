@@ -1,22 +1,6 @@
 import Foundation
 import Combine
 
-// Adding placeholder types for compilation
-struct Configuration {
-    static let apiURL = "http://localhost:3001"
-}
-
-struct KeychainManager {
-    static let shared = KeychainManager()
-    func loadTokens() throws -> Session? {
-        return nil
-    }
-}
-
-struct Session {
-    let accessToken: String
-}
-
 class APIClient {
     static let shared = APIClient()
 

@@ -1,6 +1,8 @@
 import { loadPrompt } from "../prompt/index";
 import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
 import { PromptTemplateBuilder } from "../prompts";
+import fs from "fs";
+import path from "path";
 
 type GoogleGenAIModule = typeof import("@google/genai");
 type GoogleGenAIConstructor = GoogleGenAIModule["GoogleGenAI"];
@@ -30,6 +32,70 @@ async function getGeminiClient(): Promise<GoogleGenAIClient> {
 export class GeminiNutritionProvider implements NutritionProvider {
   private async getClient() {
     return getGeminiClient();
+  }
+
+  /**
+   * Prepares an image for Gemini by converting local URLs to base64 inlineData
+   * Returns an object with mimeType and data for Gemini's inlineData format
+   */
+  private async prepareImageForGemini(imageUrl: string): Promise<{ mimeType: string; data: string } | undefined> {
+    try {
+      const u = new URL(imageUrl);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1";
+      
+      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
+        const uploadsDir = path.resolve(
+          process.cwd(),
+          "apps",
+          "backend",
+          "node",
+          "uploads",
+        );
+        const relative = u.pathname.replace(/^\/uploads\//, "");
+        const filePath = path.resolve(uploadsDir, relative);
+        
+        if (fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeType =
+            ext === ".png"
+              ? "image/png"
+              : ext === ".webp"
+                ? "image/webp"
+                : "image/jpeg";
+          const base64Data = buf.toString("base64");
+          console.log("[GeminiNutritionProvider] Converted local image to base64 inlineData");
+          return { mimeType, data: base64Data };
+        } else {
+          console.warn("[GeminiNutritionProvider] Local file not found for", filePath);
+        }
+      }
+      
+      // For remote URLs, fetch the image and convert to base64
+      try {
+        const response = await fetch(imageUrl);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buf = Buffer.from(arrayBuffer);
+          const contentType = response.headers.get("content-type") || "image/jpeg";
+          const mimeType = contentType.split(";")[0].trim();
+          const base64Data = buf.toString("base64");
+          console.log("[GeminiNutritionProvider] Fetched remote image and converted to base64 inlineData");
+          return { mimeType, data: base64Data };
+        } else {
+          console.warn("[GeminiNutritionProvider] Failed to fetch remote image:", response.status);
+        }
+      } catch (fetchErr) {
+        console.warn("[GeminiNutritionProvider] Error fetching remote image:", fetchErr);
+      }
+      
+      return undefined;
+    } catch (_e) {
+      // Not a valid URL
+      console.warn("[GeminiNutritionProvider] Invalid image URL:", imageUrl);
+      return undefined;
+    }
   }
 
   async analyze(
@@ -63,8 +129,6 @@ export class GeminiNutritionProvider implements NutritionProvider {
       systemPrompt = options?.prompt || loaded.text;
       promptVersion = options?.promptVersion || loaded.version;
     }
-    
-    const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
 
     const client = await this.getClient();
     const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 45000);
@@ -83,12 +147,34 @@ export class GeminiNutritionProvider implements NutritionProvider {
       | undefined;
 
     // Build content parts based on whether we have an image
-    const contentParts: any[] = [{ text: userPrompt }];
+    const contentParts: any[] = [];
     
+    // Add text content
     if (options?.imageUrl) {
-      // For Gemini, we'd need to handle image loading similar to OpenAI
-      // For now, we'll just note that image processing is supported
-      console.warn("[GeminiNutritionProvider] Image support not yet fully implemented for Gemini provider");
+      // For multimodal, use a cleaner prompt structure
+      const textPrompt = content && content.trim()
+        ? `${systemPrompt}\n\nAnalyze this food: ${content}`
+        : `${systemPrompt}\n\nAnalyze the food shown in this image and return JSON as specified.`;
+      contentParts.push({ text: textPrompt });
+    } else {
+      const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
+      contentParts.push({ text: userPrompt });
+    }
+    
+    // Handle image if provided
+    if (options?.imageUrl) {
+      const imageData = await this.prepareImageForGemini(options.imageUrl);
+      if (imageData) {
+        contentParts.push({
+          inlineData: {
+            mimeType: imageData.mimeType,
+            data: imageData.data,
+          },
+        });
+        console.log("[GeminiNutritionProvider] Added image to content parts");
+      } else {
+        console.warn("[GeminiNutritionProvider] Could not prepare image for analysis, proceeding with text only");
+      }
     }
 
     try {

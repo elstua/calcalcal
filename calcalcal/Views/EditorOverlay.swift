@@ -182,7 +182,7 @@ struct EditorOverlay: View {
                                         BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                                     }
                                 }
-                                let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+                                let analysis = try await ImageAPI.analyzeImageLegacy(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
 
                                 #if DEBUG
                                 print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
