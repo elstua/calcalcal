@@ -12,7 +12,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "ts-node src/scripts/runMigrations.ts",
-    "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts"
+    "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts",
+    "test": "jest"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",

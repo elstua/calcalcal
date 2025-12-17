@@ -4,8 +4,8 @@ import { DiaryEntryModel } from "../models/DiaryEntry";
 import { AIService } from "../services/ai/service";
 import Database from "../services/database";
 import { OpenAI } from "openai";
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 import { getNutritionProvider } from "../services/ai/providers";
 import { PromptTemplateBuilder, PromptContext } from "../services/ai/prompts";
 
@@ -91,12 +91,12 @@ function queueAnalysisJob(entryId: string, blocks: any[]) {
       if (activeAnalysisJobs.get(entryId) === jobToken) {
         activeAnalysisJobs.delete(entryId);
       }
-  }
+    }
+  });
 }
 
 // POST /api/ai/analyze-block
 router.post("/analyze-block", unifiedAnalyzeBlockHandler);
-}
 
 // Unified analyze-block handler
 async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
@@ -119,15 +119,14 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
     // Determine analysis scenario and build context
     const hasText = !!(content.text && content.text.trim());
     const hasImage = !!(content.imageUrl && content.imageUrl.trim());
-    const hasUserData = !!(content.userProvidedData && Object.keys(content.userProvidedData).length > 0);
-    
-    let scenario: PromptContext['scenario'];
+
+    let scenario: PromptContext["scenario"];
     if (hasText && hasImage) {
-      scenario = 'multimodal';
+      scenario = "multimodal";
     } else if (hasImage && !hasText) {
-      scenario = 'image-only';
+      scenario = "image-only";
     } else if (hasText && !hasImage) {
-      scenario = userModified || hasUserData ? 'manual-update' : 'text-only';
+      scenario = userModified ? "manual-update" : "text-only";
     } else {
       return res.status(400).json({
         error: "Either text or imageUrl must be provided",
@@ -148,7 +147,7 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
 
     // Get nutrition provider and perform analysis
     const provider = getNutritionProvider();
-    const model = 
+    const model =
       process.env.AI_MODEL ||
       (process.env.AI_PROVIDER === "gemini"
         ? process.env.AI_GEMINI_MODEL
@@ -189,14 +188,19 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
         ]);
       } catch (error: any) {
         if (error.message === "Request timeout") {
-          console.error("[analyze-block] Request timed out after", timeout, "ms");
+          console.error(
+            "[analyze-block] Request timed out after",
+            timeout,
+            "ms",
+          );
           await Database.query(
             `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
             ["failed", "Request timeout", entryId],
           );
           return res.status(408).json({
             error: "Request timeout",
-            message: "The nutrition analysis took too long to complete. Please try again.",
+            message:
+              "The nutrition analysis took too long to complete. Please try again.",
           });
         }
         throw error;
@@ -205,12 +209,12 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
       console.error("[analyze-block] Provider call failed", {
         message: error?.message,
       });
-      
+
       await Database.query(
         `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
         ["failed", error?.message || "Unknown error", entryId],
       );
-      
+
       return res.status(500).json({
         error: "AI analysis failed",
         message: error?.message || "Unknown error",
@@ -218,18 +222,6 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
     }
 
     console.timeEnd("[analyze-block] ai_call");
-
-    if (typeof analysis !== "object" || analysis === null) {
-      console.error("[analyze-block] Invalid analysis result:", analysis);
-      await Database.query(
-        `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
-        ["failed", "Invalid analysis result from AI provider", entryId],
-      );
-      return res.status(500).json({
-        error: "AI analysis failed",
-        message: "Invalid analysis result from AI provider",
-      });
-    }
 
     // Update the block in the entry with new analysis data
     const updatedBlocks = (entry.blocks || []).map((block: any) => {
@@ -289,10 +281,15 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
 
     res.json(result);
   } catch (error: any) {
-    console.error("/analyze-block error", error?.response?.data || error?.message || error);
-    res.status(500).json({ error: "Internal server error", message: error?.message });
+    console.error(
+      "/analyze-block error",
+      error?.response?.data || error?.message || error,
+    );
+    res
+      .status(500)
+      .json({ error: "Internal server error", message: error?.message });
   }
-});
+}
 
 // Legacy endpoint - redirects to new unified endpoint
 // POST /api/ai/analyze
