@@ -1,4 +1,4 @@
-import { loadPrompt } from "../prompt";
+import { loadPrompt } from "../prompt/index";
 import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
 import { PromptTemplateBuilder } from "../prompts";
 

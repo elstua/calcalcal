@@ -1,6 +1,6 @@
 import { OpenAI } from "openai";
 import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
-import { loadPrompt } from "../prompt";
+import { loadPrompt } from "../prompt/index";
 import { PromptTemplateBuilder } from "../prompts";
 import fs from "fs";
 import path from "path";
