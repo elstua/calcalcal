@@ -40,11 +40,8 @@ export class GeminiNutritionProvider implements NutritionProvider {
    */
   private async prepareImageForGemini(imageUrl: string): Promise<{ mimeType: string; data: string } | undefined> {
     try {
-      const u = new URL(imageUrl);
-      const isLocalHost =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1";
-      
-      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
+      // Handle relative paths like /uploads/... directly (common from iOS app)
+      if (imageUrl.startsWith("/uploads/")) {
         const uploadsDir = path.resolve(
           process.cwd(),
           "apps",
@@ -52,9 +49,11 @@ export class GeminiNutritionProvider implements NutritionProvider {
           "node",
           "uploads",
         );
-        const relative = u.pathname.replace(/^\/uploads\//, "");
+        const relative = imageUrl.replace(/^\/uploads\//, "");
         const filePath = path.resolve(uploadsDir, relative);
-        
+
+        console.log("[GeminiNutritionProvider] Attempting to read local file:", filePath);
+
         if (fs.existsSync(filePath)) {
           const buf = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase();
@@ -65,15 +64,52 @@ export class GeminiNutritionProvider implements NutritionProvider {
                 ? "image/webp"
                 : "image/jpeg";
           const base64Data = buf.toString("base64");
-          console.log("[GeminiNutritionProvider] Converted local image to base64 inlineData");
+          console.log("[GeminiNutritionProvider] Converted local image to base64 inlineData, size:", buf.length, "bytes");
+          return { mimeType, data: base64Data };
+        } else {
+          console.warn("[GeminiNutritionProvider] Local file not found for", filePath);
+        }
+        return undefined;
+      }
+
+      // Try parsing as URL for localhost or remote URLs
+      const u = new URL(imageUrl);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1";
+
+      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
+        const uploadsDir = path.resolve(
+          process.cwd(),
+          "apps",
+          "backend",
+          "node",
+          "uploads",
+        );
+        const relative = u.pathname.replace(/^\/uploads\//, "");
+        const filePath = path.resolve(uploadsDir, relative);
+
+        console.log("[GeminiNutritionProvider] Attempting to read local file from URL:", filePath);
+
+        if (fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeType =
+            ext === ".png"
+              ? "image/png"
+              : ext === ".webp"
+                ? "image/webp"
+                : "image/jpeg";
+          const base64Data = buf.toString("base64");
+          console.log("[GeminiNutritionProvider] Converted local image to base64 inlineData, size:", buf.length, "bytes");
           return { mimeType, data: base64Data };
         } else {
           console.warn("[GeminiNutritionProvider] Local file not found for", filePath);
         }
       }
-      
+
       // For remote URLs, fetch the image and convert to base64
       try {
+        console.log("[GeminiNutritionProvider] Fetching remote image:", imageUrl);
         const response = await fetch(imageUrl);
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
@@ -81,7 +117,7 @@ export class GeminiNutritionProvider implements NutritionProvider {
           const contentType = response.headers.get("content-type") || "image/jpeg";
           const mimeType = contentType.split(";")[0].trim();
           const base64Data = buf.toString("base64");
-          console.log("[GeminiNutritionProvider] Fetched remote image and converted to base64 inlineData");
+          console.log("[GeminiNutritionProvider] Fetched remote image and converted to base64 inlineData, size:", buf.length, "bytes");
           return { mimeType, data: base64Data };
         } else {
           console.warn("[GeminiNutritionProvider] Failed to fetch remote image:", response.status);
@@ -89,11 +125,11 @@ export class GeminiNutritionProvider implements NutritionProvider {
       } catch (fetchErr) {
         console.warn("[GeminiNutritionProvider] Error fetching remote image:", fetchErr);
       }
-      
+
       return undefined;
     } catch (_e) {
-      // Not a valid URL
-      console.warn("[GeminiNutritionProvider] Invalid image URL:", imageUrl);
+      // Not a valid URL and not a relative path we can handle
+      console.warn("[GeminiNutritionProvider] Could not process image URL:", imageUrl);
       return undefined;
     }
   }
@@ -116,11 +152,11 @@ export class GeminiNutritionProvider implements NutritionProvider {
       "gemini-2.5-flash";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
-    
+
     // Determine system prompt based on context or fallback to legacy
     let systemPrompt: string;
     let promptVersion: string;
-    
+
     if (options?.context) {
       systemPrompt = options?.prompt || PromptTemplateBuilder.buildPrompt(options.context);
       promptVersion = options?.promptVersion || "unified-v1";
@@ -140,15 +176,15 @@ export class GeminiNutritionProvider implements NutritionProvider {
     let responseText: string | undefined;
     let usage:
       | {
-          promptTokenCount?: number | null;
-          candidatesTokenCount?: number | null;
-          totalTokenCount?: number | null;
-        }
+        promptTokenCount?: number | null;
+        candidatesTokenCount?: number | null;
+        totalTokenCount?: number | null;
+      }
       | undefined;
 
     // Build content parts based on whether we have an image
     const contentParts: any[] = [];
-    
+
     // Add text content
     if (options?.imageUrl) {
       // For multimodal, use a cleaner prompt structure
@@ -160,7 +196,7 @@ export class GeminiNutritionProvider implements NutritionProvider {
       const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
       contentParts.push({ text: userPrompt });
     }
-    
+
     // Handle image if provided
     if (options?.imageUrl) {
       const imageData = await this.prepareImageForGemini(options.imageUrl);
@@ -191,10 +227,10 @@ export class GeminiNutritionProvider implements NutritionProvider {
           responseMimeType: "application/json",
           ...(requestTimeout
             ? {
-                httpOptions: {
-                  timeout: requestTimeout,
-                },
-              }
+              httpOptions: {
+                timeout: requestTimeout,
+              },
+            }
             : {}),
         },
       });
@@ -209,12 +245,12 @@ export class GeminiNutritionProvider implements NutritionProvider {
           ? errData
           : errData
             ? (() => {
-                try {
-                  return JSON.stringify(errData);
-                } catch {
-                  return "[unserializable error data]";
-                }
-              })()
+              try {
+                return JSON.stringify(errData);
+              } catch {
+                return "[unserializable error data]";
+              }
+            })()
             : null;
       console.error("[Gemini] models.generateContent failed", {
         model,
@@ -263,10 +299,10 @@ export class GeminiNutritionProvider implements NutritionProvider {
       rawResponseText: responseText,
       usage: usage
         ? {
-            promptTokens: usage.promptTokenCount ?? undefined,
-            completionTokens: usage.candidatesTokenCount ?? undefined,
-            totalTokens: usage.totalTokenCount ?? undefined,
-          }
+          promptTokens: usage.promptTokenCount ?? undefined,
+          completionTokens: usage.candidatesTokenCount ?? undefined,
+          totalTokens: usage.totalTokenCount ?? undefined,
+        }
         : undefined,
       providerModel: model,
       temperature,

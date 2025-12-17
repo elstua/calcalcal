@@ -278,8 +278,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     /// Positions `ImageComponent` overlays and sets up exclusion paths so text flows around images.
     private func updateImageOverlays() {
-        // Collect current image blocks from the document.
-        let imageBlocks = blockDocumentController.document.blocks.filter { $0.kind.isImage }
+        // Get current text storage length for bounds validation
+        guard let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage else {
+            return
+        }
+        let storageLength = textStorage.length
+        
+        // Collect current image blocks from the document, filtering out stale blocks.
+        // During deletion, block metadata can temporarily point to invalid ranges.
+        let imageBlocks = blockDocumentController.document.blocks.filter { block in
+            block.kind.isImage && block.range.location < storageLength && NSMaxRange(block.range) <= storageLength
+        }
 
         // Remove overlays for blocks that no longer exist.
         let currentIDs = Set(imageBlocks.map { $0.id })
@@ -449,6 +458,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private func rectForBlock(_ block: BlockMetadata) -> CGRect? {
         guard let textLayoutManager = textLayoutManager else { return nil }
         guard let contentManager = textLayoutManager.textContentManager else { return nil }
+        
+        // Validate block range before accessing text content.
+        // Block metadata can become stale during deletion, causing crashes
+        // if we pass invalid offsets to contentManager.location().
+        // We need location + 1 to be valid, so check for location + 1 <= length.
+        guard let textStorage = (contentManager as? NSTextContentStorage)?.textStorage,
+              block.range.location + 1 <= textStorage.length else {
+            return nil
+        }
 
         let docRange = contentManager.documentRange
         guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location) else {
@@ -660,8 +678,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             let targetSpacingBefore: CGFloat
 
             if block.kind.isImage {
-                // For image blocks, use cached spacing or calculate if content changed
-                targetSpacing = cachedSpacing(for: block)
+                // For image blocks, use cached spacing or calculate if content changed.
+                // Skip spacing calculation if block range extends beyond storage length
+                // to avoid crashes from stale metadata during rapid edits.
+                if NSMaxRange(block.range) <= storage.length {
+                    targetSpacing = cachedSpacing(for: block)
+                } else {
+                    targetSpacing = Self.imageSpacingLarge // Safe fallback
+                }
                 targetSpacingBefore = Self.imageSpacingBefore
             } else {
                 targetSpacing = Self.paragraphSpacing
@@ -739,11 +763,20 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let availableLength = textStorage.length - block.range.location
         guard availableLength > 0 else { return 1 }
         let safeLength = max(1, min(block.range.length, availableLength))
+        
+        // Additional validation: ensure the computed end position won't exceed document bounds.
+        // This prevents crashes from stale block metadata during rapid edits.
+        let computedEnd = block.range.location + safeLength
+        guard computedEnd <= textStorage.length else { return 1 }
 
         let docRange = contentManager.documentRange
-        guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location),
-              let endLocation = contentManager.location(startLocation, offsetBy: safeLength),
-              let textRange = NSTextRange(location: startLocation, end: endLocation) else {
+        guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location) else {
+            return 1
+        }
+        guard let endLocation = contentManager.location(startLocation, offsetBy: safeLength) else {
+            return 1
+        }
+        guard let textRange = NSTextRange(location: startLocation, end: endLocation) else {
             return 1
         }
 
