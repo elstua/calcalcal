@@ -792,6 +792,22 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     }
 
     // MARK: - Metadata Handling
+    private struct AnalyzedBlock {
+        let id: String
+        let position: Int
+        let content: String
+        let calories: Int?
+        let protein: Double?
+        let fat: Double?
+        let carbs: Double?
+        let fiber: Double?
+        let sugar: Double?
+        let sodium: Double?
+        let weight: Double?
+        let confidence: Double?
+        let aiAnalysis: String?
+    }
+
     private func parseAnalyzedBlocks(from payload: Any?) -> [AnalyzedBlock] {
         if let blocks = payload as? [AnalyzedBlock] {
             return blocks
@@ -825,6 +841,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 fiber: parseDouble(dict["fiber"]),
                 sugar: parseDouble(dict["sugar"]),
                 sodium: parseDouble(dict["sodium"]),
+                weight: parseDouble(dict["weight"]),
                 confidence: parseDouble(dict["confidence"]),
                 aiAnalysis: nil
             )
@@ -956,6 +973,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             || (analyzed.fiber ?? 0) > 0
             || (analyzed.sugar ?? 0) > 0
             || (analyzed.sodium ?? 0) > 0
+            || (analyzed.weight ?? 0) > 0
         guard hasMeaningfulData else { return nil }
         return NutritionData(
             calories: analyzed.calories,
@@ -965,6 +983,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             fiber: analyzed.fiber,
             sugar: analyzed.sugar,
             sodium: analyzed.sodium,
+            weight: analyzed.weight,
             confidence: analyzed.confidence
         )
     }

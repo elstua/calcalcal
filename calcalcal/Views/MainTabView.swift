@@ -805,36 +805,59 @@ struct EditorOverlaySimple: View {
                         }
                     }
 
-                    let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: nil, blockId: blockId.uuidString)
+                    var blockText = ""
+                    if let blockForAnalysis = blocks.first(where: { $0.id == blockId }) {
+                        if case let .imageText(_, _, text) = blockForAnalysis.type {
+                            blockText = text
+                        } else if case let .text(text) = blockForAnalysis.type {
+                            blockText = text
+                        }
+                    }
+
+                    let contentPayload: [String: Any] = ["imageUrl": upload.publicUrl, "text": blockText]
+
+                    let analysis = try await DiaryAPI.analyzeBlock(
+                        entryId: canonicalEntryId.uuidString,
+                        blockId: blockId.uuidString,
+                        content: contentPayload
+                    )
+
                     let nutrition = NutritionData(
                         calories: analysis.calories,
-                        protein: analysis.macros?.protein,
-                        fat: analysis.macros?.fat,
-                        carbs: analysis.macros?.carbs,
-                        fiber: analysis.macros?.fiber,
-                        sugar: analysis.macros?.sugar,
-                        sodium: analysis.macros?.sodium,
-                        weight: analysis.macros?.weight,
-                        metric_description: analysis.macros?.metric_description,
+                        protein: analysis.protein,
+                        fat: analysis.fat,
+                        carbs: analysis.carbs,
+                        fiber: analysis.fiber,
+                        sugar: analysis.sugar,
+                        sodium: analysis.sodium,
+                        weight: analysis.weight,
+                        metric_description: analysis.metric_description,
                         confidence: analysis.confidence
                     )
 
                     await MainActor.run {
-                        if let idx = blocks.firstIndex(where: { block in
-                            if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
-                            return false
-                        }) {
+                        // Update block with analysis results
+                        if let idx = blocks.firstIndex(where: { $0.id == blockId }) {
                             var updated = blocks[idx]
                             if case let .imageText(data, ref, _) = updated.type {
-                                updated.type = .imageText(data, ref, analysis.description)
+                                updated.type = .imageText(data, ref, analysis.description ?? blockText)
                             }
-                            updated.imageUrl = updated.imageUrl ?? upload.publicUrl
                             updated.nutrition = nutrition
                             if let cals = analysis.calories, cals > 0 {
                                 updated.calorieData = String(cals)
                             }
                             blocks[idx] = updated
                             BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                        }
+
+                        // Update total calories for the entry
+                        if let totals = analysis.totals {
+                            self.liveTotalCalories = totals.total_calories
+                            NotificationCenter.default.post(
+                                name: .diaryEntryTotalsUpdated,
+                                object: nil,
+                                userInfo: ["entryId": canonicalEntryId, "totalCalories": totals.total_calories as Any]
+                            )
                         }
                     }
                 } catch {

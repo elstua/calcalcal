@@ -7,6 +7,7 @@ import { OpenAI } from "openai";
 import fs from "fs";
 import path from "path";
 import { getNutritionProvider } from "../services/ai/providers";
+import { PromptTemplateBuilder, PromptContext } from "../services/ai/prompts";
 
 const router = Router();
 
@@ -94,6 +95,203 @@ function queueAnalysisJob(entryId: string, blocks: any[]) {
   });
 }
 
+// POST /api/ai/analyze-block
+router.post("/analyze-block", async (req: AuthRequest, res) => {
+  try {
+    const { blockId, entryId, content, userModified = false } = req.body;
+    const userId = req.userId!;
+
+    if (!blockId || !entryId || !content) {
+      return res.status(400).json({
+        error: "blockId, entryId, and content are required",
+      });
+    }
+
+    // Verify entry ownership
+    const entry = await DiaryEntryModel.getById(entryId);
+    if (!entry || entry.user_id !== userId) {
+      return res.status(404).json({ error: "Entry not found" });
+    }
+
+    // Determine analysis scenario and build context
+    const hasText = !!(content.text && content.text.trim());
+    const hasImage = !!(content.imageUrl && content.imageUrl.trim());
+    const hasUserData = !!(content.userProvidedData && Object.keys(content.userProvidedData).length > 0);
+    
+    let scenario: PromptContext['scenario'];
+    if (hasText && hasImage) {
+      scenario = 'multimodal';
+    } else if (hasImage && !hasText) {
+      scenario = 'image-only';
+    } else if (hasText && !hasImage) {
+      scenario = userModified || hasUserData ? 'manual-update' : 'text-only';
+    } else {
+      return res.status(400).json({
+        error: "Either text or imageUrl must be provided",
+      });
+    }
+
+    const promptContext: PromptContext = {
+      text: content.text || undefined,
+      imageUrl: content.imageUrl || undefined,
+      userModified,
+      userProvidedData: content.userProvidedData || undefined,
+      scenario,
+    };
+
+    console.log(
+      `[analyze-block] user=${userId} entry=${entryId} block=${blockId} scenario=${scenario} hasText=${hasText} hasImage=${hasImage} userModified=${userModified}`,
+    );
+
+    // Get nutrition provider and perform analysis
+    const provider = getNutritionProvider();
+    const model = 
+      process.env.AI_MODEL ||
+      (process.env.AI_PROVIDER === "gemini"
+        ? process.env.AI_GEMINI_MODEL
+        : process.env.AI_OPENAI_MODEL) ||
+      "gpt-4o-mini";
+    const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+
+    // Set analysis status in database
+    await Database.query(
+      `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = NULL WHERE id = $2`,
+      ["processing", entryId],
+    );
+
+    // Perform the analysis
+    console.time("[analyze-block] ai_call");
+    let analysis: any;
+
+    try {
+      const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 60_000);
+      const timeout =
+        Number.isFinite(timeoutEnv) && timeoutEnv > 0
+          ? Math.floor(timeoutEnv)
+          : 60_000;
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Request timeout")), timeout);
+      });
+
+      try {
+        analysis = await Promise.race([
+          provider.analyze(content.text || "", {
+            temperature,
+            model,
+            imageUrl: content.imageUrl,
+            context: promptContext,
+          }),
+          timeoutPromise,
+        ]);
+      } catch (error: any) {
+        if (error.message === "Request timeout") {
+          console.error("[analyze-block] Request timed out after", timeout, "ms");
+          await Database.query(
+            `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
+            ["failed", "Request timeout", entryId],
+          );
+          return res.status(408).json({
+            error: "Request timeout",
+            message: "The nutrition analysis took too long to complete. Please try again.",
+          });
+        }
+        throw error;
+      }
+    } catch (error: any) {
+      console.error("[analyze-block] Provider call failed", {
+        message: error?.message,
+      });
+      
+      await Database.query(
+        `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
+        ["failed", error?.message || "Unknown error", entryId],
+      );
+      
+      return res.status(500).json({
+        error: "AI analysis failed",
+        message: error?.message || "Unknown error",
+      });
+    }
+
+    console.timeEnd("[analyze-block] ai_call");
+
+    if (typeof analysis !== "object" || analysis === null) {
+      console.error("[analyze-block] Invalid analysis result:", analysis);
+      await Database.query(
+        `UPDATE diary_entries SET ai_analysis_status = $1, ai_analysis_error = $2 WHERE id = $3`,
+        ["failed", "Invalid analysis result from AI provider", entryId],
+      );
+      return res.status(500).json({
+        error: "AI analysis failed",
+        message: "Invalid analysis result from AI provider",
+      });
+    }
+
+    // Update the block in the entry with new analysis data
+    const updatedBlocks = (entry.blocks || []).map((block: any) => {
+      if (block.id === blockId) {
+        return {
+          ...block,
+          ...analysis,
+          userModified: userModified || false,
+          lastAnalyzedAt: new Date().toISOString(),
+        };
+      }
+      return block;
+    });
+
+    // Calculate new totals
+    const totals = AIService.calculateTotals(updatedBlocks);
+
+    // Update the database
+    await Database.query(
+      `UPDATE diary_entries SET
+         blocks = $1,
+         total_calories = $2,
+         total_protein = $3,
+         total_fat = $4,
+         total_carbs = $5,
+         total_fiber = $6,
+         total_sugar = $7,
+         total_sodium = $8,
+         ai_analysis_status = $9,
+         ai_analysis_error = NULL
+       WHERE id = $10`,
+      [
+        JSON.stringify(updatedBlocks),
+        totals.total_calories,
+        totals.total_protein,
+        totals.total_fat,
+        totals.total_carbs,
+        totals.total_fiber,
+        totals.total_sugar,
+        totals.total_sodium,
+        "completed",
+        entryId,
+      ],
+    );
+
+    console.log(
+      `[analyze-block] success calories=${analysis.calories} protein=${analysis.protein} fat=${analysis.fat} carbs=${analysis.carbs} weight=${analysis.weight || "N/A"} metric_description=${analysis.metric_description || "N/A"}`,
+    );
+
+    // Return the updated block data
+    const result = {
+      blockId,
+      entryId,
+      ...analysis,
+      totals,
+    };
+
+    res.json(result);
+  } catch (error: any) {
+    console.error("/analyze-block error", error?.response?.data || error?.message || error);
+    res.status(500).json({ error: "Internal server error", message: error?.message });
+  }
+});
+
+// Legacy endpoint - redirects to new unified endpoint
 // POST /api/ai/analyze
 router.post("/analyze", async (req: AuthRequest, res) => {
   try {
@@ -126,190 +324,32 @@ router.post("/analyze", async (req: AuthRequest, res) => {
   }
 });
 
+// Legacy endpoint - redirects to new unified endpoint
 // POST /api/ai/analyze-image
 router.post("/analyze-image", async (req: AuthRequest, res) => {
   try {
     const { imageUrl, entryId, blockId } = req.body || {};
     const userId = req.userId!;
 
-    if (!imageUrl || typeof imageUrl !== "string") {
-      return res.status(400).json({ error: "imageUrl is required" });
+    if (!imageUrl || !entryId || !blockId) {
+      return res.status(400).json({
+        error: "imageUrl, entryId, and blockId are required",
+      });
     }
 
-    // Debug: Log full imageUrl to detect trailing characters
-    console.log(`[analyze-image] FULL imageUrl received: "${imageUrl}"`);
-    console.log(
-      `[analyze-image] imageUrl length: ${imageUrl.length}, last 10 chars: "${imageUrl.slice(-10)}"`,
-    );
-
-    // Check for and fix trailing dot after file extension (defensive fix for URL corruption)
-    let cleanedImageUrl = imageUrl;
-    const trailingDotPattern = /\.(jpg|jpeg|png|webp|gif)\.$/i;
-    if (trailingDotPattern.test(cleanedImageUrl)) {
-      console.warn(
-        "[analyze-image] ⚠️ WARNING: imageUrl ends with trailing dot after extension, stripping it",
-      );
-      cleanedImageUrl = cleanedImageUrl.slice(0, -1);
-      console.log(`[analyze-image] Cleaned imageUrl: "${cleanedImageUrl}"`);
-    } else if (imageUrl.endsWith(".")) {
-      console.warn(
-        "[analyze-image] ⚠️ WARNING: imageUrl ends with a trailing dot (but not after known extension)",
-      );
-    }
-
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("[analyze-image] Missing OPENAI_API_KEY");
-      return res.status(500).json({ error: "AI provider not configured" });
-    }
-
-    // Optional: verify entry ownership if provided
-    if (entryId) {
-      const entry = await DiaryEntryModel.getById(entryId);
-      if (!entry || entry.user_id !== userId) {
-        return res.status(404).json({ error: "Entry not found" });
-      }
-    }
-
-    // Analyze with OpenAI multimodal (one pass: description + macros)
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: 45_000,
-    });
-    const model = process.env.AI_OPENAI_MODEL || "gpt-4o-mini";
-    const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
-
-    console.log(
-      `[analyze-image] user=${userId} model=${model} url=${cleanedImageUrl.slice(0, 120)}${
-        cleanedImageUrl.length > 120 ? "…" : ""
-      }`,
-    );
-
-    const systemPrompt = `
-You are a nutrition expert. Look at the image and return ONLY a valid JSON object:
-{
-  "description": "<short food description>",
-  "calories": <number>,
-  "protein": <grams>,
-  "fat": <grams>,
-  "carbs": <grams>,
-  "fiber": <grams>,
-  "sugar": <grams>,
-  "sodium": <mg>,
-  "weight": <number in grams, optional but recommended>,
-  "metric_description": <string with weight unit, e.g., "100 g", "1 cup", "1 serving">,
-  "confidence": <0..1>
-}
-If uncertain, provide your best estimate. Always return valid JSON.
-`.trim();
-
-    console.time("[analyze-image] openai_call");
-    // If the image is hosted on localhost, OpenAI cannot fetch it.
-    // Inline it as a data URL by reading from the local uploads directory.
-    let imageForOpenAI: string = cleanedImageUrl;
-    try {
-      const u = new URL(cleanedImageUrl);
-      const isLocalHost =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1";
-      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
-        const uploadsDir = path.resolve(
-          process.cwd(),
-          "apps",
-          "backend",
-          "node",
-          "uploads",
-        );
-        const relative = u.pathname.replace(/^\/uploads\//, "");
-        const filePath = path.resolve(uploadsDir, relative);
-        if (fs.existsSync(filePath)) {
-          const buf = fs.readFileSync(filePath);
-          const ext = path.extname(filePath).toLowerCase();
-          const mime =
-            ext === ".png"
-              ? "image/png"
-              : ext === ".webp"
-                ? "image/webp"
-                : "image/jpeg";
-          const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
-          imageForOpenAI = dataUrl;
-          console.log("[analyze-image] Inlined local image as data URL");
-        } else {
-          console.warn("[analyze-image] Local file not found for", filePath);
-        }
-      }
-    } catch (_e) {
-      // Not a valid URL; ignore and use as-is
-    }
-
-    const completion = await client.chat.completions.create({
-      model,
-      temperature,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Analyze this food photo and return JSON as specified.",
-            },
-            { type: "image_url", image_url: { url: imageForOpenAI } },
-          ] as any,
-        },
-      ],
-    });
-    console.timeEnd("[analyze-image] openai_call");
-
-    const responseText = completion.choices[0]?.message?.content?.trim();
-    if (!responseText) {
-      console.error("[analyze-image] Empty response from AI provider");
-      return res.status(500).json({ error: "Empty response from AI provider" });
-    }
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      // If not pure JSON, try to extract JSON block (best-effort)
-      const match = responseText.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch {
-          parsed = undefined;
-        }
-      }
-    }
-    if (!parsed || typeof parsed !== "object") {
-      console.error(
-        "[analyze-image] Failed to parse AI response:",
-        responseText,
-      );
-      return res
-        .status(500)
-        .json({ error: "Failed to parse AI response", message: responseText });
-    }
-
-    // Normalize and coerce to numbers
-    const result = {
-      description: String(parsed.description ?? "").slice(0, 200),
-      calories: Number(parsed.calories ?? 0),
-      protein: Number(parsed.protein ?? 0),
-      fat: Number(parsed.fat ?? 0),
-      carbs: Number(parsed.carbs ?? 0),
-      fiber: Number(parsed.fiber ?? 0),
-      sugar: Number(parsed.sugar ?? 0),
-      sodium: Number(parsed.sodium ?? 0),
-      weight: parsed.weight ? Number(parsed.weight) : undefined,
-      metric_description: parsed.metric_description || undefined,
-      confidence: Number(parsed.confidence ?? 0.5),
+    // Create block content structure for unified endpoint
+    const content = {
+      text: "", // No text provided for legacy image-only analysis
+      imageUrl: imageUrl,
     };
 
-    console.log(
-      `[analyze-image] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs} weight=${result.weight || "N/A"} metric_description=${result.metric_description || "N/A"}`,
-    );
-    // v1: client merges into the block and totals
-    // (optional future: server-side merge into db when entryId/blockId are provided)
-    res.json(result);
+    // Call the new unified endpoint logic
+    req.body.blockId = blockId;
+    req.body.content = content;
+    req.body.userModified = false;
+
+    // Forward to the unified handler
+    return router.handle(req, res);
   } catch (error: any) {
     console.error(
       "/analyze-image error",
@@ -321,7 +361,7 @@ If uncertain, provide your best estimate. Always return valid JSON.
   }
 });
 
-// POST /api/ai/calories-popup-update
+// POST /api/ai/calories-popup-update - now integrates with unified analysis
 router.post("/calories-popup-update", async (req: AuthRequest, res) => {
   try {
     const { text, calories, weight, entryId, blockId } = req.body;
@@ -349,195 +389,24 @@ router.post("/calories-popup-update", async (req: AuthRequest, res) => {
       `[calories-popup-update] user=${userId} entry=${entryId} block=${blockId} calories=${calories} weight=${weight}`,
     );
 
-    // Import AIService to use its analyzeSingleBlock method
-    const { AIService } = await import("../services/ai/service");
+    // Create block content structure for unified endpoint
+    const userProvidedData: any = {};
+    if (calories !== undefined) userProvidedData.calories = calories;
+    if (weight !== undefined) userProvidedData.weight = weight;
 
-    // Create a specialized block-like object with custom analysis method
-    const blockData = {
-      id: blockId,
-      content: text,
-      userModified: true, // Mark as user-modified to prevent re-analysis
+    const content = {
+      text: text,
+      imageUrl: undefined, // No image in popup update
+      userProvidedData: userProvidedData,
     };
 
-    // Create a custom analyze method that will handle the popup update logic
-    const customAnalyze = async (content: string) => {
-      const { getNutritionProvider } = await import("../services/ai/providers");
-      const provider = getNutritionProvider();
-      const model =
-        process.env.AI_MODEL ||
-        (process.env.AI_PROVIDER === "gemini"
-          ? process.env.AI_GEMINI_MODEL
-          : process.env.AI_OPENAI_MODEL) ||
-        "gpt-4o-mini";
-      const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
+    // Call the new unified endpoint logic
+    req.body.blockId = blockId;
+    req.body.content = content;
+    req.body.userModified = true;
 
-      // Build custom prompt based on what user changed
-      let prompt = "";
-      if (weight && !calories) {
-        // User changed weight, recalculate calories
-        prompt = `
-You are a nutrition expert. The user has updated the weight of a food item.
-
-Original food description: "${text}"
-New weight: ${weight}g
-
-Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
-{
-  "calories": <number>,
-  "protein": <grams>,
-  "fat": <grams>,
-  "carbs": <grams>,
-  "fiber": <grams>,
-  "sugar": <grams>,
-  "sodium": <mg>,
-  "weight": <number in grams>,
-  "metric_description": <string with weight unit, e.g., "${weight} g">,
-  "confidence": <0..1>
-}
-
-Base the calculation on the new weight of ${weight}g. If uncertain, provide your best estimate. Always return valid JSON.
-`.trim();
-      } else if (calories && weight) {
-        // User changed both calories and weight
-        prompt = `
-You are a nutrition expert. The user has updated both the calories and weight of a food item.
-
-Original food description: "${text}"
-New calories: ${calories}kcal
-New weight: ${weight}g
-
-Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
-{
-  "calories": <number>,
-  "protein": <grams>,
-  "fat": <grams>,
-  "carbs": <grams>,
-  "fiber": <grams>,
-  "sugar": <grams>,
-  "sodium": <mg>,
-  "weight": <number in grams>,
-  "metric_description": <string with weight unit, e.g., "${weight} g">,
-  "confidence": <0..1>
-}
-
-Use the provided values of ${calories} calories and ${weight}g weight. Adjust other macros proportionally. Always return valid JSON.
-`.trim();
-      } else if (calories && !weight) {
-        // User changed calories only, adjust macros proportionally
-        prompt = `
-You are a nutrition expert. The user has updated the calories of a food item while keeping the same weight.
-
-Original food description: "${text}"
-New calories: ${calories}kcal
-
-Please analyze this food and return ONLY a valid JSON object with updated nutritional information:
-{
-  "calories": <number>,
-  "protein": <grams>,
-  "fat": <grams>,
-  "carbs": <grams>,
-  "fiber": <grams>,
-  "sugar": <grams>,
-  "sodium": <mg>,
-  "weight": <number in grams, keep original if possible>,
-  "metric_description": <string with weight unit, e.g., "100 g">,
-  "confidence": <0..1>
-}
-
-Use exactly ${calories} calories and adjust other macros proportionally to match this calorie count. Always return valid JSON.
-`.trim();
-      } else {
-        throw new Error("Invalid combination of calories and weight");
-      }
-
-      // Use the provider with our custom prompt
-      return provider.analyze(content, {
-        temperature,
-        model,
-        prompt,
-      });
-    };
-
-    console.time("[calories-popup-update] ai_call");
-
-    let analysis: unknown;
-
-    try {
-      // Add timeout to the request
-      const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 60_000);
-      const timeout =
-        Number.isFinite(timeoutEnv) && timeoutEnv > 0
-          ? Math.floor(timeoutEnv)
-          : 60_000;
-
-      // Create a timeout promise to ensure the request doesn't hang indefinitely
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Request timeout")), timeout);
-      });
-
-      try {
-        analysis = await Promise.race([customAnalyze(text), timeoutPromise]);
-      } catch (error: any) {
-        if (error.message === "Request timeout") {
-          console.error(
-            "[calories-popup-update] Request timed out after",
-            timeout,
-            "ms",
-          );
-          return res.status(408).json({
-            error: "Request timeout",
-            message:
-              "The nutrition analysis took too long to complete. Please try again.",
-          });
-        }
-        throw error;
-      }
-    } catch (error: any) {
-      console.error("[calories-popup-update] Provider call failed", {
-        message: error?.message,
-      });
-
-      return res.status(500).json({
-        error: "AI analysis failed",
-        message: error?.message || "Unknown error",
-      });
-    }
-
-    console.timeEnd("[calories-popup-update] ai_call");
-
-    if (typeof analysis !== "object" || analysis === null) {
-      console.error(
-        "[calories-popup-update] Invalid analysis result:",
-        analysis,
-      );
-      return res.status(500).json({
-        error: "AI analysis failed",
-        message: "Invalid analysis result from AI provider",
-      });
-    }
-
-    const typedAnalysis = analysis as Record<string, any>;
-
-    // Create result object with all nutrition data
-    const result = {
-      blockId: blockId,
-      calories: Number(typedAnalysis.calories ?? 0),
-      protein: Number(typedAnalysis.protein ?? 0),
-      fat: Number(typedAnalysis.fat ?? 0),
-      carbs: Number(typedAnalysis.carbs ?? 0),
-      fiber: Number(typedAnalysis.fiber ?? 0),
-      sugar: Number(typedAnalysis.sugar ?? 0),
-      sodium: Number(typedAnalysis.sodium ?? 0),
-      weight: typedAnalysis.weight ? Number(typedAnalysis.weight) : undefined,
-      metric_description: typedAnalysis.metric_description || undefined,
-      confidence: Number(typedAnalysis.confidence ?? 0.5),
-    };
-
-    console.log(
-      `[calories-popup-update] success calories=${result.calories} protein=${result.protein} fat=${result.fat} carbs=${result.carbs} weight=${result.weight || "N/A"} metric_description=${result.metric_description || "N/A"}`,
-    );
-
-    res.json(result);
+    // Forward to the unified handler
+    return router.handle(req, res);
   } catch (error: any) {
     console.error(
       "/calories-popup-update error",

@@ -1,6 +1,9 @@
 import { OpenAI } from "openai";
-import { NutritionAnalysisResult, NutritionProvider } from "./types";
+import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
 import { loadPrompt } from "../prompt";
+import { PromptTemplateBuilder } from "../prompts";
+import fs from "fs";
+import path from "path";
 
 // Create OpenAI client with default timeout
 const client = new OpenAI({
@@ -16,6 +19,8 @@ export class OpenAINutritionProvider implements NutritionProvider {
       model?: string;
       prompt?: string;
       promptVersion?: string;
+      imageUrl?: string;
+      context?: PromptContext;
     },
   ): Promise<NutritionAnalysisResult> {
     const model =
@@ -25,9 +30,19 @@ export class OpenAINutritionProvider implements NutritionProvider {
       "gpt-4o-mini";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
-    const loaded = loadPrompt("nutrition");
-    const systemPrompt = options?.prompt || loaded.text;
-    const promptVersion = options?.promptVersion || loaded.version;
+    
+    // Determine system prompt based on context or fallback to legacy
+    let systemPrompt: string;
+    let promptVersion: string;
+    
+    if (options?.context) {
+      systemPrompt = options?.prompt || PromptTemplateBuilder.buildPrompt(options.context);
+      promptVersion = options?.promptVersion || "unified-v1";
+    } else {
+      const loaded = loadPrompt("nutrition");
+      systemPrompt = options?.prompt || loaded.text;
+      promptVersion = options?.promptVersion || loaded.version;
+    }
 
     // Get timeout from options or environment
     const timeoutEnv = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 45_000);
@@ -36,16 +51,59 @@ export class OpenAINutritionProvider implements NutritionProvider {
         ? Math.floor(timeoutEnv)
         : 45_000;
 
+    // Handle image if provided
+    let imageForOpenAI: string | undefined;
+    if (options?.imageUrl) {
+      imageForOpenAI = await this.prepareImageForOpenAI(options.imageUrl);
+    }
+
     let completion;
     try {
+      const messages: any[] = [
+        { role: "system", content: systemPrompt }
+      ];
+
+      // Build user message based on content type
+      if (imageForOpenAI) {
+        // Multimodal message with both image and text
+        const userContent: any[] = [];
+        
+        if (content && content.trim()) {
+          userContent.push({
+            type: "text",
+            text: options?.context?.scenario === 'image-only' 
+              ? "Analyze this food photo and return JSON as specified."
+              : `Analyze this food: ${content}`
+          });
+        } else {
+          userContent.push({
+            type: "text", 
+            text: "Analyze this food photo and return JSON as specified."
+          });
+        }
+        
+        userContent.push({
+          type: "image_url",
+          image_url: { url: imageForOpenAI }
+        });
+        
+        messages.push({
+          role: "user",
+          content: userContent
+        });
+      } else {
+        // Text-only message
+        messages.push({
+          role: "user",
+          content: `Analyze this food: ${content}`
+        });
+      }
+
       completion = await client.chat.completions.create({
         model,
         temperature,
         max_tokens: 1000, // Limit tokens to prevent long responses
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analyze this food: ${content}` },
-        ],
+        messages,
       });
     } catch (err: any) {
       const status = err?.status || err?.response?.status;
@@ -116,6 +174,48 @@ export class OpenAINutritionProvider implements NutritionProvider {
     };
 
     return result;
+  }
+
+  private async prepareImageForOpenAI(imageUrl: string): Promise<string | undefined> {
+    try {
+      const u = new URL(imageUrl);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1";
+      
+      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
+        const uploadsDir = path.resolve(
+          process.cwd(),
+          "apps",
+          "backend",
+          "node",
+          "uploads",
+        );
+        const relative = u.pathname.replace(/^\/uploads\//, "");
+        const filePath = path.resolve(uploadsDir, relative);
+        
+        if (fs.existsSync(filePath)) {
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mime =
+            ext === ".png"
+              ? "image/png"
+              : ext === ".webp"
+                ? "image/webp"
+                : "image/jpeg";
+          const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+          console.log("[OpenAINutritionProvider] Inlined local image as data URL");
+          return dataUrl;
+        } else {
+          console.warn("[OpenAINutritionProvider] Local file not found for", filePath);
+        }
+      }
+      
+      // Return original URL if not local or no conversion needed
+      return imageUrl;
+    } catch (_e) {
+      // Not a valid URL; return as-is
+      return imageUrl;
+    }
   }
 }
 

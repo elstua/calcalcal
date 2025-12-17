@@ -1,8 +1,47 @@
 import Foundation
 
+// Types exist in separate files - they should be available automatically if in same target
+
 struct DiaryAPI {
     struct AnalyzeResponse: Codable { let success: Bool; let updatedBlocksCount: Int? }
     struct AnalyzeError: Codable { let error: String; let code: String?; let ai_step: String? }
+    
+    struct AnalyzeBlockResponse: Codable {
+        let blockId: String
+        let entryId: String
+        let description: String?
+        let calories: Int?
+        let protein: Double?
+        let fat: Double?
+        let carbs: Double?
+        let fiber: Double?
+        let sugar: Double?
+        let sodium: Double?
+        let weight: Double?
+        let metric_description: String?
+        let confidence: Double?
+        let totals: EntryTotals?
+    }
+    
+    struct EntryTotals: Codable {
+        let total_calories: Int
+        let total_protein: Double
+        let total_fat: Double
+        let total_carbs: Double
+        let total_fiber: Double
+        let total_sugar: Double
+        let total_sodium: Double
+    }
+    
+    struct Totals: Codable {
+        let total_calories: Int
+        let total_protein: Double
+        let total_fat: Double
+        let total_carbs: Double
+        let total_fiber: Double
+        let total_sugar: Double
+        let total_sodium: Double
+    }
     struct Row: Codable {
         let id: String
         let user_id: String
@@ -352,6 +391,36 @@ struct DiaryAPI {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
+    }
+
+    /// Unified analysis endpoint for single block - can handle text, image, or both
+    static func analyzeBlock(entryId: String, blockId: String, content: [String: Any], userModified: Bool = false) async throws -> AnalyzeBlockResponse {
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/ai/analyze-block"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        
+        var payload: [String: Any] = [
+            "entryId": entryId,
+            "blockId": blockId,
+            "content": content,
+            "userModified": userModified
+        ]
+        
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let request = try makeRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if !(200..<300).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
+            print("❌ analyzeBlock failed HTTP=\(http.statusCode) body=\(bodyText)")
+            throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
+                NSLocalizedDescriptionKey: "analyzeBlock failed (HTTP \(http.statusCode)): \(bodyText)"
+            ])
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(AnalyzeBlockResponse.self, from: data)
     }
 }
 

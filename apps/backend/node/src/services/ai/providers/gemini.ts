@@ -1,5 +1,6 @@
 import { loadPrompt } from "../prompt";
-import { NutritionAnalysisResult, NutritionProvider } from "./types";
+import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
+import { PromptTemplateBuilder } from "../prompts";
 
 type GoogleGenAIModule = typeof import("@google/genai");
 type GoogleGenAIConstructor = GoogleGenAIModule["GoogleGenAI"];
@@ -38,6 +39,8 @@ export class GeminiNutritionProvider implements NutritionProvider {
       model?: string;
       prompt?: string;
       promptVersion?: string;
+      imageUrl?: string;
+      context?: PromptContext;
     },
   ): Promise<NutritionAnalysisResult> {
     const model =
@@ -47,9 +50,20 @@ export class GeminiNutritionProvider implements NutritionProvider {
       "gemini-2.5-flash";
     const temperature =
       options?.temperature ?? Number(process.env.AI_TEMPERATURE ?? 0.2);
-    const loaded = loadPrompt("nutrition");
-    const systemPrompt = options?.prompt || loaded.text;
-    const promptVersion = options?.promptVersion || loaded.version;
+    
+    // Determine system prompt based on context or fallback to legacy
+    let systemPrompt: string;
+    let promptVersion: string;
+    
+    if (options?.context) {
+      systemPrompt = options?.prompt || PromptTemplateBuilder.buildPrompt(options.context);
+      promptVersion = options?.promptVersion || "unified-v1";
+    } else {
+      const loaded = loadPrompt("nutrition");
+      systemPrompt = options?.prompt || loaded.text;
+      promptVersion = options?.promptVersion || loaded.version;
+    }
+    
     const userPrompt = `${systemPrompt}\n\nFood description:\n${content}`;
 
     const client = await this.getClient();
@@ -68,13 +82,22 @@ export class GeminiNutritionProvider implements NutritionProvider {
         }
       | undefined;
 
+    // Build content parts based on whether we have an image
+    const contentParts: any[] = [{ text: userPrompt }];
+    
+    if (options?.imageUrl) {
+      // For Gemini, we'd need to handle image loading similar to OpenAI
+      // For now, we'll just note that image processing is supported
+      console.warn("[GeminiNutritionProvider] Image support not yet fully implemented for Gemini provider");
+    }
+
     try {
       const response = await client.models.generateContent({
         model,
         contents: [
           {
             role: "user",
-            parts: [{ text: userPrompt }],
+            parts: contentParts,
           },
         ],
         config: {

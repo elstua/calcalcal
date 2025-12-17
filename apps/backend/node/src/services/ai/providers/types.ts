@@ -1,3 +1,20 @@
+export interface PromptContext {
+  text?: string;
+  imageUrl?: string;
+  userModified?: boolean;
+  userProvidedData?: {
+    calories?: number;
+    weight?: number;
+    protein?: number;
+    fat?: number;
+    carbs?: number;
+    fiber?: number;
+    sugar?: number;
+    sodium?: number;
+  };
+  scenario: 'text-only' | 'image-only' | 'multimodal' | 'manual-update' | 'voice-validation';
+}
+
 export interface NutritionAnalysisResult {
   calories: number;
   protein: number;
@@ -29,6 +46,8 @@ export interface NutritionProvider {
       model?: string;
       prompt?: string;
       promptVersion?: string;
+      imageUrl?: string;
+      context?: PromptContext;
     },
   ): Promise<NutritionAnalysisResult>;
 }

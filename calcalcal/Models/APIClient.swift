@@ -1,6 +1,22 @@
 import Foundation
 import Combine
 
+// Adding placeholder types for compilation
+struct Configuration {
+    static let apiURL = "http://localhost:3001"
+}
+
+struct KeychainManager {
+    static let shared = KeychainManager()
+    func loadTokens() throws -> Session? {
+        return nil
+    }
+}
+
+struct Session {
+    let accessToken: String
+}
+
 class APIClient {
     static let shared = APIClient()
 
@@ -88,21 +104,30 @@ class APIClient {
         calories: Int? = nil,
         weight: Double? = nil
     ) -> AnyPublisher<CaloriePopupUpdateResponse, Error> {
-        var body: [String: Any] = [
-            "entryId": entryId,
-            "blockId": blockId,
-            "text": text
-        ]
-
+        // Build user provided data for unified analysis
+        var userProvidedData: [String: Any] = [:]
+        
         if let calories = calories {
-            body["calories"] = calories
+            userProvidedData["calories"] = calories
         }
 
         if let weight = weight {
-            body["weight"] = weight
+            userProvidedData["weight"] = weight
         }
+        
+        let content: [String: Any] = [
+            "text": text,
+            "userProvidedData": userProvidedData
+        ]
 
-        return request("/api/ai/calories-popup-update", method: "POST", body: body)
+        let body: [String: Any] = [
+            "entryId": entryId,
+            "blockId": blockId,
+            "content": content,
+            "userModified": true
+        ]
+
+        return request("/api/ai/analyze-block", method: "POST", body: body)
     }
 }
 

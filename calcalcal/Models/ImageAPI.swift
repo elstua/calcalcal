@@ -79,11 +79,11 @@ struct ImageAPI {
         return decoded
     }
 
-    /// Ensure we send an absolute URL to the backend (required by server to fetch or inline the image)
+    /// Ensure we send an absolute URL to backend (required by server to fetch or inline image)
     private static func normalizeImageURL(_ imageUrl: String) -> String {
         var trimmed = imageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Strip any trailing dots that might have been incorrectly added after the file extension
+        // Strip any trailing dots that might have been incorrectly added after file extension
         // (defensive fix for URL corruption bug - e.g., ".jpg." -> ".jpg")
         let validExtensions = [".jpg.", ".jpeg.", ".png.", ".webp.", ".gif."]
         for ext in validExtensions {
@@ -91,7 +91,7 @@ struct ImageAPI {
                 #if DEBUG
                 print("⚠️ normalizeImageURL: stripping trailing dot from URL ending with '\(ext)': \(trimmed)")
                 #endif
-                trimmed.removeLast() // Remove the trailing dot
+                trimmed.removeLast() // Remove trailing dot
                 break
             }
         }
@@ -109,7 +109,14 @@ struct ImageAPI {
         }
     }
 
-    static func analyzeImage(imageUrl: String, entryId: String? = nil, blockId: String? = nil) async throws -> AnalyzeImageResponse {
+    static func analyzeImage(imageUrl: String, entryId: String, blockId: String) async throws -> AnalyzeImageResponse {
+        // For now, use the legacy analyze-image endpoint
+        // The unified endpoint integration will be done separately
+        return try await analyzeImageLegacy(imageUrl: imageUrl, entryId: entryId, blockId: blockId)
+    }
+    
+    /// Legacy method for backward compatibility - requires entryId and blockId
+    static func analyzeImageLegacy(imageUrl: String, entryId: String? = nil, blockId: String? = nil) async throws -> AnalyzeImageResponse {
         let base = Configuration.apiURL
         guard let url = URL(string: "\(base)/api/ai/analyze-image") else { throw URLError(.badURL) }
         var request = try authorizedRequest(url: url, method: "POST")
@@ -121,9 +128,9 @@ struct ImageAPI {
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         #if DEBUG
-        print("🤖 Analyze start imageUrl=\(absoluteImageUrl)")
-        print("🤖 Analyze input imageUrl=\(imageUrl), length=\(imageUrl.count), last10='\(String(imageUrl.suffix(10)))'")
-        print("🤖 Analyze normalized imageUrl=\(absoluteImageUrl), length=\(absoluteImageUrl.count), last10='\(String(absoluteImageUrl.suffix(10)))'")
+        print("🤖 Legacy Analyze start imageUrl=\(absoluteImageUrl)")
+        print("🤖 Legacy Analyze input imageUrl=\(imageUrl), length=\(imageUrl.count), last10='\(String(imageUrl.suffix(10)))'")
+        print("🤖 Legacy Analyze normalized imageUrl=\(absoluteImageUrl), length=\(absoluteImageUrl.count), last10='\(String(absoluteImageUrl.suffix(10)))'")
         if absoluteImageUrl.hasSuffix(".") {
             print("⚠️ WARNING: imageUrl ends with a trailing dot!")
         }
@@ -133,13 +140,13 @@ struct ImageAPI {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Analyze failed HTTP=\(http.statusCode) body=\(bodyText)")
-            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Analyze failed: HTTP \(http.statusCode)"])
+            print("❌ Legacy Analyze failed HTTP=\(http.statusCode) body=\(bodyText)")
+            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Legacy Analyze failed: HTTP \(http.statusCode)"])
         }
         let decoder = JSONDecoder()
         let result = try decoder.decode(AnalyzeImageResponse.self, from: data)
         #if DEBUG
-        print("✅ Analyze success desc='\(result.description)' calories=\(String(describing: result.calories))")
+        print("✅ Legacy Analyze success desc='\(result.description)' calories=\(String(describing: result.calories))")
         #endif
         return result
     }
