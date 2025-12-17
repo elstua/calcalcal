@@ -91,12 +91,15 @@ function queueAnalysisJob(entryId: string, blocks: any[]) {
       if (activeAnalysisJobs.get(entryId) === jobToken) {
         activeAnalysisJobs.delete(entryId);
       }
-    }
-  });
+  }
 }
 
 // POST /api/ai/analyze-block
-router.post("/analyze-block", async (req: AuthRequest, res) => {
+router.post("/analyze-block", unifiedAnalyzeBlockHandler);
+}
+
+// Unified analyze-block handler
+async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
   try {
     const { blockId, entryId, content, userModified = false } = req.body;
     const userId = req.userId!;
@@ -349,7 +352,7 @@ router.post("/analyze-image", async (req: AuthRequest, res) => {
     req.body.userModified = false;
 
     // Forward to the unified handler
-    return router.handle(req, res);
+    return unifiedAnalyzeBlockHandler(req, res);
   } catch (error: any) {
     console.error(
       "/analyze-image error",
@@ -406,7 +409,7 @@ router.post("/calories-popup-update", async (req: AuthRequest, res) => {
     req.body.userModified = true;
 
     // Forward to the unified handler
-    return router.handle(req, res);
+    return unifiedAnalyzeBlockHandler(req, res);
   } catch (error: any) {
     console.error(
       "/calories-popup-update error",
