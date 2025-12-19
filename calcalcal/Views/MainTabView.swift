@@ -608,11 +608,17 @@ struct EditorOverlaySimple: View {
                 )
             }
         }
-        .sheet(isPresented: $showImagePicker) {
-            ImagePicker(image: $pickedImage)
-                .onDisappear {
+        .fullScreenCover(isPresented: $showImagePicker) {
+            UnifiedMediaPickerView(
+                onImageSelected: { image in
+                    pickedImage = image
+                    showImagePicker = false
                     handleImagePicked()
+                },
+                onDismiss: {
+                    showImagePicker = false
                 }
+            )
         }
         .onAppear {
             setupOverlay()

@@ -136,116 +136,16 @@ struct EditorOverlay: View {
                     }
             )
         }
-        .sheet(isPresented: $showImagePicker) {
-            ImagePicker(image: $pickedImage)
-                .onDisappear {
-                    guard let image = pickedImage else { return }
-                    let uuid = UUID()
-                    // Downscale for local display and future upload
-                    let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
-                    // Use resized image in the UI
-                    imageMap[uuid] = compressed.resizedImage
-                    // Store in local image cache under deterministic key for fallback before URL is known
-                    ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
-                    // Store PNG data of resized image in the model for stable internal rendering
-                    if let resizedPNG = compressed.resizedImage.pngData() {
-                        let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil, nutrition: nil)
-                        blocks.append(newBlock)
-
-                        // Kick off upload + analyze pipeline
-                        let capturedUUID = uuid
-                        let blockId = newBlock.id
-                        let entryIdString: String? = nil // optional for backend
-                        Task.detached(priority: .userInitiated) {
-                            do {
-                                #if DEBUG
-                                print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
-                                #endif
-                                let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
-
-                                #if DEBUG
-                                print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
-                                #endif
-                                // Persist into disk cache for future sessions
-                                ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
-                                // Persist image URL/objectKey into the corresponding block for future reloads
-                                await MainActor.run {
-                                    if let idx = blocks.firstIndex(where: { block in
-                                        if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
-                                        return false
-                                    }) {
-                                        var updated = blocks[idx]
-                                        updated.imageUrl = upload.publicUrl
-                                        updated.imageObjectKey = upload.objectKey
-                                        blocks[idx] = updated
-                                        // Persist blocks cache immediately
-                                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
-                                    }
-                                }
-                                let analysis = try await ImageAPI.analyzeImageLegacy(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
-
-                                #if DEBUG
-                                print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
-                                #endif
-
-                                // Build nutrition model
-                                let nutrition = NutritionData(
-                                    calories: analysis.calories,
-                                    protein: analysis.macros?.protein,
-                                    fat: analysis.macros?.fat,
-                                    carbs: analysis.macros?.carbs,
-                                    fiber: analysis.macros?.fiber,
-                                    sugar: analysis.macros?.sugar,
-                                    sodium: analysis.macros?.sodium,
-                                    weight: analysis.macros?.weight,
-                                    metric_description: analysis.macros?.metric_description,
-                                    confidence: analysis.confidence
-                                )
-
-                                // Apply to the inserted block (by imageRef match)
-                                await MainActor.run {
-                                    if let idx = blocks.firstIndex(where: { block in
-                                        if case let .imageText(_, ref, _) = block.type {
-                                            return ref == capturedUUID
-                                        }
-                                        return false
-                                    }) {
-                                        var updated = blocks[idx]
-                                        // Update text with description
-                                        if case let .imageText(data, ref, _) = updated.type {
-                                            updated.type = .imageText(data, ref, analysis.description)
-                                        }
-                                        // Ensure image URL stays attached
-                                        updated.imageUrl = updated.imageUrl ?? upload.publicUrl
-                                        // Update nutrition & calorieData for UI (local-only, totals come from backend)
-                                        updated.nutrition = nutrition
-                                        if let cals = analysis.calories, cals > 0 {
-                                            updated.calorieData = String(cals)
-                                        }
-                                        blocks[idx] = updated
-                                        BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
-                                        #if DEBUG
-                                        print("📸 Pipeline: block \(idx) updated with analysis")
-                                        #endif
-                                    } else {
-                                        #if DEBUG
-                                        print("⚠️ Pipeline: could not find block by imageRef=\(capturedUUID)")
-                                        #endif
-                                    }
-                                }
-                            } catch {
-                                #if DEBUG
-                                print("❌ Pipeline error: \(error)")
-                                #endif
-                            }
-                        }
-                    }
-                    // Ensure keyboard focuses after insert
-                    DispatchQueue.main.asyncAfter(deadline: .now()) {
-                        shouldBecomeFirstResponder = true
-                    }
-                    pickedImage = nil
+        .fullScreenCover(isPresented: $showImagePicker) {
+            UnifiedMediaPickerView(
+                onImageSelected: { image in
+                    showImagePicker = false
+                    handleImageSelected(image)
+                },
+                onDismiss: {
+                    showImagePicker = false
                 }
+            )
         }
         .onAppear {
             dimmingProgress = 0
@@ -471,6 +371,113 @@ extension EditorOverlay {
             default:
                 continue
             }
+        }
+    }
+    
+    private func handleImageSelected(_ image: UIImage) {
+        let uuid = UUID()
+        // Downscale for local display and future upload
+        let compressed = ImageCompression.compressForUpload(image, maxDimension: 720, quality: 0.7)
+        // Use resized image in the UI
+        imageMap[uuid] = compressed.resizedImage
+        // Store in local image cache under deterministic key for fallback before URL is known
+        ImageCache.shared.storeLocal(compressed.resizedImage, ref: uuid)
+        // Store PNG data of resized image in the model for stable internal rendering
+        if let resizedPNG = compressed.resizedImage.pngData() {
+            let newBlock = Block(type: .imageText(resizedPNG, uuid, ""), calorieData: nil, nutrition: nil)
+            blocks.append(newBlock)
+
+            // Kick off upload + analyze pipeline
+            let capturedUUID = uuid
+            let blockId = newBlock.id
+            let entryIdString: String? = nil // optional for backend
+            Task.detached(priority: .userInitiated) {
+                do {
+                    #if DEBUG
+                    print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
+                    #endif
+                    let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
+
+                    #if DEBUG
+                    print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
+                    #endif
+                    // Persist into disk cache for future sessions
+                    ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
+                    // Persist image URL/objectKey into the corresponding block for future reloads
+                    await MainActor.run {
+                        if let idx = blocks.firstIndex(where: { block in
+                            if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
+                            return false
+                        }) {
+                            var updated = blocks[idx]
+                            updated.imageUrl = upload.publicUrl
+                            updated.imageObjectKey = upload.objectKey
+                            blocks[idx] = updated
+                            // Persist blocks cache immediately
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                        }
+                    }
+                    let analysis = try await ImageAPI.analyzeImageLegacy(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+
+                    #if DEBUG
+                    print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
+                    #endif
+
+                    // Build nutrition model
+                    let nutrition = NutritionData(
+                        calories: analysis.calories,
+                        protein: analysis.macros?.protein,
+                        fat: analysis.macros?.fat,
+                        carbs: analysis.macros?.carbs,
+                        fiber: analysis.macros?.fiber,
+                        sugar: analysis.macros?.sugar,
+                        sodium: analysis.macros?.sodium,
+                        weight: analysis.macros?.weight,
+                        metric_description: analysis.macros?.metric_description,
+                        confidence: analysis.confidence
+                    )
+
+                    // Apply to the inserted block (by imageRef match)
+                    await MainActor.run {
+                        if let idx = blocks.firstIndex(where: { block in
+                            if case let .imageText(_, ref, _) = block.type {
+                                return ref == capturedUUID
+                            }
+                            return false
+                        }) {
+                            var updated = blocks[idx]
+                            // Update text with description
+                            if case let .imageText(data, ref, _) = updated.type {
+                                updated.type = .imageText(data, ref, analysis.description)
+                            }
+                            // Ensure image URL stays attached
+                            updated.imageUrl = updated.imageUrl ?? upload.publicUrl
+                            // Update nutrition & calorieData for UI (local-only, totals come from backend)
+                            updated.nutrition = nutrition
+                            if let cals = analysis.calories, cals > 0 {
+                                updated.calorieData = String(cals)
+                            }
+                            blocks[idx] = updated
+                            BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                            #if DEBUG
+                            print("📸 Pipeline: block \(idx) updated with analysis")
+                            #endif
+                        } else {
+                            #if DEBUG
+                            print("⚠️ Pipeline: could not find block by imageRef=\(capturedUUID)")
+                            #endif
+                        }
+                    }
+                } catch {
+                    #if DEBUG
+                    print("❌ Pipeline error: \(error)")
+                    #endif
+                }
+            }
+        }
+        // Ensure keyboard focuses after insert
+        DispatchQueue.main.asyncAfter(deadline: .now()) {
+            shouldBecomeFirstResponder = true
         }
     }
 }
