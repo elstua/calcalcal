@@ -641,4 +641,109 @@ router.delete('/account', authenticateToken, async (req: AuthRequest, res: Respo
   }
 });
 
+// DEBUG ENDPOINTS - Only available in development
+if (process.env.NODE_ENV !== 'production') {
+  // DELETE /api/auth/debug/delete-user
+  // Completely delete a user account and all associated data (no confirmation required)
+  router.delete('/debug/delete-user', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.userId!;
+      console.log(`🔧 DEBUG: Force deleting user ${userId} and all associated data`);
+      
+      // Verify user exists before deletion
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Delete refresh tokens first
+      await RefreshTokenModel.revokeAllForUser(userId);
+      
+      // Delete the user record
+      const result = await Database.query(
+        'DELETE FROM user_profiles WHERE id = $1',
+        [userId]
+      );
+      
+      console.log(`🔧 DEBUG: User ${userId} (${user.is_temporary ? 'temporary' : 'permanent'}) deleted successfully`);
+      return res.json({ 
+        success: true, 
+        message: 'User and all associated data deleted',
+        data: {
+          deletedUserId: userId,
+          accountType: user.is_temporary ? 'temporary' : 'permanent',
+          deviceId: user.device_id
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('🔧 DEBUG: Delete user error:', { message, error });
+      return res.status(500).json({ 
+        success: false,
+        error: 'Failed to delete user', 
+        message 
+      });
+    }
+  });
+  
+  // POST /api/auth/debug/cleanup-temporary-by-device
+  // Clean up temporary account by device ID (no auth required)
+  router.post('/debug/cleanup-temporary-by-device', async (req: Request, res: Response) => {
+    try {
+      const { deviceId } = req.body || {};
+      if (!deviceId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'deviceId is required' 
+        });
+      }
+      
+      console.log(`🔧 DEBUG: Cleaning up temporary account for device: ${deviceId}`);
+      
+      // Find user by device ID
+      const user = await UserModel.findByDeviceId(deviceId);
+      if (!user) {
+        return res.json({ 
+          success: true, 
+          message: 'No temporary account found for this device' 
+        });
+      }
+      
+      if (!user.is_temporary) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'This device is linked to a permanent account - cannot delete via debug endpoint' 
+        });
+      }
+      
+      // Delete refresh tokens first
+      await RefreshTokenModel.revokeAllForUser(user.id);
+      
+      // Delete the user
+      await Database.query(
+        'DELETE FROM user_profiles WHERE device_id = $1',
+        [deviceId]
+      );
+      
+      console.log(`🔧 DEBUG: Temporary account for device ${deviceId} deleted successfully`);
+      return res.json({ 
+        success: true, 
+        message: 'Temporary account and all associated data deleted',
+        data: {
+          deletedUserId: user.id,
+          deviceId: deviceId
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('🔧 DEBUG: Device cleanup error:', { message, error });
+      return res.status(500).json({ 
+        success: false,
+        error: 'Failed to cleanup temporary account', 
+        message 
+      });
+    }
+  });
+}
+
 export default router;
