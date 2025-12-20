@@ -200,6 +200,67 @@ export class UserModel {
     );
     return result.rows[0];
   }
+
+  /**
+   * Delete a user account and all associated data
+   * This operation is performed in a transaction to ensure data integrity
+   * @param userId User ID to delete
+   * @returns True if deletion successful
+   */
+  static async deleteAccount(userId: string): Promise<boolean> {
+    const client = await Database.getClient();
+    try {
+      await client.query('BEGIN');
+
+      // Get all user's diary entries to collect images before deletion
+      const entriesResult = await client.query(
+        'SELECT images FROM diary_entries WHERE user_id = $1',
+        [userId]
+      );
+      
+      // Collect all unique image URLs/object keys
+      const allImages: string[] = [];
+      for (const row of entriesResult.rows) {
+        if (row.images && Array.isArray(row.images)) {
+          allImages.push(...row.images);
+        }
+      }
+      
+      // Delete user's diary entries first (due to foreign key constraints)
+      await client.query('DELETE FROM diary_entries WHERE user_id = $1', [userId]);
+
+      // Delete user's popular food items
+      await client.query('DELETE FROM popular_food_items WHERE user_id = $1', [userId]);
+
+      // Delete user's refresh tokens
+      await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+
+      // Finally delete the user profile
+      const result = await client.query('DELETE FROM user_profiles WHERE id = $1', [userId]);
+
+      await client.query('COMMIT');
+
+      // Delete user's images from Cloudflare R2 after successful database deletion
+      if (allImages.length > 0) {
+        try {
+          const { deleteAllUserImages } = await import('../services/storage/r2');
+          const deletedCount = await deleteAllUserImages(userId);
+          console.log(`✅ Deleted ${deletedCount} images from R2 for user ${userId}`);
+        } catch (imageError) {
+          console.error(`⚠️ Failed to delete images from R2 for user ${userId}:`, imageError);
+          // Don't fail the account deletion, but log the error for manual cleanup
+        }
+      }
+
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Failed to delete user account:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 

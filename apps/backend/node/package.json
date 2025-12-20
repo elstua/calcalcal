@@ -13,7 +13,8 @@
     "start": "node dist/server.js",
     "migrate": "ts-node src/scripts/runMigrations.ts",
     "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts",
-    "test": "jest"
+    "test": "jest",
+    "cleanup-images": "ts-node src/scripts/cleanup-images.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",

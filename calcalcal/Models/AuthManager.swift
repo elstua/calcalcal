@@ -784,6 +784,53 @@ class AuthManager: NSObject, ObservableObject {
         return profileResponse.profile
     }
     
+    /// Delete the current user's account and all associated data
+    /// - Parameter reason: Optional reason for deletion (for analytics/audit purposes)
+    func deleteAccount(reason: String? = nil) async throws {
+        guard let session = try? KeychainManager.shared.loadTokens() else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        print("🗑️ Deleting account...")
+        
+        let urlString = "\(Configuration.apiURL)/api/auth/account"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        
+        // Require explicit confirmation to prevent accidental deletion
+        let deleteRequest: [String: Any] = [
+            "confirmed": "DELETE_MY_ACCOUNT"
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: deleteRequest)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let responseText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw NSError(domain: "AuthManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Account deletion failed: \(responseText)"])
+        }
+        
+        // Clear all local data after successful deletion
+        await MainActor.run {
+            self.clearAllAuthenticationData()
+            // Clear user defaults
+            UserDefaults.standard.removeObject(forKey: "current_user_id")
+            UserDefaults.standard.removeObject(forKey: "temporary_device_id")
+            print("✅ Account deleted and all local data cleared")
+        }
+    }
+    
     // MARK: - Backend Integration
     
     private func authenticateWithBackend(identityToken: String, user: ASAuthorizationAppleIDCredential) {

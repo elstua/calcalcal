@@ -584,4 +584,61 @@ router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
+// DELETE /api/auth/account - Delete user account and all associated data
+router.delete('/account', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { confirmed } = req.body || {};
+
+    // Require explicit confirmation to prevent accidental deletion
+    if (!confirmed || confirmed !== 'DELETE_MY_ACCOUNT') {
+      return res.status(400).json({ 
+        error: 'Confirmation required',
+        message: 'You must provide confirmed: "DELETE_MY_ACCOUNT" to delete your account'
+      });
+    }
+
+    console.log('🗑️ Account deletion request for user:', userId);
+
+    // Verify user exists before deletion
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Perform account deletion with transaction safety
+    const deleted = await UserModel.deleteAccount(userId);
+
+    if (!deleted) {
+      return res.status(500).json({ 
+        error: 'Failed to delete account',
+        message: 'Unable to process account deletion'
+      });
+    }
+
+    console.log('✅ Account deleted successfully:', {
+      userId,
+      email: user.email,
+      accountType: user.is_temporary ? 'temporary' : 'permanent'
+    });
+
+    return res.json({
+      success: true,
+      message: 'Account deleted successfully',
+      data: {
+        deletedAt: new Date().toISOString(),
+        accountType: user.is_temporary ? 'temporary' : 'permanent'
+      }
+    });
+
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Account deletion error:', { message, error });
+    return res.status(500).json({ 
+      error: 'Failed to delete account', 
+      message 
+    });
+  }
+});
+
 export default router;

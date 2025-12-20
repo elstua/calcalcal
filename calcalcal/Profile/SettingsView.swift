@@ -6,6 +6,7 @@ struct SettingsView: View {
     
     @State private var isResettingOnboarding = false
     @State private var resetMessage: String?
+    @State private var showingDeleteAccountConfirmation = false
     
     var body: some View {
         NavigationView {
@@ -13,6 +14,16 @@ struct SettingsView: View {
                 Section {
                     Text("Settings functionality coming soon...")
                         .foregroundColor(.secondary)
+                }
+                
+                // Delete Account Section (only for permanent accounts)
+                if !appState.isTemporaryUser {
+                    Section(header: Text("Account Management")) {
+                        Button("Delete Account") {
+                            showingDeleteAccountConfirmation = true
+                        }
+                        .foregroundColor(.red)
+                    }
                 }
                 
                 #if DEBUG
@@ -47,6 +58,15 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(isPresented: $showingDeleteAccountConfirmation) {
+                DeleteAccountConfirmationView(
+                    onDelete: {
+                        Task {
+                            await appState.deleteAccount()
+                        }
+                    }
+                )
             }
         }
     }

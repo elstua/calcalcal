@@ -309,4 +309,23 @@ class AppState: ObservableObject {
             print("[AppState] HealthKit sync error: \(error.localizedDescription)")
         }
     }
+    
+    // MARK: - Account Management
+    
+    /// Delete user account and handle navigation
+    func deleteAccount() async {
+        do {
+            try await authManager.deleteAccount()
+            
+            await MainActor.run {
+                // Clear all state
+                onboardingCoordinator = nil
+                objectWillChange.send()
+            }
+        } catch {
+            await MainActor.run {
+                self.authManager.error = "Failed to delete account: \(error.localizedDescription)"
+            }
+        }
+    }
 } 

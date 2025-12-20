@@ -84,4 +84,69 @@ export async function r2PresignPutObject(params: R2PresignParams): Promise<R2Pre
   };
 }
 
+/**
+ * Delete all images for a user from Cloudflare R2
+ * @param userId User ID whose images should be deleted
+ * @returns Number of images deleted
+ */
+export async function deleteAllUserImages(userId: string): Promise<number> {
+  const bucket = env('R2_BUCKET');
+  const client = getClient();
+  
+  try {
+    // List all objects for this user under uploads/{userId}/
+    const objectsStream = client.listObjects(bucket, `uploads/${userId}/`, true);
+    const objects: string[] = [];
+    
+    // Collect all object keys
+    for await (const obj of objectsStream) {
+      if (obj.name) {
+        objects.push(obj.name);
+      }
+    }
+    
+    // Delete all objects in batches (R2 supports up to 1000 objects per delete call)
+    const batchSize = 1000;
+    let deletedCount = 0;
+    
+    for (let i = 0; i < objects.length; i += batchSize) {
+      const batch = objects.slice(i, i + batchSize);
+      if (batch.length > 0) {
+        await client.removeObjects(bucket, batch);
+        deletedCount += batch.length;
+        console.log(`🗑️ Deleted batch of ${batch.length} images for user ${userId}`);
+      }
+    }
+    
+    console.log(`✅ Successfully deleted ${deletedCount} images for user ${userId}`);
+    return deletedCount;
+  } catch (error) {
+    console.error(`❌ Failed to delete images for user ${userId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Extract object key from image URL
+ * @param imageUrl Full image URL or object key
+ * @returns Object key for R2
+ */
+export function extractObjectKeyFromUrl(imageUrl: string): string {
+  // If it's already an object key (starts with 'uploads/'), return as-is
+  if (imageUrl.startsWith('uploads/')) {
+    return imageUrl;
+  }
+  
+  // Extract object key from full URL
+  try {
+    const url = new URL(imageUrl);
+    const pathname = url.pathname;
+    // Remove leading slash if present
+    return pathname.startsWith('/') ? pathname.substring(1) : pathname;
+  } catch {
+    // Fallback: assume it's already an object key
+    return imageUrl;
+  }
+}
+
 
