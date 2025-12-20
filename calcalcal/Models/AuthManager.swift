@@ -9,6 +9,11 @@ class AuthManager: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     
+    /// Whether the current user is using a temporary (non-OAuth) account
+    var isTemporaryUser: Bool {
+        currentUser?.isTemporary ?? false
+    }
+    
     private var cancellables = Set<AnyCancellable>()
     
     override init() {
@@ -58,6 +63,194 @@ class AuthManager: NSObject, ObservableObject {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Expected date string to be ISO8601-formatted, got: \(dateString)")
         }
         return decoder
+    }
+    
+    // MARK: - Temporary Account
+    
+    /// Create a temporary account for users who want to skip OAuth authentication
+    /// This allows users to start using the app immediately
+    func createTemporaryAccount() {
+        isLoading = true
+        error = nil
+        
+        print("🔐 Creating temporary account...")
+        
+        // Clear any cached sessions
+        do {
+            try KeychainManager.shared.deleteTokens()
+        } catch {
+            print("⚠️ Failed to clear cached sessions: \(error)")
+        }
+        
+        // Generate a unique device ID
+        let deviceId = getOrCreateDeviceId()
+        
+        Task {
+            do {
+                let urlString = "\(Configuration.apiURL)/api/auth/create-temporary"
+                print("🔍 === TEMPORARY ACCOUNT DEBUG ===")
+                print("Attempting to connect to: \(urlString)")
+                
+                guard let url = URL(string: urlString) else {
+                    await MainActor.run {
+                        self.isLoading = false
+                        self.error = "Invalid backend URL"
+                    }
+                    return
+                }
+                
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let authRequest: [String: Any] = [
+                    "deviceId": deviceId
+                ]
+                
+                request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
+                
+                print("🌐 Sending request with deviceId: \(deviceId)")
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    await MainActor.run {
+                        self.isLoading = false
+                        self.error = "Invalid response from server"
+                    }
+                    return
+                }
+                
+                print("📥 Response received - Status: \(httpResponse.statusCode)")
+                
+                guard httpResponse.statusCode == 200 else {
+                    let responseText = String(data: data, encoding: .utf8) ?? "No response data"
+                    print("❌ Backend error response: \(responseText)")
+                    await MainActor.run {
+                        self.isLoading = false
+                        self.error = "Failed to create temporary account (Status: \(httpResponse.statusCode))"
+                    }
+                    return
+                }
+                
+                let decoder = AuthManager.makeJSONDecoder()
+                let authResponse = try decoder.decode(AuthResponse.self, from: data)
+                
+                print("✅ Temporary account created!")
+                print("   - User ID: \(authResponse.user?.id ?? "nil")")
+                print("   - Is Temporary: \(authResponse.user?.isTemporary ?? false)")
+                print("🔍 === END TEMPORARY ACCOUNT DEBUG ===")
+                
+                await MainActor.run {
+                    self.isLoading = false
+                    
+                    if authResponse.success, let session = authResponse.session, let user = authResponse.user {
+                        do {
+                            try KeychainManager.shared.saveTokens(session)
+                            APIClient.shared.updateSession(session)
+                            
+                            self.currentUser = user
+                            self.isAuthenticated = true
+                            UserDefaults.standard.set(user.id, forKey: "current_user_id")
+                            
+                            print("✅ Temporary session saved successfully")
+                        } catch {
+                            self.error = "Failed to save session: \(error.localizedDescription)"
+                        }
+                    } else {
+                        self.error = authResponse.error ?? "Failed to create temporary account"
+                    }
+                }
+            } catch {
+                print("Network error: \(error)")
+                await MainActor.run {
+                    self.isLoading = false
+                    self.error = "Network error: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    /// Upgrade a temporary account to a permanent account with OAuth
+    /// - Parameters:
+    ///   - appleId: Apple ID (if upgrading with Apple)
+    ///   - googleId: Google ID (if upgrading with Google)
+    ///   - email: User's email
+    ///   - name: User's name
+    func upgradeTemporaryAccount(appleId: String?, googleId: String?, email: String?, name: String?) async throws {
+        guard let session = try? KeychainManager.shared.loadTokens() else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        print("🔄 Upgrading temporary account...")
+        
+        let urlString = "\(Configuration.apiURL)/api/auth/upgrade-temporary"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        
+        var upgradeRequest: [String: Any] = [:]
+        if let appleId = appleId {
+            upgradeRequest["appleId"] = appleId
+        }
+        if let googleId = googleId {
+            upgradeRequest["googleId"] = googleId
+        }
+        if let email = email {
+            upgradeRequest["email"] = email
+        }
+        if let name = name {
+            upgradeRequest["name"] = name
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: upgradeRequest)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let responseText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw NSError(domain: "AuthManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Upgrade failed: \(responseText)"])
+        }
+        
+        let decoder = AuthManager.makeJSONDecoder()
+        struct UpgradeResponse: Codable {
+            let success: Bool
+            let user: User?
+            let message: String?
+            let error: String?
+        }
+        let upgradeResponse = try decoder.decode(UpgradeResponse.self, from: data)
+        
+        if upgradeResponse.success, let user = upgradeResponse.user {
+            await MainActor.run {
+                self.currentUser = user
+            }
+            print("✅ Account upgraded successfully")
+        } else {
+            throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: upgradeResponse.error ?? "Upgrade failed"])
+        }
+    }
+    
+    /// Get or create a unique device identifier for temporary accounts
+    private func getOrCreateDeviceId() -> String {
+        let deviceIdKey = "temporary_device_id"
+        
+        if let existingId = UserDefaults.standard.string(forKey: deviceIdKey) {
+            return existingId
+        }
+        
+        // Generate a new UUID for this device
+        let newId = UUID().uuidString
+        UserDefaults.standard.set(newId, forKey: deviceIdKey)
+        return newId
     }
     
     // MARK: - Apple Sign-In

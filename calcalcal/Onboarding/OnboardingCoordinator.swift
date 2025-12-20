@@ -23,7 +23,7 @@ class OnboardingCoordinator: ObservableObject {
     // MARK: - Published Properties
     
     /// Current step being displayed
-    @Published private(set) var currentStep: OnboardingStepType = .welcome
+    @Published private(set) var currentStep: OnboardingStepType = .aboutApp
     
     /// All data collected during onboarding
     @Published var collectedData: OnboardingData = OnboardingData()
@@ -53,6 +53,9 @@ class OnboardingCoordinator: ObservableObject {
     
     private let userDefaults: UserDefaults
     private var cancellables = Set<AnyCancellable>()
+    
+    /// Whether the current user is using a temporary account (needs account creation prompt)
+    var isTemporaryUser: Bool = false
     
     // MARK: - Initialization
     
@@ -164,7 +167,7 @@ class OnboardingCoordinator: ObservableObject {
     func reset() {
         print("[OnboardingCoordinator] Resetting onboarding")
         
-        currentStep = .welcome
+        currentStep = .aboutApp
         collectedData = OnboardingData()
         analytics = OnboardingAnalytics()
         isCompleted = false
@@ -226,9 +229,19 @@ class OnboardingCoordinator: ObservableObject {
         }
         
         // Move to next step
-        guard let nextStep = currentStep.next else {
+        guard var nextStep = currentStep.next else {
             print("[OnboardingCoordinator] Error: No next step available")
             return .invalidStep
+        }
+        
+        // Skip createAccount step for non-temporary users
+        if nextStep == .createAccount && !isTemporaryUser {
+            print("[OnboardingCoordinator] Skipping createAccount step (not a temporary user)")
+            if let stepAfter = nextStep.next {
+                nextStep = stepAfter
+            } else {
+                return completeOnboarding()
+            }
         }
         
         currentStep = nextStep

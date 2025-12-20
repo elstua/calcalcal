@@ -44,6 +44,17 @@ struct User: Codable, Identifiable {
     /// Whether user has completed onboarding
     let onboardingCompleted: Bool?
     
+    // MARK: - Temporary Account Fields
+    
+    /// Whether this is a temporary (non-OAuth) account
+    let isTemporary: Bool?
+    
+    /// Device ID for temporary accounts
+    let deviceId: String?
+    
+    /// How the account was created: "apple", "google", or "temporary"
+    let createdVia: String?
+    
     enum CodingKeys: String, CodingKey {
         case id
         case email = "email"
@@ -68,6 +79,10 @@ struct User: Codable, Identifiable {
         case weightUnit = "weight_unit"
         case heightUnit = "height_unit"
         case onboardingCompleted = "onboarding_completed"
+        // Temporary account fields
+        case isTemporary = "is_temporary"
+        case deviceId = "device_id"
+        case createdVia = "created_via"
     }
 
     init(from decoder: Decoder) throws {
@@ -95,6 +110,10 @@ struct User: Codable, Identifiable {
         self.weightUnit = try container.decodeIfPresent(String.self, forKey: .weightUnit)
         self.heightUnit = try container.decodeIfPresent(String.self, forKey: .heightUnit)
         self.onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted)
+        // Temporary account fields
+        self.isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary)
+        self.deviceId = try container.decodeIfPresent(String.self, forKey: .deviceId)
+        self.createdVia = try container.decodeIfPresent(String.self, forKey: .createdVia)
     }
 
     private static func decodeLenientDouble(container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Double? {

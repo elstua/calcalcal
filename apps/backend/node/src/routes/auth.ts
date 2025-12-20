@@ -398,6 +398,164 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
+// POST /api/auth/create-temporary
+// Create a temporary account for users who want to skip OAuth
+router.post('/create-temporary', async (req: Request, res: Response) => {
+  try {
+    console.log('📥 Received create-temporary request');
+    
+    const { deviceId } = req.body || {};
+    if (!deviceId) {
+      console.error('❌ Missing deviceId');
+      return res.status(400).json({ success: false, error: 'deviceId is required' });
+    }
+    
+    console.log('🔍 Checking for existing temporary account with deviceId:', deviceId);
+    
+    // Check if this device already has a temporary account
+    let dbUser = await UserModel.findByDeviceId(deviceId);
+    
+    if (dbUser) {
+      console.log('✅ Found existing temporary account:', dbUser.id);
+    } else {
+      console.log('👤 Creating new temporary account');
+      dbUser = await UserModel.createTemporaryUser(deviceId);
+      console.log('✅ Temporary account created:', dbUser.id);
+    }
+    
+    // Generate session tokens
+    const { accessToken, refreshToken } = AuthService.generateSessionTokens(dbUser.id);
+    
+    // Persist refresh token
+    const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await RefreshTokenModel.create(dbUser.id, refreshToken, refreshExpiry, {
+      userAgent: req.headers['user-agent'] as string | undefined,
+      ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || undefined,
+    });
+    
+    // Serialize dates for JSON response
+    const userResponse = {
+      ...dbUser,
+      created_at: typeof dbUser.created_at === 'string' 
+        ? dbUser.created_at 
+        : (dbUser.created_at as any)?.toISOString?.() || String(dbUser.created_at),
+      updated_at: typeof dbUser.updated_at === 'string'
+        ? dbUser.updated_at
+        : (dbUser.updated_at as any)?.toISOString?.() || String(dbUser.updated_at),
+    };
+    
+    const response = {
+      success: true,
+      user: userResponse,
+      session: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: 7 * 24 * 60 * 60,
+      },
+    };
+    
+    console.log('✅ Temporary account creation successful');
+    return res.json(response);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Create temporary account error:', { message, error });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to create temporary account', 
+      message 
+    });
+  }
+});
+
+// POST /api/auth/upgrade-temporary
+// Upgrade a temporary account to a permanent account with OAuth
+router.post('/upgrade-temporary', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    console.log('📥 Received upgrade-temporary request for user:', userId);
+    
+    // Get the current user to verify it's a temporary account
+    const currentUser = await UserModel.findById(userId);
+    if (!currentUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    if (!currentUser.is_temporary) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Account is not temporary - already upgraded' 
+      });
+    }
+    
+    const { appleId, googleId, email, name } = req.body || {};
+    
+    if (!appleId && !googleId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Either appleId or googleId is required for upgrade' 
+      });
+    }
+    
+    console.log('🔄 Upgrading temporary account with:', { appleId: !!appleId, googleId: !!googleId });
+    
+    // Check if the OAuth ID is already linked to another account
+    if (appleId) {
+      const existingApple = await UserModel.findByAppleId(appleId);
+      if (existingApple && existingApple.id !== userId) {
+        return res.status(409).json({ 
+          success: false, 
+          error: 'This Apple ID is already linked to another account' 
+        });
+      }
+    }
+    
+    if (googleId) {
+      const existingGoogle = await UserModel.findByGoogleId(googleId);
+      if (existingGoogle && existingGoogle.id !== userId) {
+        return res.status(409).json({ 
+          success: false, 
+          error: 'This Google account is already linked to another account' 
+        });
+      }
+    }
+    
+    // Upgrade the account
+    const upgradedUser = await UserModel.upgradeTemporaryAccount(
+      userId,
+      appleId || null,
+      googleId || null,
+      email,
+      name
+    );
+    
+    // Serialize dates for JSON response
+    const userResponse = {
+      ...upgradedUser,
+      created_at: typeof upgradedUser.created_at === 'string' 
+        ? upgradedUser.created_at 
+        : (upgradedUser.created_at as any)?.toISOString?.() || String(upgradedUser.created_at),
+      updated_at: typeof upgradedUser.updated_at === 'string'
+        ? upgradedUser.updated_at
+        : (upgradedUser.updated_at as any)?.toISOString?.() || String(upgradedUser.updated_at),
+    };
+    
+    console.log('✅ Account upgraded successfully');
+    return res.json({ 
+      success: true, 
+      user: userResponse,
+      message: 'Account upgraded successfully' 
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Upgrade temporary account error:', { message, error });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to upgrade account', 
+      message 
+    });
+  }
+});
+
 // POST /api/auth/logout - revoke current refresh token or all tokens
 router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {

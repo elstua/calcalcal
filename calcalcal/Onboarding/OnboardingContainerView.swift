@@ -35,6 +35,10 @@ struct OnboardingContainerView: View {
             Spacer()
         }
         .onAppear {
+            // Set temporary user flag before starting
+            coordinator.isTemporaryUser = appState.isTemporaryUser
+            print("[OnboardingContainerView] isTemporaryUser: \(coordinator.isTemporaryUser)")
+            
             // Start onboarding and pre-fill data if user is returning
             if let user = appState.currentUser, user.hasHealthData {
                 let existingData = user.toOnboardingData()
@@ -57,9 +61,6 @@ struct OnboardingContainerView: View {
     @ViewBuilder
     private func stepView(for step: OnboardingStepType) -> some View {
         switch step {
-        case .welcome:
-            WelcomeStepView(coordinator: coordinator)
-            
         case .aboutApp:
             AboutAppStepView(coordinator: coordinator)
             
@@ -74,6 +75,9 @@ struct OnboardingContainerView: View {
             
         case .height:
             HeightStepView(coordinator: coordinator)
+            
+        case .createAccount:
+            CreateAccountStepView(coordinator: coordinator)
             
         case .ready:
             ReadyStepView(coordinator: coordinator)

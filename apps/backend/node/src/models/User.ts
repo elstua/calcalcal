@@ -23,6 +23,10 @@ export interface User {
   weight_unit?: 'kg' | 'lbs';
   height_unit?: 'cm' | 'in';
   onboarding_completed?: boolean | null;
+  // Temporary account fields
+  is_temporary?: boolean;
+  device_id?: string | null;
+  created_via?: 'apple' | 'google' | 'temporary' | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,6 +54,73 @@ export class UserModel {
       [id]
     );
     return result.rows[0] || null;
+  }
+
+  static async findByDeviceId(deviceId: string): Promise<User | null> {
+    const result = await Database.query<User>(
+      'SELECT * FROM user_profiles WHERE device_id = $1',
+      [deviceId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Create a temporary user account (no OAuth required)
+   * @param deviceId Unique device identifier
+   * @returns Created temporary user
+   */
+  static async createTemporaryUser(deviceId: string): Promise<User> {
+    const { v4: uuidv4 } = await import('uuid');
+    const userId = uuidv4();
+    
+    const result = await Database.query<User>(
+      `INSERT INTO user_profiles (id, device_id, is_temporary, created_via, updated_at)
+       VALUES ($1, $2, TRUE, 'temporary', NOW())
+       RETURNING *`,
+      [userId, deviceId]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * Upgrade a temporary account to a permanent account with OAuth
+   * Links the OAuth provider to the existing temporary account
+   * @param userId The temporary user's ID
+   * @param appleId Apple ID (optional)
+   * @param googleId Google ID (optional)
+   * @param email User's email (optional)
+   * @param name User's name (optional)
+   * @returns Updated user
+   */
+  static async upgradeTemporaryAccount(
+    userId: string,
+    appleId: string | null,
+    googleId: string | null,
+    email?: string,
+    name?: string
+  ): Promise<User> {
+    // Determine created_via based on which OAuth provider is being used
+    const createdVia = appleId ? 'apple' : googleId ? 'google' : 'temporary';
+    
+    const result = await Database.query<User>(
+      `UPDATE user_profiles 
+       SET is_temporary = FALSE,
+           apple_id = COALESCE($2, apple_id),
+           google_id = COALESCE($3, google_id),
+           email = COALESCE($4, email),
+           name = COALESCE($5, name),
+           created_via = $6,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [userId, appleId, googleId, email ?? null, name ?? null, createdVia]
+    );
+    
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    
+    return result.rows[0];
   }
 
   static async upsertUser(

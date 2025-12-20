@@ -17,8 +17,8 @@ struct ContentView: View {
                         .environmentObject(appState)
                 }
             } else {
-                // Not logged in, show login
-                LoginView()
+                // Not logged in, show auth choice (welcome screen)
+                AuthChoiceView()
                     .environmentObject(appState)
             }
         }

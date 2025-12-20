@@ -144,6 +144,11 @@ struct ProfileView: View {
                     // Apple Health Section
                     healthKitSection
                     
+                    // Account Status Banner (for temporary accounts)
+                    if appState.isTemporaryUser {
+                        temporaryAccountBanner
+                    }
+                    
                     // Settings Button
                     Button("Settings") {
                         showingSettings = true
@@ -274,6 +279,28 @@ struct ProfileView: View {
         }
         .padding()
         .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    // MARK: - Temporary Account Banner
+    
+    @ViewBuilder
+    private var temporaryAccountBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("Temporary Account")
+                    .font(.headline)
+                Spacer()
+            }
+            
+            Text("Your data is stored locally. Create an account in Settings to sync across devices.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
         .cornerRadius(12)
     }
     

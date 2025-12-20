@@ -9,12 +9,12 @@ import Foundation
 /// 3. Create the step view
 /// 4. Add case to OnboardingContainerView factory switch
 enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
-    case welcome = 0        // Greeting screen after sign-in
-    case aboutApp = 1       // Carousel with 3 feature highlights
-    case healthKit = 2      // HealthKit permission request (mocked for now)
-    case activityLevel = 3  // Activity level selection
-    case weight = 4         // Current and target weight pickers
-    case height = 5         // Height picker
+    case aboutApp = 0       // Carousel with 3 feature highlights
+    case healthKit = 1      // HealthKit permission request (mocked for now)
+    case activityLevel = 2  // Activity level selection
+    case weight = 3         // Current and target weight pickers
+    case height = 4         // Height picker
+    case createAccount = 5  // Account creation prompt (temporary users only)
     case ready = 6          // Completion screen - all set!
     
     var id: Int { rawValue }
@@ -22,8 +22,6 @@ enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
     /// Human-readable title for each step (useful for debugging/analytics)
     var title: String {
         switch self {
-        case .welcome:
-            return "Welcome"
         case .aboutApp:
             return "About App"
         case .healthKit:
@@ -34,6 +32,8 @@ enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
             return "Weight"
         case .height:
             return "Height"
+        case .createAccount:
+            return "Create Account"
         case .ready:
             return "Ready"
         }
@@ -42,7 +42,7 @@ enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
     /// Whether this step can be skipped by the user
     var canSkip: Bool {
         switch self {
-        case .welcome, .aboutApp, .ready:
+        case .aboutApp, .ready:
             // Informational screens - no skip button needed (just continue)
             return false
         case .healthKit:
@@ -51,6 +51,9 @@ enum OnboardingStepType: Int, CaseIterable, Codable, Identifiable {
         case .activityLevel, .weight, .height:
             // Data collection screens - user can skip but we encourage completion
             return true
+        case .createAccount:
+            // User can skip account creation (handled in step view with "Skip for now")
+            return false
         }
     }
     

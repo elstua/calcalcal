@@ -46,6 +46,11 @@ class AppState: ObservableObject {
         authManager.error
     }
     
+    /// Whether the current user has a temporary (non-OAuth) account
+    var isTemporaryUser: Bool {
+        authManager.isTemporaryUser
+    }
+    
     // MARK: - Onboarding
     
     /// Whether the user has completed onboarding.
