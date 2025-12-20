@@ -7,16 +7,19 @@ struct ContentView: View {
         Group {
             if appState.isAuthenticated {
                 // User is logged in
-                if appState.isTemporaryUser {
-                    // Temporary users always see account creation screen
-                    CreateAccountStepView(coordinator: OnboardingCoordinator())
-                        .environmentObject(appState)
-                } else if appState.hasCompletedOnboarding {
-                    // Permanent users with completed onboarding - show main app
-                    MainTabView()
-                        .environmentObject(appState)
+                if appState.hasCompletedOnboarding {
+                    // Onboarding completed - check if temporary user needs account creation
+                    if appState.isTemporaryUser {
+                        // Temporary users see account creation screen after onboarding
+                        CreateAccountStepView(coordinator: OnboardingCoordinator())
+                            .environmentObject(appState)
+                    } else {
+                        // Permanent users with completed onboarding - show main app
+                        MainTabView()
+                            .environmentObject(appState)
+                    }
                 } else {
-                    // Permanent users who need onboarding
+                    // User needs onboarding (both temporary and permanent)
                     OnboardingContainerView()
                         .environmentObject(appState)
                 }
