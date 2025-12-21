@@ -4,6 +4,7 @@ import { UserModel } from '../models/User';
 import { v4 as uuidv4 } from 'uuid';
 import { RefreshTokenModel } from '../models/RefreshToken';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import Database from '../services/database';
 
 const router = Router();
 

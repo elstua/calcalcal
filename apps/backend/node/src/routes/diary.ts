@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth';
 import { DiaryEntryModel } from '../models/DiaryEntry';
+import { StreakCalculator } from '../services/streakCalculator';
 
 const router = Router();
 
@@ -62,6 +63,19 @@ router.post('/entries', async (req: AuthRequest, res) => {
 
     const entry = await DiaryEntryModel.upsert(userId, date, content || '');
 
+    // Update streaks after creating entry
+    try {
+      await StreakCalculator.updateStreaksOnEntryChange(
+        userId,
+        date,
+        content || '',
+        entry.blocks || []
+      );
+    } catch (streakError) {
+      console.error('Error updating streaks:', streakError);
+      // Don't fail the request if streak update fails
+    }
+
     res.status(201).json(entry);
   } catch (error) {
     console.error('Error creating entry:', error);
@@ -85,6 +99,19 @@ router.patch('/entries/:id', async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Entry not found' });
     }
 
+    // Update streaks after updating entry
+    try {
+      await StreakCalculator.updateStreaksOnEntryChange(
+        userId,
+        entry.date,
+        content,
+        entry.blocks || []
+      );
+    } catch (streakError) {
+      console.error('Error updating streaks:', streakError);
+      // Don't fail the request if streak update fails
+    }
+
     res.json(entry);
   } catch (error) {
     console.error('Error updating entry:', error);
@@ -98,9 +125,28 @@ router.delete('/entries/:id', async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.userId!;
 
+    // Get entry details before deletion for streak update
+    const entry = await DiaryEntryModel.getById(id);
+    if (!entry || entry.user_id !== userId) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
     const success = await DiaryEntryModel.delete(id, userId);
     if (!success) {
       return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    // Update streaks after deleting entry (treat as empty content)
+    try {
+      await StreakCalculator.updateStreaksOnEntryChange(
+        userId,
+        entry.date,
+        '',
+        []
+      );
+    } catch (streakError) {
+      console.error('Error updating streaks after deletion:', streakError);
+      // Don't fail the request if streak update fails
     }
 
     res.json({ success: true });

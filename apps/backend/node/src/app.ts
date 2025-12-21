@@ -7,6 +7,7 @@ import authRoutes from './routes/auth';
 import diaryRoutes from './routes/diary';
 import aiRoutes from './routes/ai';
 import storageRoutes from './routes/storage';
+import streaksRoutes from './routes/streaks';
 
 // Load env in this order: .env.local, then fallback to ENV.example if exists
 if (fs.existsSync('.env.local')) {
@@ -45,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/diary', diaryRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/storage', storageRoutes);
+app.use('/api/streaks', streaksRoutes);
 
 // Error handling middleware - must be last
 app.use((err: any, req: Request, res: Response, next: any) => {
