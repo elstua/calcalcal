@@ -6,11 +6,13 @@ struct DayStripItemModel: Identifiable, Equatable {
     let date: Date
     let calories: Int?
     let hasEntry: Bool
+    let isInStreak: Bool
 }
 
 struct DayStripView: View {
     let items: [DayStripItemModel]
     let selectedDate: Date
+    let currentStreak: Int
     let onSelectDate: (Date) -> Void
     let onShowAllDays: () -> Void
     
@@ -18,7 +20,7 @@ struct DayStripView: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            DayStripAllDaysButton(action: onShowAllDays)
+            DayStripStreakButton(streak: currentStreak, action: onShowAllDays)
             
             ForEach(items) { item in
                 DayStripItemView(
@@ -126,17 +128,19 @@ private struct DayStripItemView: View {
     }
 }
 
-private struct DayStripAllDaysButton: View {
+private struct DayStripStreakButton: View {
+    let streak: Int
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 2) {
-                Image(systemName: "calendar")
+                Text("🔥 \(streak)")
                     .font(.headline)
-                Text("All days")
+                    .foregroundColor(.orange)
+                Text("Streak")
                     .font(.caption)
-                    
+                    .foregroundColor(.secondary)
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)

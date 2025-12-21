@@ -110,6 +110,7 @@ private extension MainTabView {
                     DayStripView(
                         items: dayStripItems(),
                         selectedDate: selectedDay,
+                        currentStreak: appState.streaksData?.currentStreak ?? 0,
                         onSelectDate: { selectDay($0, animated: true) },
                         onShowAllDays: { showAllDaysSheet = true }
                     )
@@ -248,14 +249,38 @@ private extension MainTabView {
     }
 
     func dayStripItems() -> [DayStripItemModel] {
-        visibleDates.reversed().map { date in
+        // Parse streak start date
+        let streakStart: Date?
+        if let startString = appState.streaksData?.streakStartDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            streakStart = formatter.date(from: startString)
+        } else {
+            streakStart = nil
+        }
+        
+        return visibleDates.reversed().map { date in
             let key = dayKey(for: date)
             let state = dayEntryStates[key]
+            
+            // Check if date is in streak range [streakStart, today]
+            var isInStreak = false
+            if let start = streakStart {
+                let dayStart = calendar.startOfDay(for: date)
+                // Normalize start date to start of day for comparison
+                let streakDayStart = calendar.startOfDay(for: start)
+                let today = calendar.startOfDay(for: Date())
+                
+                isInStreak = dayStart >= streakDayStart && dayStart <= today
+            }
+            
             return DayStripItemModel(
                 id: key,
                 date: date,
                 calories: state?.entry.totalCalories,
-                hasEntry: !(state?.isPlaceholder ?? true)
+                hasEntry: !(state?.isPlaceholder ?? true),
+                isInStreak: isInStreak
             )
         }
     }

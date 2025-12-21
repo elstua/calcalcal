@@ -422,6 +422,30 @@ struct DiaryAPI {
         let decoder = JSONDecoder()
         return try decoder.decode(AnalyzeBlockResponse.self, from: data)
     }
+
+    /// Fetch current user streaks data
+    static func getStreaks() async throws -> StreaksData {
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/streaks"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        
+        // This is a GET request, authenticated by session token in makeRequest
+        let request = try makeRequest(url: url)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if !(200..<300).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
+            print("❌ getStreaks failed HTTP=\(http.statusCode) body=\(bodyText)")
+            throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
+                NSLocalizedDescriptionKey: "getStreaks failed (HTTP \(http.statusCode)): \(bodyText)"
+            ])
+        }
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(StreaksData.self, from: data)
+    }
 }
 
 private extension KeyedDecodingContainer {

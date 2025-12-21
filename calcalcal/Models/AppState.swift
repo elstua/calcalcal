@@ -7,6 +7,9 @@ class AppState: ObservableObject {
     /// Coordinator for managing onboarding flow
     /// Lazy-initialized when onboarding is needed
     @Published var onboardingCoordinator: OnboardingCoordinator?
+
+    /// Current streak data
+    @Published var streaksData: StreaksData?
     
     /// HealthKit manager for health data sync
     let healthKitManager = HealthKitManager.shared
@@ -27,6 +30,7 @@ class AppState: ObservableObject {
         // Sync HealthKit data on app launch if authorized
         Task {
             await syncHealthKitDataOnLaunch()
+            await refreshStreaks()
         }
     }
     
@@ -320,12 +324,28 @@ class AppState: ObservableObject {
             await MainActor.run {
                 // Clear all state
                 onboardingCoordinator = nil
+                streaksData = nil
                 objectWillChange.send()
             }
         } catch {
             await MainActor.run {
                 self.authManager.error = "Failed to delete account: \(error.localizedDescription)"
             }
+        }
+    }
+    
+    // MARK: - Streaks
+    
+    func refreshStreaks() async {
+        guard authManager.isAuthenticated else { return }
+        
+        do {
+            let data = try await DiaryAPI.getStreaks()
+            await MainActor.run {
+                self.streaksData = data
+            }
+        } catch {
+             print("[AppState] Failed to fetch streaks: \(error.localizedDescription)")
         }
     }
 } 
