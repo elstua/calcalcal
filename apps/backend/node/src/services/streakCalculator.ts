@@ -33,7 +33,7 @@ export class StreakCalculator {
     options: StreakCalculationOptions = {}
   ): boolean {
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
-    
+
     // Check content length
     const trimmedContent = content.trim();
     if (trimmedContent.length < opts.minimumContentLength) {
@@ -185,36 +185,48 @@ export class StreakCalculator {
   ): Promise<void> {
     // Get current streaks data
     const currentStreaks = await StreaksModel.getCurrentStreaks(userId);
-    
+
     // Check if entry has meaningful content
     const hasContent = this.hasMeaningfulContent(content, blocks);
-    
+
     // Get user's timezone
     const timezoneOffset = await this.getUserTimezoneOffset(userId);
     const today = this.getTimezoneAwareDate(new Date(), timezoneOffset);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Calculate yesterday relative to the entry date (not today)
+    const entryDateObj = new Date(entryDate);
+    const yesterdayOfEntry = new Date(entryDateObj);
+    yesterdayOfEntry.setDate(yesterdayOfEntry.getDate() - 1);
+    const yesterdayOfEntryStr = yesterdayOfEntry.toISOString().split('T')[0];
 
     if (hasContent) {
       // User has meaningful content - update streak
       let newCurrentStreak = 1;
       let newStreakStart = entryDate;
 
-      if (currentStreaks?.last_entry_date === yesterdayStr) {
-        // Continue existing streak
+      // Check if this is a same-day update (don't increment total_days)
+      const isSameDayUpdate = currentStreaks?.last_entry_date === entryDate;
+
+      if (currentStreaks?.last_entry_date === yesterdayOfEntryStr) {
+        // Continue existing streak (entry is day after last entry)
         newCurrentStreak = (currentStreaks.current_streak || 0) + 1;
         newStreakStart = currentStreaks.streak_start_date || entryDate;
-      } else if (currentStreaks?.last_entry_date === today) {
-        // Same day update - keep current streak
+      } else if (isSameDayUpdate) {
+        // Same day update - keep current streak values
         newCurrentStreak = currentStreaks.current_streak || 1;
         newStreakStart = currentStreaks.streak_start_date || entryDate;
       }
+      // else: gap in days - reset streak to 1 (default values)
 
       const newLongestStreak = Math.max(
         newCurrentStreak,
         currentStreaks?.longest_streak || 0
       );
+
+      // Only increment total_days_with_entries for new unique dates
+      const newTotalDays = isSameDayUpdate
+        ? (currentStreaks?.total_days_with_entries || 0)
+        : (currentStreaks?.total_days_with_entries || 0) + 1;
 
       await StreaksModel.updateStreak(
         userId,
@@ -222,18 +234,18 @@ export class StreakCalculator {
         newLongestStreak,
         entryDate,
         newStreakStart,
-        (currentStreaks?.total_days_with_entries || 0) + 1
+        newTotalDays
       );
     } else {
       // Entry has no meaningful content - check if this breaks the streak
-      if (currentStreaks?.last_entry_date === yesterdayStr) {
+      if (currentStreaks?.last_entry_date === yesterdayOfEntryStr) {
         // Move current streak to history
         if (currentStreaks.current_streak > 0) {
           await StreaksModel.addToHistory(
             userId,
             currentStreaks.current_streak,
-            currentStreaks.streak_start_date || yesterdayStr,
-            yesterdayStr
+            currentStreaks.streak_start_date || yesterdayOfEntryStr,
+            yesterdayOfEntryStr
           );
         }
 
@@ -292,7 +304,7 @@ export class StreakCalculator {
     const averageStreakLength =
       totalCompletedStreaks > 0
         ? streakHistory.reduce((sum, streak) => sum + streak.streak_length, 0) /
-          totalCompletedStreaks
+        totalCompletedStreaks
         : 0;
 
     return {
