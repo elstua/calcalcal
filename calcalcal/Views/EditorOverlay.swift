@@ -744,6 +744,23 @@ extension EditorOverlay {
             }
             lastSavedAt = Date()
             lastSavedContent = trimmed
+            
+            // Refresh streaks after save
+            Task {
+                do {
+                    let streaks = try await DiaryAPI.getStreaks()
+                    await MainActor.run {
+                        NotificationCenter.default.post(
+                            name: .streaksDataUpdated,
+                            object: nil,
+                            userInfo: ["streaks": streaks]
+                        )
+                    }
+                } catch {
+                    print("⚠️ Failed to refresh streaks after autosave: \(error)")
+                }
+            }
+            
             print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
         } catch {
             print("❌ Autosave error: \(error)")
@@ -783,6 +800,22 @@ extension EditorOverlay {
                 print("✅ Flush save success (no AI analysis)")
                 // Save blocks cache on flush as well
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                
+                // Refresh streaks after save
+                Task {
+                    do {
+                        let streaks = try await DiaryAPI.getStreaks()
+                        await MainActor.run {
+                            NotificationCenter.default.post(
+                                name: .streaksDataUpdated,
+                                object: nil,
+                                userInfo: ["streaks": streaks]
+                            )
+                        }
+                    } catch {
+                        print("⚠️ Failed to refresh streaks after flush save: \(error)")
+                    }
+                }
             } else {
                 print("⚠️ Missing user id; deferring flush save")
             }

@@ -1102,9 +1102,28 @@ extension EditorOverlaySimple {
                     )
                 }
             }
+
             lastSavedAt = Date()
             lastSavedContent = trimmed
-        } catch {
+            
+            // Refresh streaks after save
+            Task {
+                do {
+                    let streaks = try await DiaryAPI.getStreaks()
+                    await MainActor.run {
+                        NotificationCenter.default.post(
+                            name: .streaksDataUpdated,
+                            object: nil,
+                            userInfo: ["streaks": streaks]
+                        )
+                    }
+                } catch {
+                    print("⚠️ Failed to refresh streaks after autosave: \(error)")
+                }
+            }
+            
+            print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
+    } catch {
             #if DEBUG
             print("❌ Autosave error: \(error)")
             #endif
@@ -1130,6 +1149,22 @@ extension EditorOverlaySimple {
                 lastSavedAt = Date()
                 lastSavedContent = trimmed
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+
+                // Refresh streaks after save
+                Task {
+                    do {
+                        let streaks = try await DiaryAPI.getStreaks()
+                        await MainActor.run {
+                            NotificationCenter.default.post(
+                                name: .streaksDataUpdated,
+                                object: nil,
+                                userInfo: ["streaks": streaks]
+                            )
+                        }
+                    } catch {
+                        print("⚠️ Failed to refresh streaks after flush save: \(error)")
+                    }
+                }
             }
         } catch {
             #if DEBUG

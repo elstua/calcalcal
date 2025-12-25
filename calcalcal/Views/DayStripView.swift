@@ -138,7 +138,7 @@ private struct DayStripStreakButton: View {
                 Text("🔥 \(streak)")
                     .font(.headline)
                     .foregroundColor(.orange)
-                Text("Streak")
+                Text("Days")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

@@ -487,6 +487,22 @@ struct DiaryEntryPopupView: View {
                     )
                 }
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
+                
+                // Refresh streaks after save
+                Task {
+                    do {
+                        let streaks = try await DiaryAPI.getStreaks()
+                        await MainActor.run {
+                            NotificationCenter.default.post(
+                                name: .streaksDataUpdated,
+                                object: nil,
+                                userInfo: ["streaks": streaks]
+                            )
+                        }
+                    } catch {
+                        print("⚠️ Failed to refresh streaks after autosave: \(error)")
+                    }
+                }
             } else {
                 // Fallback: do nothing; next save will update once user id is available.
                 print("⚠️ Missing user id; deferring insert until available")
