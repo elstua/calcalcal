@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { AuthRequest, authenticateToken } from "../middleware/auth";
 import { DiaryEntryModel } from "../models/DiaryEntry";
+import { StreaksModel } from "../models/Streaks";
 import { AIService } from "../services/ai/service";
+import { StreakCalculator } from "../services/streakCalculator";
 import Database from "../services/database";
 import { OpenAI } from "openai";
 import * as fs from "fs";
@@ -271,12 +273,24 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
       `[analyze-block] success calories=${analysis.calories} protein=${analysis.protein} fat=${analysis.fat} carbs=${analysis.carbs} weight=${analysis.weight || "N/A"} metric_description=${analysis.metric_description || "N/A"}`,
     );
 
-    // Return the updated block data
+    // Update streaks after successful AI analysis (validated food items)
+    let streaksData = null;
+    try {
+      await StreakCalculator.updateStreaksOnAnalysisComplete(userId, entry.date);
+      streaksData = await StreaksModel.getStreaksData(userId);
+      console.log(`[analyze-block] streaks updated: current=${streaksData?.currentStreak}`);
+    } catch (streakError) {
+      console.error('[analyze-block] Error updating streaks:', streakError);
+      // Don't fail the request if streak update fails
+    }
+
+    // Return the updated block data with streaks
     const result = {
       blockId,
       entryId,
       ...analysis,
       totals,
+      streaks: streaksData,
     };
 
     res.json(result);

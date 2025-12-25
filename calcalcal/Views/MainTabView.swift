@@ -93,6 +93,11 @@ struct MainTabView: View {
                 state.entry.totalCalories = total
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
+            guard let info = notification.userInfo,
+                  let streaks = info["streaks"] as? StreaksData else { return }
+            appState.streaksData = streaks
+        }
     }
 }
 
@@ -888,6 +893,15 @@ struct EditorOverlaySimple: View {
                                 name: .diaryEntryTotalsUpdated,
                                 object: nil,
                                 userInfo: ["entryId": canonicalEntryId, "totalCalories": totals.total_calories as Any]
+                            )
+                        }
+
+                        // Update streaks data reactively
+                        if let streaks = analysis.streaks {
+                            NotificationCenter.default.post(
+                                name: .streaksDataUpdated,
+                                object: nil,
+                                userInfo: ["streaks": streaks]
                             )
                         }
                     }

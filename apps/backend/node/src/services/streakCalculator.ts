@@ -11,7 +11,7 @@ export interface StreakCalculationOptions {
 export class StreakCalculator {
   private static readonly DEFAULT_OPTIONS: Required<StreakCalculationOptions> = {
     timezoneOffset: 0,
-    minimumContentLength: 10,
+    minimumContentLength: 1, // Any non-empty content counts
     ignorePlaceholderPrompts: true,
   };
 
@@ -253,6 +253,60 @@ export class StreakCalculator {
         await StreaksModel.resetCurrentStreak(userId);
       }
     }
+  }
+
+  /**
+   * Update streaks when AI analysis completes successfully (validated food items)
+   * Called from AI analysis endpoints when food is confirmed by AI
+   */
+  static async updateStreaksOnAnalysisComplete(
+    userId: string,
+    entryDate: string
+  ): Promise<void> {
+    // Get current streaks data
+    const currentStreaks = await StreaksModel.getCurrentStreaks(userId);
+
+    // Calculate yesterday relative to the entry date
+    const entryDateObj = new Date(entryDate);
+    const yesterdayOfEntry = new Date(entryDateObj);
+    yesterdayOfEntry.setDate(yesterdayOfEntry.getDate() - 1);
+    const yesterdayOfEntryStr = yesterdayOfEntry.toISOString().split('T')[0];
+
+    // Check if this is a same-day update (don't increment total_days)
+    const isSameDayUpdate = currentStreaks?.last_entry_date === entryDate;
+
+    let newCurrentStreak = 1;
+    let newStreakStart = entryDate;
+
+    if (currentStreaks?.last_entry_date === yesterdayOfEntryStr) {
+      // Continue existing streak (entry is day after last entry)
+      newCurrentStreak = (currentStreaks.current_streak || 0) + 1;
+      newStreakStart = currentStreaks.streak_start_date || entryDate;
+    } else if (isSameDayUpdate) {
+      // Same day update - keep current streak values
+      newCurrentStreak = currentStreaks.current_streak || 1;
+      newStreakStart = currentStreaks.streak_start_date || entryDate;
+    }
+    // else: gap in days - reset streak to 1 (default values)
+
+    const newLongestStreak = Math.max(
+      newCurrentStreak,
+      currentStreaks?.longest_streak || 0
+    );
+
+    // Only increment total_days_with_entries for new unique dates
+    const newTotalDays = isSameDayUpdate
+      ? (currentStreaks?.total_days_with_entries || 0)
+      : (currentStreaks?.total_days_with_entries || 0) + 1;
+
+    await StreaksModel.updateStreak(
+      userId,
+      newCurrentStreak,
+      newLongestStreak,
+      entryDate,
+      newStreakStart,
+      newTotalDays
+    );
   }
 
   /**

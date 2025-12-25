@@ -21,6 +21,7 @@ struct DiaryAPI {
         let metric_description: String?
         let confidence: Double?
         let totals: EntryTotals?
+        let streaks: StreaksData?
     }
     
     struct EntryTotals: Codable {

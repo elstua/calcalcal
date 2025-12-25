@@ -285,6 +285,7 @@ extension Notification.Name {
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
     static let diaryEntryCanonicalIdResolved = Notification.Name("diaryEntryCanonicalIdResolved")
+    static let streaksDataUpdated = Notification.Name("streaksDataUpdated")
 }
 
 // MARK: - Utilities
