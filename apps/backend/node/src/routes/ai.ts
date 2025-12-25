@@ -26,7 +26,7 @@ function cloneBlocks(blocks: any[]): any[] {
   }
 }
 
-function queueAnalysisJob(entryId: string, blocks: any[]) {
+function queueAnalysisJob(entryId: string, blocks: any[], userId: string, entryDate: string | Date) {
   const jobToken = Symbol(entryId);
   const safeBlocks = cloneBlocks(blocks);
   activeAnalysisJobs.set(entryId, jobToken);
@@ -72,6 +72,15 @@ function queueAnalysisJob(entryId: string, blocks: any[]) {
         ],
       );
       console.log(`[ai:analyze] job completed entry=${entryId}`);
+
+      // Update streaks after successful AI analysis
+      try {
+        await StreakCalculator.updateStreaksOnAnalysisComplete(userId, entryDate);
+        console.log(`[ai:analyze] streaks updated for user=${userId}`);
+      } catch (streakError) {
+        console.error('[ai:analyze] Error updating streaks:', streakError);
+        // Don't fail the job if streak update fails
+      }
     } catch (error: any) {
       const isLatest = activeAnalysisJobs.get(entryId) === jobToken;
       if (!isLatest) {
@@ -328,7 +337,7 @@ router.post("/analyze", async (req: AuthRequest, res) => {
       ["processing", entryId],
     );
 
-    queueAnalysisJob(entryId, blocks);
+    queueAnalysisJob(entryId, blocks, userId, entry.date);
 
     return res
       .status(202)
