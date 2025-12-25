@@ -261,31 +261,39 @@ export class StreakCalculator {
    */
   static async updateStreaksOnAnalysisComplete(
     userId: string,
-    entryDate: string
+    entryDate: string | Date
   ): Promise<void> {
+    // Normalize entryDate to YYYY-MM-DD string (DB may return Date object)
+    const entryDateStr = typeof entryDate === 'string'
+      ? entryDate.split('T')[0]  // Handle "2025-12-25T00:00:00Z" format
+      : entryDate.toISOString().split('T')[0];
+
+    console.log(`[StreakCalculator] updateStreaksOnAnalysisComplete called: userId=${userId}, entryDate=${entryDateStr}`);
+
     // Get current streaks data
     const currentStreaks = await StreaksModel.getCurrentStreaks(userId);
+    console.log(`[StreakCalculator] currentStreaks:`, JSON.stringify(currentStreaks));
 
     // Calculate yesterday relative to the entry date
-    const entryDateObj = new Date(entryDate);
+    const entryDateObj = new Date(entryDateStr + 'T00:00:00Z');
     const yesterdayOfEntry = new Date(entryDateObj);
     yesterdayOfEntry.setDate(yesterdayOfEntry.getDate() - 1);
     const yesterdayOfEntryStr = yesterdayOfEntry.toISOString().split('T')[0];
 
     // Check if this is a same-day update (don't increment total_days)
-    const isSameDayUpdate = currentStreaks?.last_entry_date === entryDate;
+    const isSameDayUpdate = currentStreaks?.last_entry_date === entryDateStr;
 
     let newCurrentStreak = 1;
-    let newStreakStart = entryDate;
+    let newStreakStart = entryDateStr;
 
     if (currentStreaks?.last_entry_date === yesterdayOfEntryStr) {
       // Continue existing streak (entry is day after last entry)
       newCurrentStreak = (currentStreaks.current_streak || 0) + 1;
-      newStreakStart = currentStreaks.streak_start_date || entryDate;
+      newStreakStart = currentStreaks.streak_start_date || entryDateStr;
     } else if (isSameDayUpdate) {
       // Same day update - keep current streak values
       newCurrentStreak = currentStreaks.current_streak || 1;
-      newStreakStart = currentStreaks.streak_start_date || entryDate;
+      newStreakStart = currentStreaks.streak_start_date || entryDateStr;
     }
     // else: gap in days - reset streak to 1 (default values)
 
@@ -299,11 +307,13 @@ export class StreakCalculator {
       ? (currentStreaks?.total_days_with_entries || 0)
       : (currentStreaks?.total_days_with_entries || 0) + 1;
 
+    console.log(`[StreakCalculator] Updating streak: newCurrentStreak=${newCurrentStreak}, newLongestStreak=${newLongestStreak}, entryDateStr=${entryDateStr}, newStreakStart=${newStreakStart}, newTotalDays=${newTotalDays}`);
+
     await StreaksModel.updateStreak(
       userId,
       newCurrentStreak,
       newLongestStreak,
-      entryDate,
+      entryDateStr,
       newStreakStart,
       newTotalDays
     );
