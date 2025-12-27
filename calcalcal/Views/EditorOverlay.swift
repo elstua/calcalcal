@@ -719,6 +719,23 @@ extension EditorOverlay {
                                                     "analyzedBlocks": payload
                                                 ]
                                             )
+                                            
+                                            // Refresh streaks now that we have nutrition data (analysis complete)
+                                            Task {
+                                                do {
+                                                    let streaks = try await DiaryAPI.getStreaks()
+                                                    await MainActor.run {
+                                                        NotificationCenter.default.post(
+                                                            name: .streaksDataUpdated,
+                                                            object: nil,
+                                                            userInfo: ["streaks": streaks]
+                                                        )
+                                                    }
+                                                    print("🔥 Streaks refreshed after analysis completion")
+                                                } catch {
+                                                    print("⚠️ Failed to refresh streaks after analysis: \(error)")
+                                                }
+                                            }
                                         }
                                     }
                                 }

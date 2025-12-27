@@ -27,10 +27,28 @@ export class DiaryEntryModel {
     dateTo: string
   ) {
     const result = await Database.query(
-      `SELECT id, user_id, date, content, images, total_calories, updated_at
+      `SELECT id, user_id, date, content, images, total_calories, updated_at, ai_analysis_status
        FROM diary_entries
        WHERE user_id = $1 AND date >= $2 AND date <= $3
        ORDER BY date DESC`,
+      [userId, dateFrom, dateTo]
+    );
+    return result.rows;
+  }
+
+  static async listAnalyzedByDateRange(
+    userId: string,
+    dateFrom: string,
+    dateTo: string
+  ) {
+    const result = await Database.query(
+      `SELECT id, user_id, date, content, images, total_calories, updated_at
+       FROM diary_entries
+       WHERE user_id = $1 
+         AND date >= $2 
+         AND date <= $3 
+         AND ai_analysis_status = 'completed'
+       ORDER BY date ASC`,
       [userId, dateFrom, dateTo]
     );
     return result.rows;
