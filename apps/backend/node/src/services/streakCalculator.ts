@@ -195,4 +195,62 @@ export class StreakCalculator {
   static async initializeUserStreaks(userId: string): Promise<void> {
     await StreaksModel.initializeUserStreaks(userId);
   }
+
+  /**
+   * Get detailed streak statistics
+   */
+  static async getStreakStatistics(userId: string): Promise<any> {
+    const streaksData = await StreaksModel.getStreaksData(userId);
+    const history = await StreaksModel.getStreakHistory(userId, 50);
+
+    const totalCompletedStreaks = history.length;
+    const averageStreakLength = totalCompletedStreaks > 0
+      ? Math.round(history.reduce((sum, h) => sum + h.streak_length, 0) / totalCompletedStreaks)
+      : 0;
+
+    return {
+      currentStreak: streaksData?.currentStreak || 0,
+      longestStreak: streaksData?.longestStreak || 0,
+      totalDaysWithEntries: streaksData?.totalDaysWithEntries || 0,
+      lastEntryDate: streaksData?.lastEntryDate || null,
+      streakStartDate: streaksData?.streakStartDate || null,
+      totalCompletedStreaks,
+      averageStreakLength,
+      recentStreaks: history.map(h => ({
+        length: h.streak_length,
+        startDate: h.start_date,
+        endDate: h.end_date,
+      })),
+    };
+  }
+
+  /**
+   * Check if content has meaningful information (not placeholder)
+   */
+  static hasMeaningfulContent(content: string, blocks: any[] = []): boolean {
+    const placeholders = [
+      'what did you eat today?',
+      'describe your meals',
+      'log your food',
+      'track your calories',
+      'add your meals',
+      '',
+    ];
+
+    const normalizedContent = content?.trim().toLowerCase() || '';
+
+    if (placeholders.includes(normalizedContent)) {
+      return false;
+    }
+
+    if (normalizedContent.length < 10) {
+      return false;
+    }
+
+    if (blocks && blocks.length > 0) {
+      return true;
+    }
+
+    return true;
+  }
 }

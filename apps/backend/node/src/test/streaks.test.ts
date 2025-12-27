@@ -32,6 +32,17 @@ describe('Streaks Functionality', () => {
     await StreakCalculator.initializeUserStreaks(testUserId);
   });
 
+  // Helper function to mark entries as analyzed for streak testing
+  async function markEntryAsAnalyzed(userId: string, date: string) {
+    await Database.query(
+      `UPDATE diary_entries 
+       SET ai_analysis_status = 'completed', 
+           total_calories = 100 
+       WHERE user_id = $1 AND date = $2`,
+      [userId, date]
+    );
+  }
+
   describe('StreaksModel', () => {
     test('should initialize streaks for new user', async () => {
       const streaks = await StreaksModel.getStreaksData(testUserId);
@@ -101,22 +112,23 @@ describe('Streaks Functionality', () => {
     });
 
     test('should calculate streaks from consecutive entries', async () => {
-      // Create entries for 5 consecutive days
-      const today = new Date('2025-12-21');
+      // Create entries for 5 consecutive days ending today
+      const today = new Date();
       for (let i = 4; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        
+
         await DiaryEntryModel.upsert(
           testUserId,
           dateStr,
           `Healthy eating day ${5-i}. Had salad and grilled chicken.`
         );
+        await markEntryAsAnalyzed(testUserId, dateStr);
       }
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
-      
+
       expect(streaks.currentStreak).toBe(5);
       expect(streaks.longestStreak).toBe(5);
       expect(streaks.totalDaysWithEntries).toBe(5);
@@ -126,45 +138,77 @@ describe('Streaks Functionality', () => {
 
     test('should handle streak breaks correctly', async () => {
       // Create entries with a gap
-      await DiaryEntryModel.upsert(testUserId, '2025-12-17', 'Healthy eating day 1');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-18', 'Healthy eating day 2');
-      // Skip 2025-12-19 (break)
-      await DiaryEntryModel.upsert(testUserId, '2025-12-20', 'Back on track day 1');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-21', 'Back on track day 2');
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dayBeforeYesterday = new Date(today);
+      dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2);
+      const threeDaysAgo = new Date(today);
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const fourDaysAgo = new Date(today);
+      fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+
+      await DiaryEntryModel.upsert(testUserId, fourDaysAgo.toISOString().split('T')[0], 'Healthy eating day 1');
+      await markEntryAsAnalyzed(testUserId, fourDaysAgo.toISOString().split('T')[0]);
+      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Healthy eating day 2');
+      await markEntryAsAnalyzed(testUserId, threeDaysAgo.toISOString().split('T')[0]);
+      // Skip dayBeforeYesterday (break)
+      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Back on track day 1');
+      await markEntryAsAnalyzed(testUserId, yesterday.toISOString().split('T')[0]);
+      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Back on track day 2');
+      await markEntryAsAnalyzed(testUserId, today.toISOString().split('T')[0]);
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
-      
-      expect(streaks.currentStreak).toBe(2); // Current streak should be 2 (20-21)
+
+      expect(streaks.currentStreak).toBe(2); // Current streak should be 2 (yesterday-today)
       expect(streaks.longestStreak).toBe(2); // Longest should be 2
       expect(streaks.totalDaysWithEntries).toBe(4);
     });
 
-    test('should ignore placeholder content in streak calculation', async () => {
-      // Create entries with placeholder content
-      await DiaryEntryModel.upsert(testUserId, '2025-12-17', 'What did you eat today?');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-18', 'Healthy eating with salad');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-19', 'Describe your meals');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-20', 'Grilled chicken and vegetables');
+    test('should only count analyzed entries in streak calculation', async () => {
+      // Create entries - some analyzed, some not
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const twoDaysAgo = new Date(today);
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const threeDaysAgo = new Date(today);
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Entry 1');
+      await markEntryAsAnalyzed(testUserId, threeDaysAgo.toISOString().split('T')[0]);
+      await DiaryEntryModel.upsert(testUserId, twoDaysAgo.toISOString().split('T')[0], 'Entry 2');
+      await markEntryAsAnalyzed(testUserId, twoDaysAgo.toISOString().split('T')[0]);
+      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Entry 3 - not analyzed');
+      // Skip marking as analyzed
+      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Entry 4');
+      await markEntryAsAnalyzed(testUserId, today.toISOString().split('T')[0]);
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
-      
-      // Should only count meaningful content days
-      expect(streaks.currentStreak).toBe(1); // Only 2025-12-20 is meaningful
-      expect(streaks.totalDaysWithEntries).toBe(2); // 2025-12-18 and 2025-12-20
+
+      // Should only count analyzed entries
+      expect(streaks.currentStreak).toBe(1); // Only today is consecutive analyzed
+      expect(streaks.totalDaysWithEntries).toBe(3); // 3 days ago, 2 days ago, and today
     });
 
     test('should recalculate streaks correctly', async () => {
-      // Create some initial data
-      await DiaryEntryModel.upsert(testUserId, '2025-12-17', 'Day 1');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-18', 'Day 2');
-      await DiaryEntryModel.upsert(testUserId, '2025-12-19', 'Day 3');
-      
+      // Create some initial data - 3 consecutive days ending today
+      const today = new Date();
+      for (let i = 2; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+
+        await DiaryEntryModel.upsert(testUserId, dateStr, `Day ${3-i}`);
+        await markEntryAsAnalyzed(testUserId, dateStr);
+      }
+
       // Manually set incorrect streaks data
-      await StreaksModel.updateStreak(testUserId, 1, 1, '2025-12-17', '2025-12-17', 3);
-      
+      await StreaksModel.updateStreak(testUserId, 1, 1, today.toISOString().split('T')[0], today.toISOString().split('T')[0], 3);
+
       // Recalculate should fix it
       const recalculated = await StreakCalculator.recalculateAllStreaks(testUserId);
-      
+
       expect(recalculated.currentStreak).toBe(3);
       expect(recalculated.longestStreak).toBe(3);
       expect(recalculated.totalDaysWithEntries).toBe(3);
@@ -190,19 +234,21 @@ describe('Streaks Functionality', () => {
   });
 
   describe('Streak Update Triggers', () => {
-    test('should update streaks when meaningful entry is created', async () => {
-      // Create a meaningful entry
+    test('should update streaks when meaningful entry is analyzed', async () => {
+      // Create a meaningful entry and mark it as analyzed
+      const today = new Date().toISOString().split('T')[0];
       await DiaryEntryModel.upsert(
         testUserId,
-        '2025-12-21',
+        today,
         'Had a great healthy salad for lunch.'
       );
+      await markEntryAsAnalyzed(testUserId, today);
 
-      // Wait a moment for trigger to process
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Manually trigger streak update (no database trigger anymore)
+      await StreakCalculator.updateStreaksOnAnalysisComplete(testUserId, today);
 
       const streaks = await StreaksModel.getStreaksData(testUserId);
-      
+
       expect(streaks?.currentStreak).toBe(1);
       expect(streaks?.totalDaysWithEntries).toBe(1);
       expect(streaks?.lastEntryDate).toBeTruthy();
