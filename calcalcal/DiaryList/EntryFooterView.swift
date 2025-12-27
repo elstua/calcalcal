@@ -6,6 +6,10 @@ struct EntryFooterView: View {
     let remoteTotalCalories: Int?
     let onAddImage: () -> Void
     
+    // Access app state to get user goals
+    @EnvironmentObject var appState: AppState
+    @State private var showDayOverview: Bool = false
+    
     var body: some View {
         HStack {
             Button(action: onAddImage) {
@@ -14,7 +18,23 @@ struct EntryFooterView: View {
             }
             .accessibilityLabel("Add Image")
             Spacer()
-            CalorieTotalView(blocks: blocks, remoteTotalCalories: remoteTotalCalories)
+            
+            Button(action: {
+                showDayOverview = true
+            }) {
+                CalorieTotalView(blocks: blocks, remoteTotalCalories: remoteTotalCalories)
+            }
+            .buttonStyle(PlainButtonStyle())
+            // Present the overview as a popover
+            .popover(isPresented: $showDayOverview) {
+                DayOverviewContextMenuView(
+                    consumed: blocks.resolvedNutritionTotal(),
+                    user: appState.currentUser,
+                    // Use a fixed width suitable for a readable card, or screen width minus padding
+                    width: UIScreen.main.bounds.width - 48
+                )
+                .presentationCompactAdaptation(.popover) // Ensure it stays as popover on iPhone if possible (iOS 16.4+)
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -60,6 +80,8 @@ struct EntryFooterView_Previews: PreviewProvider {
             remoteTotalCalories: 760,
             onAddImage: {}
         )
+        // Inject mock AppState for preview
+        .environmentObject(AppState())
         .previewLayout(.sizeThatFits)
         .padding()
     }

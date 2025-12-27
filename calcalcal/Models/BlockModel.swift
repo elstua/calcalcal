@@ -203,6 +203,27 @@ extension Collection where Element == Block {
         }
         return hasValue ? total : nil
     }
+
+    /// Returns the sum of all macros derived from local block metadata.
+    func resolvedNutritionTotal() -> NutritionData {
+        var total = NutritionData(calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, sugar: 0, sodium: 0, weight: 0, metric_description: nil, confidence: nil, userModified: false)
+        
+        for block in self {
+            if let nutrition = block.nutrition {
+                total.calories = (total.calories ?? 0) + (nutrition.calories ?? 0)
+                total.protein = (total.protein ?? 0) + (nutrition.protein ?? 0)
+                total.fat = (total.fat ?? 0) + (nutrition.fat ?? 0)
+                total.carbs = (total.carbs ?? 0) + (nutrition.carbs ?? 0)
+                total.fiber = (total.fiber ?? 0) + (nutrition.fiber ?? 0)
+                total.sugar = (total.sugar ?? 0) + (nutrition.sugar ?? 0)
+                total.sodium = (total.sodium ?? 0) + (nutrition.sodium ?? 0)
+            } else if let cal = block.resolvedCalorieValue() {
+                // Fallback for calories if nutrition is missing but calorieData exists
+                 total.calories = (total.calories ?? 0) + cal
+            }
+        }
+        return total
+    }
 }
 
 fileprivate extension Block {
