@@ -158,6 +158,8 @@ struct DiaryAPI {
                 fiber: fiber,
                 sugar: sugar,
                 sodium: sodium,
+                weight: weight,
+                metricDescription: metric_description,
                 confidence: confidence,
                 aiAnalysis: nil // We'll fetch this separately if needed
             )

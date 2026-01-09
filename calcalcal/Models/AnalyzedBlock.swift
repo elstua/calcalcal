@@ -14,6 +14,8 @@ struct AnalyzedBlock {
     let fiber: Double?
     let sugar: Double?
     let sodium: Double?
+    let weight: Double?
+    let metricDescription: String?
     let confidence: Double?
 
     // Optional provider-specific payload; not used for client logic currently.
