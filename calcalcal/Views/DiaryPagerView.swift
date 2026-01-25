@@ -6,7 +6,7 @@ struct DiaryPagerItem: Identifiable, Equatable {
     let entry: DiaryEntry
 }
 
-/// Snapping carousel for displaying diary entries by day.
+/// Paging carousel for displaying diary entries by day.
 struct DiaryPagerView<Content: View>: View {
     let items: [DiaryPagerItem]
     @Binding var selectedDate: Date
@@ -34,14 +34,14 @@ struct DiaryPagerView<Content: View>: View {
     }
     
     var body: some View {
-        SnapCarousel(
-            list: items,
-            spacing: spacing,
-            trailingSpace: trailingSpace,
-            index: $currentIndex
-        ) { item in
-            content(item, calendar.isDate(item.date, inSameDayAs: selectedDate))
+        TabView(selection: $currentIndex) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                content(item, calendar.isDate(item.date, inSameDayAs: selectedDate))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .tag(index)
+            }
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
         .onAppear {
             syncIndexWithSelection()
         }
@@ -65,83 +65,5 @@ struct DiaryPagerView<Content: View>: View {
         if currentIndex != idx {
             currentIndex = idx
         }
-    }
-}
-
-/// Simple offset-based carousel (no matched geometry requirements)
-private struct SnapCarousel<Item: Identifiable, Content: View>: View {
-    let list: [Item]
-    var spacing: CGFloat
-    var trailingSpace: CGFloat
-    @Binding var index: Int
-    @ViewBuilder let content: (Item) -> Content
-    
-    @State private var dragOffset: CGFloat = 0
-    @State private var scrollOffset: CGFloat = 0
-    @State private var isHandlingGesture: Bool = false
-    
-    var body: some View {
-        GeometryReader { proxy in
-            let cardWidth = max(0, proxy.size.width - trailingSpace)
-            let step = cardWidth + spacing
-            let centerAdjustment = (proxy.size.width - cardWidth) / 2
-            
-            HStack(spacing: spacing) {
-                ForEach(list) { item in
-                    content(item)
-                        .frame(width: cardWidth)
-                }
-            }
-            .contentShape(Rectangle())
-            .offset(x: scrollOffset + dragOffset + centerAdjustment)
-            .highPriorityGesture(
-                DragGesture()
-                    .onChanged { value in
-                        dragOffset = value.translation.width
-                    }
-                    .onEnded { value in
-                        let progress = -value.translation.width / step
-                        let rounded = progress.rounded()
-                        let newIndex = clamp(index + Int(rounded))
-                        let finalTarget = targetOffset(for: newIndex, step: step)
-                        
-                        // Merge drag offset into scroll offset so animation starts from finger's release position
-                        scrollOffset += dragOffset
-                        dragOffset = 0
-                        
-                        // Start animation FIRST, before any state changes
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            scrollOffset = finalTarget
-                        }
-                        
-                        // Update index AFTER animation completes
-                        if newIndex != index {
-                            isHandlingGesture = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                index = newIndex
-                                isHandlingGesture = false
-                            }
-                        }
-                    }
-            )
-            .onAppear {
-                scrollOffset = targetOffset(for: index, step: step)
-            }
-            .onChange(of: index) { newValue in
-                guard !isHandlingGesture else { return }
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    scrollOffset = targetOffset(for: newValue, step: step)
-                }
-            }
-        }
-    }
-    
-    private func targetOffset(for index: Int, step: CGFloat) -> CGFloat {
-        -CGFloat(index) * step
-    }
-    
-    private func clamp(_ value: Int) -> Int {
-        guard !list.isEmpty else { return 0 }
-        return min(max(value, 0), list.count - 1)
     }
 }

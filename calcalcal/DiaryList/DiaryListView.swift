@@ -148,13 +148,11 @@ struct DiaryListView: View {
             .highPriorityGesture(TapGesture().onEnded(openAction))
             .allowsHitTesting(!isEntryPresented(entry))
         
+        // iOS 18+ uses zoomTransitionSource for the zoom animation
+        // When sharedNamespace is provided, apply the transition source modifier
         if let ns = sharedNamespace {
-            if isEntryPresented(entry) {
-                tappableCard.hidden()
-            } else {
-                tappableCard
-                    .matchedGeometryEffect(id: entry.id, in: ns)
-            }
+            tappableCard
+                .zoomTransitionSource(id: entry.id, namespace: ns)
         } else {
             tappableCard
         }
@@ -168,13 +166,10 @@ struct DiaryListView: View {
             .highPriorityGesture(TapGesture().onEnded(openAction))
             .allowsHitTesting(!isEntryPresented(entry))
         
+        // iOS 18+ uses zoomTransitionSource for the zoom animation
         if let ns = sharedNamespace {
-            if isEntryPresented(entry) {
-                tappableCard.hidden()
-            } else {
-                tappableCard
-                    .matchedGeometryEffect(id: entry.id, in: ns)
-            }
+            tappableCard
+                .zoomTransitionSource(id: entry.id, namespace: ns)
         } else {
             tappableCard
         }
@@ -204,7 +199,7 @@ struct DiaryListView: View {
                 .allowsHitTesting(false)
             DiaryEditorCard(
                 entry: entry,
-                height: 550,
+                height: nil, // Adaptive height - expands to fill available space
                 cornerRadius: 0,
                 showShadow: false,
                 useExternalDecoration: true,
@@ -214,6 +209,7 @@ struct DiaryListView: View {
                 forceExpanded: false
             )
         }
+        .frame(minHeight: 300) // Ensure minimum reasonable height for today's card
     }
 
     @ViewBuilder

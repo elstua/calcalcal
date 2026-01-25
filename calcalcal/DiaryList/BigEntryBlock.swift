@@ -7,7 +7,8 @@ import UIKit
 
 struct BigEntryBlock: View {
     let entry: DiaryEntry
-    var height: CGFloat = 550
+    /// Optional fixed height. When nil, the view expands to fill available space.
+    var height: CGFloat? = nil
     var cornerRadius: CGFloat = 24
     var showShadow: Bool = true
     var useExternalDecoration: Bool = false
@@ -38,7 +39,7 @@ struct BigEntryBlock: View {
     }
     
     init(entry: DiaryEntry,
-         height: CGFloat = 550,
+         height: CGFloat? = nil,
          cornerRadius: CGFloat = 24,
          showShadow: Bool = true,
          useExternalDecoration: Bool = false,
@@ -94,17 +95,14 @@ struct BigEntryBlock: View {
             .frame(maxHeight: .infinity)
             .padding(.horizontal)
             
-            Spacer(minLength: 0)
-            
             // Footer
             EntryFooterView(
                 blocks: effectiveBlocks.wrappedValue,
                 remoteTotalCalories: overrideTotalCalories ?? entry.totalCalories,
                 onAddImage: { onAddImage?() }
             )
-            .padding(.bottom, 8)
         }
-        .frame(height: forceExpanded ? nil : height)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(useExternalDecoration ? Color.clear : Color.white)
         .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
         .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 8, x: 0, y: 4)

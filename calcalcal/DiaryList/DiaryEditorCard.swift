@@ -8,7 +8,8 @@ struct DiaryEditorCard: View {
     }
     
     let entry: DiaryEntry
-    var height: CGFloat
+    /// Optional fixed height. When nil, the view expands to fill available space.
+    var height: CGFloat?
     var cornerRadius: CGFloat
     var showShadow: Bool
     var useExternalDecoration: Bool
@@ -29,7 +30,7 @@ struct DiaryEditorCard: View {
     ]
     
     init(entry: DiaryEntry,
-         height: CGFloat = 550,
+         height: CGFloat? = nil,
          cornerRadius: CGFloat = 24,
          showShadow: Bool = false,
          useExternalDecoration: Bool = true,
@@ -89,7 +90,6 @@ struct DiaryEditorCard: View {
             overrideTotalCalories: overrideTotalCalories,
             externalBlocks: externalBlocks
         )
-        .padding(.horizontal)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     

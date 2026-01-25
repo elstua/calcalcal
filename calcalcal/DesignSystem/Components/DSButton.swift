@@ -388,7 +388,7 @@ extension DSButton {
 struct DSButton_Previews: PreviewProvider {
     static var previews: some View {
         ScrollView {
-            VStack(spacing: DSSpacing.lg) {
+            VStack(spacing: DSSpacing.md) {
                 // Primary Buttons
                 Group {
                     Text("Primary Buttons")

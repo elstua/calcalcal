@@ -13,7 +13,6 @@ struct EditorOverlay: View {
     @State private var pickedImage: UIImage? = nil
     @GestureState private var dragOffset: CGSize = .zero
     @State private var hasDismissedKeyboardForDrag: Bool = false
-    @State private var useMatchedGeometry: Bool = true
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
     @State private var lastSavedContent: String? = nil
@@ -23,7 +22,9 @@ struct EditorOverlay: View {
     @State private var loadTask: Task<Void, Never>? = nil
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
-    @State private var dimmingProgress: Double = 0
+    @State private var keyboardHeight: CGFloat = 0
+    
+    @Environment(\.dismiss) private var dismiss
 
     init(entry: DiaryEntry,
          blocks: Binding<[Block]>,
@@ -39,21 +40,25 @@ struct EditorOverlay: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Dimmed background with interactive opacity
-            let progress = min(1.0, max(0.0, 1.0 - (dragOffset.height / 400.0)))
-            Color.black.opacity(0.20 * progress * dimmingProgress)
-                .ignoresSafeArea()
-                .onTapGesture { dismissWithMatched() }
-
-            // Wrapper that responds to keyboard. Keep matched view inside for stable geometry.
-            // IMPORTANT: The matched geometry must be on a view with a FIXED size that matches
-            // the source card's size. Using .frame(maxHeight: .infinity) after matchedGeometry
-            // causes the animation to target the center of a full-screen frame instead of the card.
+        // Transparent container with padding - this creates space but doesn't zoom
+        Color.clear
+            .overlay(
+                // The actual card - this is what zooms
+                cardContent
+                    .padding(.horizontal, 12)
+                    .padding(.top, 2)
+                    .padding(.bottom, max(keyboardHeight, -8))
+            )
+            .ignoresSafeArea(.keyboard)
+            .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+    }
+    
+    private var cardContent: some View {
+        GeometryReader { geometry in
             VStack(spacing: 0) {
                 DiaryEditorCard(
                     entry: overlayEntry(),
-                    height: 550,
+                    height: nil, // Let it fill available space
                     cornerRadius: 24,
                     showShadow: false,
                     useExternalDecoration: true,
@@ -61,7 +66,7 @@ struct EditorOverlay: View {
                     imageMap: imageMap,
                     isEditable: true,
                     shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                    forceExpanded: true,
+                    forceExpanded: true, // Expand to fill
                     onBlocksChange: { updated in
                         blocks = updated
                         BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updated)
@@ -83,59 +88,45 @@ struct EditorOverlay: View {
                     BlocksCache.shared.save(entryId: canonicalEntryId, blocks: updatedBlocks)
                     scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
                 }
-
-                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .modifier(ConditionalMatchedGeometry(enabled: useMatchedGeometry, id: entry.id, namespace: namespace))
-            .frame(maxWidth: .infinity, alignment: .top)
-            .offset(y: max(0, dragOffset.height))
-            .overlay(alignment: .topTrailing) {
-                // Close button
-                Button(action: { dismissWithMatched() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.secondary)
-                        .padding(12)
-                }
-                .padding(.top, 4)
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+        .overlay(alignment: .topTrailing) {
+            Button(action: { dismissEditor() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.secondary)
             }
-            // Use simultaneousGesture instead of gesture so that the drag gesture
-            // doesn't intercept touches meant for the UITextView inside. This allows
-            // the text editor to receive taps for cursor placement and text editing
-            // while still supporting drag-to-dismiss functionality.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 20) // Require more distance to avoid interfering with text selection
-                    .updating($dragOffset) { value, state, _ in
-                        state = value.translation
-                        if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
-                            // Dismiss keyboard to avoid awkward lift during drag
-                            shouldBecomeFirstResponder = false
-                            hasDismissedKeyboardForDrag = true
-                        }
+            .padding(12)
+        }
+        .offset(y: max(0, dragOffset.height))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 80)
+                .updating($dragOffset) { value, state, _ in
+                    state = value.translation
+                    if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
+                        shouldBecomeFirstResponder = false
+                        hasDismissedKeyboardForDrag = true
                     }
-                    .onEnded { value in
-                        let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
-                        if shouldDismiss {
-                            dismissWithMatched()
-                        } else {
-                            // Restore focus if we had dismissed it for drag
-                            if hasDismissedKeyboardForDrag {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    shouldBecomeFirstResponder = true
-                                    hasDismissedKeyboardForDrag = false
-                                }
+                }
+                .onEnded { value in
+                    let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
+                    if shouldDismiss {
+                        dismissEditor()
+                    } else {
+                        if hasDismissedKeyboardForDrag {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                shouldBecomeFirstResponder = true
+                                hasDismissedKeyboardForDrag = false
                             }
                         }
                     }
-            )
-        }
+                }
+        )
         .fullScreenCover(isPresented: $showImagePicker) {
             UnifiedMediaPickerView(
                 onImageSelected: { image in
@@ -147,17 +138,26 @@ struct EditorOverlay: View {
                 }
             )
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    keyboardHeight = keyboardFrame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                keyboardHeight = 0
+            }
+        }
         .onAppear {
-            dimmingProgress = 0
-            withAnimation(.easeInOut(duration: 0.25).delay(0.1)) {
-                dimmingProgress = 1
-            }
-            // Allow matched geometry during the opening transition, then detach
-            useMatchedGeometry = true
             liveTotalCalories = entry.totalCalories
+            
+            // Auto-focus the editor after a short delay to let the transition complete
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                useMatchedGeometry = false
+                shouldBecomeFirstResponder = true
             }
+            
             // Fetch existing per-block calories for this entry (if already analyzed)
             loadTask = Task {
                 do {
@@ -321,16 +321,10 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
 
 // MARK: - Private helpers
 extension EditorOverlay {
-    private func dismissWithMatched() {
-        // Re-enable matched geometry before closing and defer the actual dismissal
-        // by one runloop tick so SwiftUI can re-render with the geometry link active.
-        useMatchedGeometry = true
-        withAnimation(.easeInOut(duration: 0.20)) {
-            dimmingProgress = 0
-        }
-        DispatchQueue.main.async {
-            onClose()
-        }
+    private func dismissEditor() {
+        // iOS 18+ handles the zoom-out animation automatically via navigationTransition
+        // Just call onClose to update parent state and dismiss the fullScreenCover
+        onClose()
     }
 
     /// Precompute the `DiaryEntry` passed into BigEntryBlock to reduce type-checking complexity.

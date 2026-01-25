@@ -20,7 +20,7 @@ struct DSColors {
     // These are placeholder colors - replace with your actual brand colors later
     
     /// Primary brand color - used for main actions, links, and emphasis
-    static let primary = Color.blue
+    static let primary = Color(hex: 0x3F68E5)
     
     /// Secondary brand color - used for accents and highlights
     static let secondary = Color.orange
