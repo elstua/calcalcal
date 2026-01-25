@@ -57,16 +57,16 @@ private struct DayStripItemView: View {
             VStack(spacing: 8) {
                 VStack(spacing: 0){
                     Text(Self.dayFormatter.string(from: model.date))
-                        .font(.title3.weight(.regular))
+                        .dsTypography(.body)
                         .foregroundColor(isSelected || isToday ? DSColors.primary : DSColors.textPrimary)
                     
                     Text(Self.weekdayFormatter.string(from: model.date).uppercased())
-                        .font(.caption.weight(.semibold))
+                        .dsTypography(.caption)
                         .foregroundColor(isSelected || isToday ? DSColors.primary : DSColors.textSecondary)
                 }
                 
                 Text(calorieText)
-                    .font(.caption.weight(.semibold))
+                    .dsTypography(.compactNumber)
                     .foregroundColor(model.hasEntry ? (isSelected ? DSColors.primary : DSColors.textSecondary) : DSColors.textSecondary.opacity(0.6))
             }
             .padding(.vertical, 16)

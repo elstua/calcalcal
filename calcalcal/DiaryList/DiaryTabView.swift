@@ -15,15 +15,21 @@ struct DiaryTabView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = DiaryTabViewModel()
     @Namespace private var editorNamespace
+    @Namespace private var allDaysNamespace
     
     // MARK: - Presentation State (iOS 18+ uses fullScreenCover with zoom transition)
     @State private var presentedEntry: DiaryEntry? = nil
     @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
     
-    // MARK: - Sheet State
-    @State private var showAllDaysSheet: Bool = false
-    @State private var pendingEntryFromSheet: DiaryEntry? = nil
+    // MARK: - All Days View State
+    @State private var showAllDaysView: Bool = false
+    @State private var pendingEntryFromAllDays: DiaryEntry? = nil
+    @State private var extendedSwipeDragOffset: CGFloat = 0
+    @State private var showAllDaysPreviewCard: Bool = false
+    
+    // Constant ID for all-days view zoom transition
+    private let allDaysViewId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     
     
     var body: some View {
@@ -40,6 +46,35 @@ struct DiaryTabView: View {
                     }
                 )
                 .applyZoomTransition(id: entry.id, namespace: editorNamespace)
+            }
+            .fullScreenCover(isPresented: $showAllDaysView, onDismiss: {
+                Task {
+                    await viewModel.refreshVisibleEntries()
+                }
+                // If an entry was queued to open from the all-days view, present it now
+                if let entry = pendingEntryFromAllDays {
+                    pendingEntryFromAllDays = nil
+                    // Small delay to ensure fullScreenCover dismissal animation completes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        presentOverlay(for: entry)
+                    }
+                }
+            }) {
+                DiaryListView(
+                    sharedNamespace: allDaysNamespace,
+                    presentedEntryId: presentedEntry?.id,
+                    onRequestOpen: { entry in
+                        // Queue the entry and dismiss fullScreenCover first
+                        pendingEntryFromAllDays = entry
+                        showAllDaysView = false
+                    },
+                    onDismiss: {
+                        showAllDaysView = false
+                    },
+                    isOverlayActive: presentedEntry != nil,
+                    streaksData: appState.streaksData
+                )
+                .applyZoomTransition(id: allDaysViewId, namespace: allDaysNamespace)
             }
         .onAppear {
             viewModel.ensurePlaceholdersForVisibleDays()
@@ -82,7 +117,11 @@ struct DiaryTabView: View {
                         selectedDate: viewModel.selectedDay,
                         currentStreak: appState.streaksData?.currentStreak ?? 0,
                         onSelectDate: { viewModel.selectDay($0) },
-                        onShowAllDays: { showAllDaysSheet = true }
+                        onShowAllDays: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showAllDaysView = true
+                            }
+                        }
                     )
                     .padding(.horizontal, 8)
                 }
@@ -93,30 +132,6 @@ struct DiaryTabView: View {
                     .padding(.bottom, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-        .sheet(isPresented: $showAllDaysSheet, onDismiss: {
-            Task {
-                await viewModel.refreshVisibleEntries()
-            }
-            // If an entry was queued to open from the sheet, present it now
-            if let entry = pendingEntryFromSheet {
-                pendingEntryFromSheet = nil
-                // Small delay to ensure sheet dismissal animation completes
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.0) {
-//                    presentOverlay(for: entry)
-//                }
-            }
-        }) {
-            DiaryListView(
-                sharedNamespace: nil,
-                presentedEntryId: presentedEntry?.id,
-                onRequestOpen: { entry in
-                    // Queue the entry and dismiss sheet first - overlay will show after sheet closes
-                    pendingEntryFromSheet = entry
-                    showAllDaysSheet = false
-                },
-                isOverlayActive: false
-            )
         }
     }
     
@@ -133,21 +148,38 @@ struct DiaryTabView: View {
             }
         } else {
             GeometryReader { proxy in
-                DiaryPagerView(
-                    items: viewModel.pagerItems,
-                    selectedDate: $viewModel.selectedDay,
-                    calendar: Calendar.current,
-                    spacing: 12,
-                    trailingSpace: 0
-                ) { item, isActive in
-                    cardView(for: item.entry, isActive: isActive, availableHeight: proxy.size.height)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .overlay(alignment: .topTrailing) {
-                    if viewModel.isLoadingRecentDays {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .padding()
+                ZStack(alignment: .leading) {
+                    DiaryPagerView(
+                        items: viewModel.pagerItems,
+                        selectedDate: $viewModel.selectedDay,
+                        calendar: Calendar.current,
+                        spacing: 12,
+                        trailingSpace: 0,
+                        onExtendedSwipe: {
+                            showAllDaysPreviewCard = false
+                            showAllDaysView = true
+                        },
+                        extendedSwipeDragOffset: $extendedSwipeDragOffset
+                    ) { item, isActive in
+                        cardView(for: item.entry, isActive: isActive, availableHeight: proxy.size.height)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .overlay(alignment: .topTrailing) {
+                        if viewModel.isLoadingRecentDays {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .padding()
+                        }
+                    }
+                    .onChange(of: extendedSwipeDragOffset) { offset in
+                        showAllDaysPreviewCard = offset > 0
+                    }
+                    
+                    // Preview card that slides in during gesture
+                    if showAllDaysPreviewCard && extendedSwipeDragOffset > 0 {
+                        allDaysPreviewCard(availableHeight: proxy.size.height)
+                            .offset(x: -proxy.size.width + extendedSwipeDragOffset + 8)
+                            .opacity(min(extendedSwipeDragOffset / 150, 1.0))
                     }
                 }
             }
@@ -192,6 +224,40 @@ struct DiaryTabView: View {
             .overlay(content())
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
+    }
+    
+    // MARK: - All Days Preview Card
+    private func allDaysPreviewCard(availableHeight: CGFloat) -> some View {
+        let cardHeight = max(0, availableHeight)
+        
+        return VStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(DSColors.surface)
+                .frame(height: cardHeight)
+                .overlay {
+                    VStack(spacing: 16) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 48))
+                            .foregroundColor(DSColors.primary)
+                        
+                        Text("All Days")
+                            .font(.dsHeadline)
+                            .foregroundColor(DSColors.textPrimary)
+                        
+                        if let streaks = appState.streaksData {
+                            Text("🔥 \(streaks.currentStreak) day streak")
+                                .font(.dsBody)
+                                .foregroundColor(DSColors.textSecondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .id("all-days-view")
+                .zoomTransitionSource(id: allDaysViewId, namespace: allDaysNamespace)
+            
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
     // MARK: - Overlay Actions

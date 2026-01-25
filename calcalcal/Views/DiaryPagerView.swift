@@ -14,8 +14,14 @@ struct DiaryPagerView<Content: View>: View {
     var spacing: CGFloat = 16
     var trailingSpace: CGFloat = 0
     let content: (DiaryPagerItem, Bool) -> Content
+    var onExtendedSwipe: (() -> Void)? = nil
+    @Binding var extendedSwipeDragOffset: CGFloat
     
     @State private var currentIndex: Int = 0
+    @GestureState private var dragOffset: CGFloat = 0
+    @State private var shouldTriggerExtendedSwipe: Bool = false
+    
+    private let extendedSwipeThreshold: CGFloat = 150
     
     init(
         items: [DiaryPagerItem],
@@ -23,6 +29,8 @@ struct DiaryPagerView<Content: View>: View {
         calendar: Calendar,
         spacing: CGFloat = 16,
         trailingSpace: CGFloat = 48,
+        onExtendedSwipe: (() -> Void)? = nil,
+        extendedSwipeDragOffset: Binding<CGFloat> = .constant(0),
         @ViewBuilder content: @escaping (DiaryPagerItem, Bool) -> Content
     ) {
         self.items = items
@@ -30,6 +38,8 @@ struct DiaryPagerView<Content: View>: View {
         self.calendar = calendar
         self.spacing = spacing
         self.trailingSpace = trailingSpace
+        self.onExtendedSwipe = onExtendedSwipe
+        self._extendedSwipeDragOffset = extendedSwipeDragOffset
         self.content = content
     }
     
@@ -42,6 +52,13 @@ struct DiaryPagerView<Content: View>: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .simultaneousGesture(
+            // Only active when on first page (oldest day) - uses simultaneousGesture to not interfere with TabView paging
+            isOnFirstPage ? extendedSwipeGesture : nil
+        )
+        .scaleEffect(isOnFirstPage && dragOffset > 50 ? 0.98 : 1.0)
+        .opacity(isOnFirstPage && dragOffset > 50 ? 0.9 : 1.0)
+        .animation(.easeOut(duration: 0.2), value: dragOffset)
         .onAppear {
             syncIndexWithSelection()
         }
@@ -58,6 +75,45 @@ struct DiaryPagerView<Content: View>: View {
                 selectedDate = newDate
             }
         }
+        .onChange(of: shouldTriggerExtendedSwipe) { shouldTrigger in
+            if shouldTrigger {
+                onExtendedSwipe?()
+                shouldTriggerExtendedSwipe = false
+            }
+        }
+    }
+    
+    private var isOnFirstPage: Bool {
+        guard !items.isEmpty else { return false }
+        return currentIndex == 0
+    }
+    
+    private var extendedSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .updating($dragOffset) { value, state, _ in
+                // Only track horizontal drag when swiping right (from oldest day, going further back)
+                // and ensure it's primarily horizontal (not vertical)
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height) * 2
+                if isHorizontal && value.translation.width > 0 {
+                    state = value.translation.width
+                    // Update the binding so parent can show preview card
+                    DispatchQueue.main.async {
+                        extendedSwipeDragOffset = value.translation.width
+                    }
+                }
+            }
+            .onEnded { value in
+                // Reset drag offset
+                DispatchQueue.main.async {
+                    extendedSwipeDragOffset = 0
+                }
+                
+                // Check if it's a strong rightward swipe beyond threshold
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height) * 2
+                if isHorizontal && value.translation.width > extendedSwipeThreshold {
+                    shouldTriggerExtendedSwipe = true
+                }
+            }
     }
     
     private func syncIndexWithSelection() {

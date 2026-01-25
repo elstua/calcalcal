@@ -10,6 +10,8 @@ struct DiaryListView: View {
     @State private var selectedEntry: DiaryEntry? = nil
     @State private var showPopup: Bool = false
     @State private var isLoadingRemote: Bool = false
+    @State private var isLoadingMore: Bool = false
+    @State private var currentLoadedDays: Int = 10
     
     // Shared geometry hooks (optional)
     var sharedNamespace: Namespace.ID? = nil
@@ -17,23 +19,29 @@ struct DiaryListView: View {
     var isOverlayActive: Bool = false
     var onRequestOpen: ((DiaryEntry) -> Void)? = nil
     var onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil
+    var onDismiss: (() -> Void)? = nil
     var userOffsetMinutes: Int? = nil // Optional override; fallback to device timezone if nil
-    private var timelineConfig = DayTimelineConfig(keepHeadCount: 5, collapseWithinInitialWindow: true)
+    var streaksData: StreaksData? = nil
+    private var timelineConfig = DayTimelineConfig(keepHeadCount: 0, collapseWithinInitialWindow: false)
 
     init(
         sharedNamespace: Namespace.ID? = nil,
         presentedEntryId: UUID? = nil,
         onRequestOpen: ((DiaryEntry) -> Void)? = nil,
         onRequestImageMap: (([UUID: UIImage]) -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil,
         userOffsetMinutes: Int? = nil,
-        isOverlayActive: Bool = false
+        isOverlayActive: Bool = false,
+        streaksData: StreaksData? = nil
     ) {
         self.sharedNamespace = sharedNamespace
         self.presentedEntryId = presentedEntryId
         self.isOverlayActive = isOverlayActive
         self.onRequestOpen = onRequestOpen
         self.onRequestImageMap = onRequestImageMap
+        self.onDismiss = onDismiss
         self.userOffsetMinutes = userOffsetMinutes
+        self.streaksData = streaksData
     }
     
     var body: some View {
@@ -41,8 +49,31 @@ struct DiaryListView: View {
             ScrollView {
                 let enumeratedItems = Array(items.enumerated())
                 VStack(spacing: 10) {
+                    // Streak statistics at the top
+                    StreakStatsView(streaksData: streaksData)
+                        .padding(.top, 8)
+                    
                     ForEach(enumeratedItems, id: \.element.id) { (index, item) in
                         timelineRowView(index: index, item: item)
+                            .onAppear {
+                                // Load more when approaching the end (within last 5 items)
+                                if index >= items.count - 5 {
+                                    Task {
+                                        await loadMoreEntriesIfNeeded()
+                                    }
+                                }
+                            }
+                    }
+                    
+                    // Loading indicator at bottom
+                    if isLoadingMore {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                                .padding()
+                            Spacer()
+                        }
                     }
                 }
                 .padding(.vertical)
@@ -106,61 +137,24 @@ struct DiaryListView: View {
     private func timelineRowView(index: Int, item: TimelineItem) -> some View {
         switch item {
         case .todayEntry(let entry):
-            timelineCard(entry: entry, isToday: true, placeholderDay: nil)
+            // Use compact card for all entries in all-days view
+            compactCard(entry: entry, placeholderDay: nil)
         case .entry(let entry):
-            timelineCard(entry: entry, isToday: false, placeholderDay: nil)
+            compactCard(entry: entry, placeholderDay: nil)
         case .placeholder(let localDay):
-            timelineCard(
+            compactCard(
                 entry: placeholderDisplayEntry(for: localDay, isToday: index == 0),
-                isToday: index == 0,
                 placeholderDay: localDay
             )
-        case .collapsed(let range, let count, let id):
-            let primary = "\(count) \(count == 1 ? "day" : "days"), \(DayTimelineGenerator.formatRange(range: range, offsetMinutes: effectiveOffsetMinutes()))"
-            let secondary = "Tap to show \(min(14, count)) more days"
-            CollapsedEmptyRunView(primaryText: primary, secondaryText: secondary) {
-                let mapping = mapEntriesByLocalDay()
-                items = DayTimelineGenerator.apply(
-                    .expandCollapsedRun(id: id),
-                    to: items,
-                    userOffsetMinutes: effectiveOffsetMinutes(),
-                    config: timelineConfig,
-                    entriesByDay: mapping
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func timelineCard(entry: DiaryEntry, isToday: Bool, placeholderDay: LocalDay?) -> some View {
-        if isToday {
-            todayCard(entry: entry, placeholderDay: placeholderDay)
-        } else {
-            compactCard(entry: entry, placeholderDay: placeholderDay)
-        }
-    }
-    
-    @ViewBuilder
-    private func todayCard(entry: DiaryEntry, placeholderDay: LocalDay?) -> some View {
-        let openAction = tapAction(for: entry, placeholderDay: placeholderDay, isToday: true)
-        let tappableCard = todayCardShell(entry: entry)
-            .contentShape(Rectangle())
-            .highPriorityGesture(TapGesture().onEnded(openAction))
-            .allowsHitTesting(!isEntryPresented(entry))
-        
-        // iOS 18+ uses zoomTransitionSource for the zoom animation
-        // When sharedNamespace is provided, apply the transition source modifier
-        if let ns = sharedNamespace {
-            tappableCard
-                .zoomTransitionSource(id: entry.id, namespace: ns)
-        } else {
-            tappableCard
+        case .collapsed:
+            // Skip collapsed sections - we load everything automatically now
+            EmptyView()
         }
     }
     
     @ViewBuilder
     private func compactCard(entry: DiaryEntry, placeholderDay: LocalDay?) -> some View {
-        let openAction = tapAction(for: entry, placeholderDay: placeholderDay, isToday: false)
+        let openAction = tapAction(for: entry, placeholderDay: placeholderDay)
         let tappableCard = compactCardShell(entry: entry)
             .contentShape(Rectangle())
             .highPriorityGesture(TapGesture().onEnded(openAction))
@@ -175,9 +169,13 @@ struct DiaryListView: View {
         }
     }
     
-    private func tapAction(for entry: DiaryEntry, placeholderDay: LocalDay?, isToday: Bool) -> () -> Void {
+    private func tapAction(for entry: DiaryEntry, placeholderDay: LocalDay?) -> () -> Void {
         {
             if let localDay = placeholderDay {
+                // Check if today for placeholder prompt
+                let offset = effectiveOffsetMinutes()
+                let todayYYYYMMDD = LocalDayMath.yyyymmdd(for: Date(), offsetMinutes: offset)
+                let isToday = localDay.yyyymmdd == todayYYYYMMDD
                 handlePlaceholderTap(localDay: localDay, isToday: isToday)
             } else {
                 present(entry: entry)
@@ -188,28 +186,6 @@ struct DiaryListView: View {
     private func isEntryPresented(_ entry: DiaryEntry) -> Bool {
         guard isOverlayActive, let presentedEntryId else { return false }
         return presentedEntryId == entry.id
-    }
-
-    @ViewBuilder
-    private func todayCardShell(entry: DiaryEntry) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-                .allowsHitTesting(false)
-            DiaryEditorCard(
-                entry: entry,
-                height: nil, // Adaptive height - expands to fill available space
-                cornerRadius: 0,
-                showShadow: false,
-                useExternalDecoration: true,
-                imageMap: [:],
-                isEditable: false,
-                shouldBecomeFirstResponder: .constant(false),
-                forceExpanded: false
-            )
-        }
-        .frame(minHeight: 300) // Ensure minimum reasonable height for today's card
     }
 
     @ViewBuilder
@@ -318,7 +294,7 @@ struct DiaryListView: View {
     private func loadInitialEntries() async {
         if isLoadingRemote { return }
         isLoadingRemote = true
-        let window = computeDateWindow(days: 30)
+        let window = computeDateWindow(days: currentLoadedDays)
         do {
             let rows = try await DiaryAPI.listEntries(dateFrom: window.from, dateTo: window.to)
             let mapped = rows.map { $0.toDiaryEntry() }
@@ -330,6 +306,35 @@ struct DiaryListView: View {
             print("Failed to load entries: \(error)")
         }
         isLoadingRemote = false
+    }
+    
+    private func loadMoreEntriesIfNeeded() async {
+        if isLoadingMore || isLoadingRemote { return }
+        
+        await MainActor.run {
+            isLoadingMore = true
+        }
+        
+        // Load 10 more days
+        let newDaysCount = currentLoadedDays + 10
+        let window = computeDateWindow(days: newDaysCount)
+        
+        do {
+            let rows = try await DiaryAPI.listEntries(dateFrom: window.from, dateTo: window.to)
+            let mapped = rows.map { $0.toDiaryEntry() }
+            await MainActor.run {
+                self.entries = mapped
+                self.currentLoadedDays = newDaysCount
+                self.recalcTimeline()
+                self.isLoadingMore = false
+            }
+            print("📥 Loaded \(newDaysCount) days of entries")
+        } catch {
+            print("Failed to load more entries: \(error)")
+            await MainActor.run {
+                self.isLoadingMore = false
+            }
+        }
     }
 }
 
