@@ -3,10 +3,14 @@ import UIKit
 import Photos
 
 struct GalleryView: View {
-    @State private var images: [UIImage] = []
+    @State private var photoAssets: [PHAsset] = []
+    @State private var allAssets: PHFetchResult<PHAsset>?
+    @State private var isLoadingMore = false
     @State private var selectedImage: UIImage? = nil
     @State private var showLargeImage = false
     @State private var photoAccessDenied = false
+    
+    private let batchSize = 50
     
     let columns = [
         GridItem(.flexible()),
@@ -20,23 +24,44 @@ struct GalleryView: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(images.indices, id: \ .self) { idx in
+                ForEach(photoAssets.indices, id: \.self) { idx in
                     GeometryReader { geo in
                         ImageComponent(
-                            uiImage: images[idx],
+                            asset: photoAssets[idx],
+                            uiImage: nil,
                             isLarge: false,
                             onDelete: nil,
-                            onLongPress: {
-                                selectedImage = images[idx]
+                            onLongPress: { image in
+                                selectedImage = image
                                 showLargeImage = true
                             }
                         )
                         .onTapGesture {
-                            let frame = geo.frame(in: .global)
-                            onImageTap?(images[idx], frame)
+                            // Load the image for tap callback
+                            let imageManager = PHCachingImageManager()
+                            let options = PHImageRequestOptions()
+                            options.deliveryMode = .highQualityFormat
+                            options.isSynchronous = true
+                            imageManager.requestImage(
+                                for: photoAssets[idx],
+                                targetSize: CGSize(width: 300, height: 300),
+                                contentMode: .aspectFill,
+                                options: options
+                            ) { image, _ in
+                                if let image = image {
+                                    let frame = geo.frame(in: .global)
+                                    onImageTap?(image, frame)
+                                }
+                            }
                         }
                     }
                     .frame(height: 130)
+                    .onAppear {
+                        // Trigger loading next batch when approaching the end
+                        if idx >= photoAssets.count - 10 {
+                            loadNextBatch()
+                        }
+                    }
                 }
             }
             .padding()
@@ -47,6 +72,7 @@ struct GalleryView: View {
                 VStack {
                     Spacer()
                     ImageComponent(
+                        asset: nil,
                         uiImage: selectedImage,
                         isLarge: true,
                         onDelete: nil,
@@ -80,24 +106,41 @@ struct GalleryView: View {
     }
     
     private func fetchPhotos() {
+        // Fetch all asset references (lightweight - no actual images loaded)
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-        let imageManager = PHCachingImageManager()
-        var uiImages: [UIImage] = []
-        let targetSize = CGSize(width: 300, height: 300)
-        let options = PHImageRequestOptions()
-        options.isSynchronous = true
-        options.deliveryMode = .highQualityFormat
-        assets.enumerateObjects { asset, _, _ in
-            imageManager.requestImage(for: asset, targetSize: targetSize, contentMode: .aspectFill, options: options) { image, _ in
-                if let image = image {
-                    uiImages.append(image)
-                }
-            }
-        }
+        
         DispatchQueue.main.async {
-            self.images = uiImages
+            self.allAssets = assets
+            self.loadNextBatch()
+        }
+    }
+    
+    private func loadNextBatch() {
+        guard let allAssets = allAssets, !isLoadingMore else { return }
+        
+        let currentCount = photoAssets.count
+        let totalCount = allAssets.count
+        
+        // Check if we've already loaded all assets
+        guard currentCount < totalCount else { return }
+        
+        isLoadingMore = true
+        
+        // Calculate how many assets to load in this batch
+        let remainingCount = totalCount - currentCount
+        let loadCount = min(batchSize, remainingCount)
+        
+        // Extract the next batch of assets
+        var newAssets: [PHAsset] = []
+        for i in currentCount..<(currentCount + loadCount) {
+            newAssets.append(allAssets.object(at: i))
+        }
+        
+        DispatchQueue.main.async {
+            self.photoAssets.append(contentsOf: newAssets)
+            self.isLoadingMore = false
         }
     }
 }

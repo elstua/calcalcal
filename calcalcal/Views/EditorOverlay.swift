@@ -56,6 +56,11 @@ struct EditorOverlay: View {
     private var cardContent: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                // Drag handle at the top
+                dragHandle
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                
                 DiaryEditorCard(
                     entry: overlayEntry(),
                     height: nil, // Let it fill available space
@@ -104,29 +109,6 @@ struct EditorOverlay: View {
             .padding(12)
         }
         .offset(y: max(0, dragOffset.height))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 80)
-                .updating($dragOffset) { value, state, _ in
-                    state = value.translation
-                    if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
-                        shouldBecomeFirstResponder = false
-                        hasDismissedKeyboardForDrag = true
-                    }
-                }
-                .onEnded { value in
-                    let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
-                    if shouldDismiss {
-                        dismissEditor()
-                    } else {
-                        if hasDismissedKeyboardForDrag {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                shouldBecomeFirstResponder = true
-                                hasDismissedKeyboardForDrag = false
-                            }
-                        }
-                    }
-                }
-        )
         .fullScreenCover(isPresented: $showImagePicker) {
             UnifiedMediaPickerView(
                 onImageSelected: { image in
@@ -321,6 +303,42 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
 
 // MARK: - Private helpers
 extension EditorOverlay {
+    /// Drag handle view - a small pill that indicates the overlay can be dismissed
+    private var dragHandle: some View {
+        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+            .fill(Color.secondary.opacity(0.3))
+            .frame(width: 36, height: 5)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($dragOffset) { value, state, _ in
+                        // Only allow downward drags
+                        if value.translation.height > 0 {
+                            state = value.translation
+                        }
+                        // Dismiss keyboard when dragging down
+                        if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
+                            shouldBecomeFirstResponder = false
+                            hasDismissedKeyboardForDrag = true
+                        }
+                    }
+                    .onEnded { value in
+                        // Check if drag was far enough or fast enough to dismiss
+                        let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
+                        if shouldDismiss {
+                            dismissEditor()
+                        } else {
+                            // Restore keyboard if we dismissed it but didn't close
+                            if hasDismissedKeyboardForDrag {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    shouldBecomeFirstResponder = true
+                                    hasDismissedKeyboardForDrag = false
+                                }
+                            }
+                        }
+                    }
+            )
+    }
+    
     private func dismissEditor() {
         // iOS 18+ handles the zoom-out animation automatically via navigationTransition
         // Just call onClose to update parent state and dismiss the fullScreenCover

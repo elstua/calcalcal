@@ -56,12 +56,12 @@
 	<string>Need to get the images for calorie tracking.</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>/Fonts/InstrumentSans-Regular.ttf</string>
-		<string>/Fonts/InstrumentSans-Medium.ttf</string>
-		<string>/Fonts/InstrumentSans-Bold.ttf</string>
-		<string>/Fonts/InstrumentSans-SemiBold.ttf</string>
-		<string>/Fonts/InstrumentSansCondensed-Regular.ttf</string>
-		<string>/Fonts/InstrumentSansCondensed-Medium.ttf</string>
+		<string>InstrumentSans-Regular.ttf</string>
+		<string>InstrumentSans-Medium.ttf</string>
+		<string>InstrumentSans-Bold.ttf</string>
+		<string>InstrumentSans-SemiBold.ttf</string>
+		<string>InstrumentSansCondensed-Regular.ttf</string>
+		<string>InstrumentSansCondensed-Medium.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

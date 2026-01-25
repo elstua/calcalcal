@@ -310,6 +310,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 host = existing
             } else {
                 let view = ImageComponent(
+                    asset: nil,
                     uiImage: uiImage,
                     isLarge: false,
                     onDelete: nil,

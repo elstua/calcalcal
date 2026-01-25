@@ -63,7 +63,9 @@ struct DiaryPagerView<Content: View>: View {
     private func syncIndexWithSelection() {
         guard let idx = items.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: selectedDate) }) else { return }
         if currentIndex != idx {
-            currentIndex = idx
+            withAnimation {
+                currentIndex = idx
+            }
         }
     }
 }

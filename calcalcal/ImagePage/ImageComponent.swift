@@ -1,11 +1,15 @@
 import SwiftUI
 import UIKit
+import Photos
 
 struct ImageComponent: View {
+    let asset: PHAsset?
     let uiImage: UIImage?
     let isLarge: Bool
     let onDelete: (() -> Void)?
-    let onLongPress: (() -> Void)? // Callback for long press
+    let onLongPress: ((UIImage) -> Void)? // Callback for long press with loaded image
+    
+    @State private var loadedImage: UIImage? = nil
     
     var body: some View {
         ZStack {
@@ -17,14 +21,15 @@ struct ImageComponent: View {
             
             VStack(spacing: 0) {
                 // Image or placeholder
-                if let uiImage = uiImage {
-                    Image(uiImage: uiImage)
+                // Use loadedImage if available, otherwise fall back to passed uiImage
+                if let displayImage = loadedImage ?? uiImage {
+                    Image(uiImage: displayImage)
                         .resizable()
                         .scaledToFill()
                         .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    // Placeholder (grey square)
+                    // Placeholder (grey square) while loading
                     RoundedRectangle(cornerRadius: isLarge ? 10 : 8)
                         .fill(Color.gray.opacity(1))
                         .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
@@ -46,10 +51,39 @@ struct ImageComponent: View {
             }
             .padding(16)
             .onLongPressGesture {
-                onLongPress?() // Call the long press callback
+                // Pass the loaded image to the callback
+                if let image = loadedImage ?? uiImage {
+                    onLongPress?(image)
+                }
             }
         }
         .frame(width: isLarge ? 350 : 100, height: isLarge ? 420 : 120)
+        .onAppear {
+            loadImageFromAsset()
+        }
+    }
+    
+    private func loadImageFromAsset() {
+        // Only load if we have an asset and haven't loaded yet
+        guard let asset = asset, loadedImage == nil else { return }
+        
+        let imageManager = PHCachingImageManager()
+        let targetSize = CGSize(width: 300, height: 300)
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic // Fast thumbnails first, then high quality
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        
+        imageManager.requestImage(
+            for: asset,
+            targetSize: targetSize,
+            contentMode: .aspectFill,
+            options: options
+        ) { image, _ in
+            DispatchQueue.main.async {
+                self.loadedImage = image
+            }
+        }
     }
 }
 
@@ -57,11 +91,11 @@ struct ImageComponent_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
             // Small preview
-            ImageComponent(uiImage: nil as UIImage?, isLarge: false, onDelete: nil, onLongPress: {})
+            ImageComponent(asset: nil, uiImage: nil as UIImage?, isLarge: false, onDelete: nil, onLongPress: nil)
                 .previewDisplayName("Small")
             
             // Large preview
-            ImageComponent(uiImage: nil as UIImage?, isLarge: true, onDelete: {}, onLongPress: {})
+            ImageComponent(asset: nil, uiImage: nil as UIImage?, isLarge: true, onDelete: {}, onLongPress: nil)
                 .previewDisplayName("Large")
         }
         .padding()
