@@ -14,10 +14,12 @@ services:
       - ./backups:/backups  # Mount backups directory for easy access
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U calcalcal"]
+      test: ["CMD-SHELL", "pg_isready -U calcalcal -d calcalcal_production"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - calcalcal-network
     # Resource limits for database
     deploy:
       resources:
