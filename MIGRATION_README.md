@@ -26,21 +26,21 @@ apps/backend/node/
 ### Nginx Configuration
 ```
 nginx/
-└── calcalcal.conf                 # Reverse proxy configuration for calcalcal.app
+└── calcalcal.conf                 # Reverse proxy configuration for api.calcalcal.app
 ```
 
 ### iOS App Updates
 ```
 calcalcal/
-├── Models/Configuration.swift     # Updated to use https://calcalcal.app
-└── Info.plist                     # Updated API_URL to https://calcalcal.app
+├── Models/Configuration.swift     # Updated to use https://api.api.calcalcal.app
+└── Info.plist                     # Updated API_URL to https://api.api.calcalcal.app
 ```
 
 ## 🚀 Quick Start
 
 1. **Read the checklist:** [CHECKLIST.md](CHECKLIST.md)
 2. **Provision Hetzner VPS:** CX21 (2 vCPU, 4GB RAM) recommended
-3. **Update DNS:** Point `calcalcal.app` to your Hetzner IP
+3. **Update DNS:** Point `api.calcalcal.app` to your Hetzner IP
 4. **Follow the guide:** Complete all steps in [HETZNER_DEPLOYMENT.md](HETZNER_DEPLOYMENT.md)
 
 ## ⏱️ Time Estimate
@@ -78,12 +78,12 @@ calcalcal/
 ### API Configuration
 - Container: `calcalcal-api`
 - Port: `3000` (localhost only)
-- Domain: `https://calcalcal.app`
-- Health endpoint: `https://calcalcal.app/health`
+- Domain: `https://api.api.calcalcal.app`
+- Health endpoint: `https://api.api.calcalcal.app/health`
 
 ### SSL Configuration
 - Provider: Let's Encrypt (free, auto-renewing)
-- Domains: `calcalcal.app` and `www.calcalcal.app`
+- Domains: `api.calcalcal.app` and `api.calcalcal.app`
 
 ## 🔒 Security Features
 
@@ -145,7 +145,7 @@ docker-compose -f docker-compose.production.yml ps
 2. **DNS propagation takes time**
    - Usually 10-30 minutes
    - Can take up to 48 hours in rare cases
-   - Test with: `dig calcalcal.app`
+   - Test with: `dig api.calcalcal.app`
 
 3. **Test everything**
    - User registration/login
@@ -233,5 +233,5 @@ After stable migration:
 
 **Status:** ✅ Ready for deployment  
 **Last Updated:** January 26, 2026  
-**Domain:** calcalcal.app  
+**Domain:** api.calcalcal.app  
 **Database Password:** NeonGenezisEva02!

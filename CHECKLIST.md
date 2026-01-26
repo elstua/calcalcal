@@ -5,7 +5,7 @@ Use this checklist before starting the Hetzner migration.
 ## Prerequisites
 
 - [ ] Hetzner account created
-- [ ] Domain `calcalcal.app` registered and accessible
+- [ ] Domain `api.calcalcal.app` registered and accessible
 - [ ] SSH key generated for GitHub access
 - [ ] Digital Ocean credentials backed up locally
 
@@ -46,7 +46,7 @@ git commit -m "Prepare for Hetzner VPS migration with Docker
 - Add production docker-compose with PostgreSQL
 - Create deployment and backup scripts
 - Add Nginx configuration for reverse proxy
-- Update iOS app to use calcalcal.app domain
+- Update iOS app to use api.calcalcal.app domain
 - Add comprehensive deployment documentation"
 git push origin main
 ```
@@ -83,10 +83,9 @@ ufw enable
 
 Go to your domain registrar (Namecheap, GoDaddy, Cloudflare, etc.):
 
-- [ ] Add A record: `calcalcal.app` → `YOUR_HETZNER_IP`
-- [ ] Add A record: `www.calcalcal.app` → `YOUR_HETZNER_IP`
-- [ ] Wait 10-30 minutes for propagation
-- [ ] Test with: `dig calcalcal.app` (should show your Hetzner IP)
+- [ ] You already have A record: `api.calcalcal.app` → `YOUR_HETZNER_IP` ✅
+- [ ] Wait 10-30 minutes for propagation (if just added)
+- [ ] Test with: `dig api.calcalcal.app` (should show your Hetzner IP)
 
 ## Step 4: Clone Repository
 
@@ -213,7 +212,7 @@ systemctl status nginx
 
 ```bash
 # Obtain certificate (follow prompts)
-certbot --nginx -d calcalcal.app -d www.calcalcal.app
+certbot --nginx -d api.calcalcal.app
 
 # Test renewal
 certbot renew --dry-run
@@ -221,19 +220,19 @@ certbot renew --dry-run
 
 - [ ] Certificate obtained
 - [ ] Auto-renewal configured
-- [ ] HTTPS works: `curl https://calcalcal.app/health`
+- [ ] HTTPS works: `curl https://api.calcalcal.app/health`
 
 ## Step 10: Test API Endpoints
 
 ```bash
 # Health check
-curl https://calcalcal.app/health
+curl https://api.calcalcal.app/health
 
 # Auth status
-curl https://calcalcal.app/api/auth/status
+curl https://api.calcalcal.app/api/auth/status
 
 # Test from your local machine too
-curl https://calcalcal.app/health
+curl https://api.calcalcal.app/health
 ```
 
 - [ ] Health endpoint works
@@ -364,7 +363,7 @@ docker stats
 
 **API:**
 - Internal: `http://localhost:3000`
-- External: `https://calcalcal.app`
+- External: `https://api.calcalcal.app`
 
 ---
 

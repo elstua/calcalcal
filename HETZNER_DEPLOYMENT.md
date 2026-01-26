@@ -5,7 +5,7 @@ This guide walks you through deploying CalCalCal backend to a Hetzner VPS using 
 ## Prerequisites
 
 - Hetzner VPS provisioned (recommended: CX21 - 2 vCPU, 4GB RAM)
-- Domain `calcalcal.app` DNS pointing to your Hetzner IP
+- Domain `api.calcalcal.app` DNS pointing to your Hetzner IP
 - SSH access to your VPS
 - Digital Ocean environment variables (to copy over)
 
@@ -143,7 +143,7 @@ systemctl restart nginx
 
 ```bash
 # Obtain Let's Encrypt certificate
-certbot --nginx -d calcalcal.app -d www.calcalcal.app
+certbot --nginx -d api.calcalcal.app
 
 # Follow prompts:
 # - Enter your email
@@ -160,15 +160,15 @@ Test your API:
 
 ```bash
 # Test health endpoint
-curl https://calcalcal.app/health
+curl https://api.calcalcal.app/health
 
 # Test authentication endpoint
-curl https://calcalcal.app/api/auth/status
+curl https://api.calcalcal.app/api/auth/status
 ```
 
 ## Step 9: iOS App Update
 
-The iOS app has already been updated to use `https://calcalcal.app`. 
+The iOS app has already been updated to use `https://api.calcalcal.app`. 
 
 Build and test:
 ```bash
@@ -309,7 +309,7 @@ If something goes wrong:
    - Deploy to TestFlight
 
 2. **Point DNS back to Digital Ocean:**
-   - Update A record for `calcalcal.app`
+   - Update A record for `api.calcalcal.app`
    - Propagation takes 5-10 minutes
 
 3. **Restore database on Digital Ocean (if needed):**

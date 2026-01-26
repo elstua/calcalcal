@@ -17,8 +17,8 @@ struct Configuration {
             return plistURL
         }
         // Hardcoded production URL for release builds (TestFlight/App Store)
-        // Updated for Hetzner VPS deployment
-        return "https://calcalcal.app"
+        // Updated for Hetzner VPS deployment - using API subdomain
+        return "https://api.calcalcal.app"
         #endif
     }()
     

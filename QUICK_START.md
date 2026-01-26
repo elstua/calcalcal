@@ -6,7 +6,7 @@ This is a condensed checklist for migrating CalCalCal from Digital Ocean to Hetz
 
 Have these ready:
 - [ ] Hetzner VPS provisioned (CX21 or larger)
-- [ ] Domain `calcalcal.app` DNS A record pointing to Hetzner IP
+- [ ] Domain `api.calcalcal.app` DNS A record pointing to Hetzner IP
 - [ ] Digital Ocean environment variables saved somewhere
 - [ ] SSH access to Hetzner VPS
 
@@ -69,15 +69,15 @@ nginx -t
 systemctl restart nginx
 
 # Get SSL certificate
-certbot --nginx -d calcalcal.app -d www.calcalcal.app
+certbot --nginx -d api.calcalcal.app
 
 # Test
-curl https://calcalcal.app/health
+curl https://api.calcalcal.app/health
 ```
 
 ## Deploy iOS App (10 minutes)
 
-The iOS app is already updated to use `https://calcalcal.app`.
+The iOS app is already updated to use `https://api.calcalcal.app`.
 
 ```bash
 # On your Mac

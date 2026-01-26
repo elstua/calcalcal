@@ -31,7 +31,7 @@ All code changes and configuration files have been prepared for migrating CalCal
 
 5. **`nginx/calcalcal.conf`**
    - Complete Nginx reverse proxy configuration
-   - SSL/TLS setup for `calcalcal.app`
+   - SSL/TLS setup for `api.calcalcal.app`
    - Rate limiting (100 requests/minute per IP)
    - Security headers and proper timeouts for AI requests
 
@@ -50,11 +50,11 @@ All code changes and configuration files have been prepared for migrating CalCal
 
 1. **`calcalcal/Models/Configuration.swift`**
    - Production URL changed from `https://calycal-app-egy2b.ondigitalocean.app`
-   - To: `https://calcalcal.app`
+   - To: `https://api.api.calcalcal.app`
    - Works for both debug and release builds
 
 2. **`calcalcal/Info.plist`**
-   - API_URL updated to `https://calcalcal.app`
+   - API_URL updated to `https://api.api.calcalcal.app`
    - Ensures proper configuration for production builds
 
 3. **`apps/backend/node/.gitignore`**
@@ -80,10 +80,10 @@ All code changes and configuration files have been prepared for migrating CalCal
 - **Auto-restart:** Yes
 
 ### Nginx
-- **Domain:** `calcalcal.app` and `www.calcalcal.app`
+- **Domain:** `api.calcalcal.app` and `api.calcalcal.app`
 - **SSL:** Let's Encrypt (auto-renewing)
 - **Rate limit:** 100 requests/minute per IP
-- **Proxy:** `localhost:3000` → `https://calcalcal.app`
+- **Proxy:** `localhost:3000` → `https://api.api.calcalcal.app`
 
 ### Security
 - Database only accessible from localhost (not exposed to internet)
@@ -101,9 +101,9 @@ All code changes and configuration files have been prepared for migrating CalCal
 - Note the IP address
 
 ### 2. Update DNS
-- Go to your domain registrar for `calcalcal.app`
-- Add/update A record: `calcalcal.app` → `YOUR_HETZNER_IP`
-- Add/update A record: `www.calcalcal.app` → `YOUR_HETZNER_IP`
+- Go to your domain registrar for `api.calcalcal.app`
+- Add/update A record: `api.calcalcal.app` → `YOUR_HETZNER_IP`
+- Add/update A record: `api.calcalcal.app` → `YOUR_HETZNER_IP`
 - Wait 5-10 minutes for DNS propagation
 
 ### 3. Get Digital Ocean Secrets
@@ -231,7 +231,7 @@ If something goes wrong:
 4. **DNS propagation takes time**
    - Can take 5 minutes to 48 hours
    - Usually completes in 10-30 minutes
-   - Test with: `dig calcalcal.app`
+   - Test with: `dig api.calcalcal.app`
 
 5. **SSL certificate auto-renews**
    - Let's Encrypt certificates valid for 90 days

@@ -24,7 +24,7 @@ All code changes for the Hetzner VPS migration have been successfully implemente
 - Optimized for large file uploads (20MB max)
 
 ### 4. iOS App Updates
-- **Configuration.swift** - Updated to `https://calcalcal.app`
+- **Configuration.swift** - Updated to `https://api.calcalcal.app`
 - **Info.plist** - Updated API_URL to new domain
 - Tested and builds successfully
 
@@ -70,7 +70,7 @@ Before migrating, collect from Digital Ocean:
 - Note the IP address
 
 ### Step 4: Update DNS
-Point `calcalcal.app` A record to your Hetzner IP
+Point `api.calcalcal.app` A record to your Hetzner IP
 
 ### Step 5: Follow the Guide
 Open **[CHECKLIST.md](CHECKLIST.md)** and complete each step
@@ -137,7 +137,7 @@ Before starting:
 - [ ] Review CHECKLIST.md
 - [ ] Gather all Digital Ocean credentials
 - [ ] Provision Hetzner VPS
-- [ ] Update DNS for calcalcal.app
+- [ ] Update DNS for api.calcalcal.app
 - [ ] Block out 2.5 hours for migration
 
 ## 🎓 What You'll Learn
