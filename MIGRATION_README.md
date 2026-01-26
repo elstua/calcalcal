@@ -46,12 +46,12 @@ calcalcal/
 ## ⏱️ Time Estimate
 
 - VPS setup: 30 minutes
-- Database migration: 30 minutes
+- Database setup: 5 minutes (fresh start!)
 - API deployment: 15 minutes
 - Nginx + SSL: 15 minutes
 - iOS app update: 10 minutes
-- Testing: 30 minutes
-- **Total: ~2.5 hours**
+- Testing: 30 minutes (with new test accounts)
+- **Total: ~2 hours (faster with fresh database!)**
 
 ## 💰 Cost Savings
 

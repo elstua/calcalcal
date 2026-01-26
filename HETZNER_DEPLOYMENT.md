@@ -76,38 +76,31 @@ doctl apps list
 doctl apps env get YOUR_APP_ID
 ```
 
-## Step 4: Migrate Database from Digital Ocean
+## Step 4: Set Up Fresh Database
 
-### On Your Local Machine:
-
-```bash
-# Get your Digital Ocean database URL
-# Go to: DigitalOcean Console → Databases → calcalcal-db → Connection Details
-
-# Create backup
-pg_dump "YOUR_DIGITAL_OCEAN_DATABASE_URL" > calcalcal_backup.sql
-
-# Transfer to Hetzner
-scp calcalcal_backup.sql root@YOUR_HETZNER_IP:/opt/calcalcal/apps/backend/node/backups/
-```
+**Since you only have test data, we're starting fresh. This is faster and cleaner!**
 
 ### On Hetzner VPS:
 
 ```bash
 cd /opt/calcalcal/apps/backend/node
 
-# Start PostgreSQL container only
+# Start PostgreSQL container
 docker-compose -f docker-compose.production.yml up -d postgres
 
 # Wait for PostgreSQL to be ready
 sleep 10
 
-# Restore database
-docker exec -i calcalcal-db psql -U calcalcal calcalcal_production < backups/calcalcal_backup.sql
+# Verify it's running
+docker ps | grep calcalcal-db
 
-# Verify data
-docker exec -it calcalcal-db psql -U calcalcal calcalcal_production -c "SELECT COUNT(*) FROM users;"
+# Check health
+docker-compose -f docker-compose.production.yml ps postgres
 ```
+
+The database is now ready! Migrations will run automatically when the API starts.
+
+**Note:** If you ever need to migrate existing data, see "Appendix A: Database Migration" at the end of this document.
 
 ## Step 5: Start All Services
 
@@ -177,6 +170,8 @@ xcodebuild -scheme Calycal -project Calycal.xcodeproj build
 ```
 
 Deploy to TestFlight for testing before releasing to App Store.
+
+**Important:** You'll need to create new test accounts since this is a fresh database.
 
 ## Deployment Scripts
 
@@ -381,3 +376,45 @@ If you encounter issues:
 2. Review this guide
 3. Check Docker and Nginx documentation
 4. Ask in the project repository issues
+
+---
+
+## Appendix A: Database Migration (Optional)
+
+**Only needed if you have production data to migrate from Digital Ocean.**
+
+Since you're starting fresh, you don't need this now. But here's how to migrate data in the future:
+
+### Export from Digital Ocean:
+
+```bash
+# On your local machine
+# Get database URL from: DigitalOcean Console → Databases → Connection Details
+
+pg_dump "YOUR_DIGITAL_OCEAN_DATABASE_URL" > calcalcal_backup.sql
+
+# Transfer to Hetzner
+scp calcalcal_backup.sql root@YOUR_HETZNER_IP:/opt/calcalcal/apps/backend/node/backups/
+```
+
+### Import to Hetzner:
+
+```bash
+# On Hetzner VPS
+cd /opt/calcalcal/apps/backend/node
+
+# Stop API container (if running)
+docker-compose -f docker-compose.production.yml stop api
+
+# Import database
+docker exec -i calcalcal-db psql -U calcalcal calcalcal_production < backups/calcalcal_backup.sql
+
+# Run any new migrations
+docker-compose -f docker-compose.production.yml run --rm api npm run migrate
+
+# Restart API
+docker-compose -f docker-compose.production.yml start api
+
+# Verify data
+docker exec -it calcalcal-db psql -U calcalcal calcalcal_production -c "SELECT COUNT(*) FROM users;"
+```

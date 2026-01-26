@@ -78,12 +78,12 @@ Open **[CHECKLIST.md](CHECKLIST.md)** and complete each step
 ## ⏱️ Timeline
 
 - **VPS setup:** 30 min
-- **Database migration:** 30 min
+- **Database setup:** 5 min (fresh start!)
 - **API deployment:** 15 min
 - **Nginx + SSL:** 15 min
-- **iOS testing:** 10 min
+- **iOS testing:** 10 min (with new test accounts)
 - **Monitoring:** 30 min
-- **Total:** ~2.5 hours
+- **Total:** ~2 hours (faster with fresh database!)
 
 ## 💰 Financial Impact
 

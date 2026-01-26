@@ -23,12 +23,17 @@ Go to Apps → calcalcal-api → Settings → Environment Variables and copy:
 - [ ] `R2_SECRET_ACCESS_KEY` = _______________
 - [ ] `R2_BUCKET` = _______________
 - [ ] `R2_PUBLIC_BASE_URL` = _______________
+- [ ] `GOOGLE_CLIENT_ID` = _______________
 
 ### From Digital Ocean Database
 
-Go to Databases → calcalcal-db → Connection Details:
+**NOTE: You only have test data, so we'll start with a fresh database. Skip this section!**
 
-- [ ] Database connection string saved: `postgresql://...`
+~~Go to Databases → calcalcal-db → Connection Details:~~
+
+~~- [ ] Database connection string saved: `postgresql://...`~~
+
+- [x] Starting fresh - no migration needed ✅
 
 ### Hetzner Information
 
@@ -122,48 +127,34 @@ Fill in all values from Step "Information Gathering":
 - [ ] All `R2_*` variables set
 - [ ] File saved
 
-## Step 6: Database Migration
+## Step 6: Database Setup - Fresh Start
 
-### On your local machine:
-
-```bash
-# Create backup
-pg_dump "YOUR_DO_DATABASE_URL" > calcalcal_backup.sql
-
-# Verify backup is not empty
-wc -l calcalcal_backup.sql
-
-# Transfer to Hetzner
-scp calcalcal_backup.sql root@YOUR_HETZNER_IP:/opt/calcalcal/apps/backend/node/backups/
-```
-
-- [ ] Database backup created
-- [ ] Backup transferred to Hetzner
+**Since you only have test data, we're starting with a fresh database. Much simpler!**
 
 ### On Hetzner VPS:
 
 ```bash
 cd /opt/calcalcal/apps/backend/node
 
-# Start PostgreSQL only
+# Start PostgreSQL container
 docker-compose -f docker-compose.production.yml up -d postgres
 
 # Wait for it to be ready
-sleep 15
+sleep 10
 
 # Check if running
 docker ps | grep calcalcal-db
 
-# Restore database
-docker exec -i calcalcal-db psql -U calcalcal calcalcal_production < backups/calcalcal_backup.sql
+# Verify it's healthy
+docker-compose -f docker-compose.production.yml ps postgres
 
-# Verify data
-docker exec -it calcalcal-db psql -U calcalcal calcalcal_production -c "SELECT COUNT(*) FROM users;"
+# That's it! The migrations will run automatically when we start the API.
 ```
 
 - [ ] PostgreSQL container started
-- [ ] Database restored
-- [ ] Data verified (user count matches Digital Ocean)
+- [ ] Container is healthy and running
+
+**Note:** If you ever need to migrate existing data in the future, see the "Optional: Database Migration" section at the end of this document.
 
 ## Step 7: Start API
 
@@ -250,6 +241,7 @@ xcodebuild -scheme Calycal -project Calycal.xcodeproj build
 
 - [ ] iOS project builds successfully
 - [ ] Test in Xcode simulator
+- [ ] **Create new test account** (fresh database, no old data)
 - [ ] Test login/signup
 - [ ] Test creating diary entry
 - [ ] Test image upload
@@ -367,5 +359,42 @@ docker stats
 
 ---
 
-**Estimated Total Time:** 2.5 - 3 hours
+**Estimated Total Time:** 2 - 2.5 hours (faster with fresh database!)
 **Estimated Cost Savings:** $21/month (78% reduction)
+
+---
+
+## Optional: Database Migration (For Future Use)
+
+**Only use this if you have production data you need to migrate.**
+
+Since you're starting fresh, you can skip this. But here's how to migrate data in the future:
+
+### Export from Digital Ocean:
+
+```bash
+# On your local machine
+pg_dump "YOUR_DO_DATABASE_URL" > calcalcal_backup.sql
+
+# Transfer to Hetzner
+scp calcalcal_backup.sql root@YOUR_HETZNER_IP:/opt/calcalcal/apps/backend/node/backups/
+```
+
+### Import to Hetzner:
+
+```bash
+# On Hetzner VPS
+cd /opt/calcalcal/apps/backend/node
+
+# Stop API (if running)
+docker-compose -f docker-compose.production.yml stop api
+
+# Import data
+docker exec -i calcalcal-db psql -U calcalcal calcalcal_production < backups/calcalcal_backup.sql
+
+# Restart API
+docker-compose -f docker-compose.production.yml start api
+
+# Verify data
+docker exec -it calcalcal-db psql -U calcalcal calcalcal_production -c "SELECT COUNT(*) FROM users;"
+```

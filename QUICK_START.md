@@ -34,18 +34,20 @@ cp .env.production.template .env.production
 nano .env.production  # Fill in values from Digital Ocean
 ```
 
-## Database Migration (30 minutes)
+## Database Setup (5 minutes) - Fresh Start
+
+**Starting fresh since you only have test data!**
 
 ```bash
-# On your local machine:
-pg_dump "YOUR_DO_DATABASE_URL" > calcalcal_backup.sql
-scp calcalcal_backup.sql root@YOUR_HETZNER_IP:/opt/calcalcal/apps/backend/node/backups/
-
 # On Hetzner:
 cd /opt/calcalcal/apps/backend/node
 docker-compose -f docker-compose.production.yml up -d postgres
 sleep 10
-docker exec -i calcalcal-db psql -U calcalcal calcalcal_production < backups/calcalcal_backup.sql
+
+# Verify it's running
+docker ps | grep calcalcal-db
+
+# Migrations will run automatically when API starts
 ```
 
 ## Start Services (15 minutes)
@@ -89,10 +91,15 @@ xcodebuild -scheme Calycal -project Calycal.xcodeproj build
 
 ## Post-Migration
 
+- [ ] **Create new test accounts** (fresh database!)
 - [ ] Test all features (login, diary, images, AI)
 - [ ] Monitor logs for 24 hours
 - [ ] Set up automated backups (crontab)
 - [ ] Delete Digital Ocean resources after 48 hours
+
+---
+
+**Note:** Need to migrate existing data in the future? See HETZNER_DEPLOYMENT.md Appendix A.
 
 ## Common Commands
 
