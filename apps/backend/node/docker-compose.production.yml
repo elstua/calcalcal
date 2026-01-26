@@ -1,0 +1,74 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: calcalcal-db
+    environment:
+      POSTGRES_USER: calcalcal
+      POSTGRES_PASSWORD: NeonGenezisEva02!
+      POSTGRES_DB: calcalcal_production
+    ports:
+      - "127.0.0.1:5432:5432"  # Only accessible from localhost for security
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Mount backups directory for easy access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calcalcal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Resource limits for database
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Node.js API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: calcalcal-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"  # Only accessible from localhost (nginx will proxy)
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Database connection to postgres container
+      - DATABASE_URL=postgresql://calcalcal:NeonGenezisEva02!@postgres:5432/calcalcal_production
+    env_file:
+      - .env.production  # Additional secrets loaded from file
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Resource limits for API
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - calcalcal-network
+
+networks:
+  calcalcal-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

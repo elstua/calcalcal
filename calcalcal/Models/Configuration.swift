@@ -17,7 +17,8 @@ struct Configuration {
             return plistURL
         }
         // Hardcoded production URL for release builds (TestFlight/App Store)
-        return "https://calycal-app-egy2b.ondigitalocean.app"
+        // Updated for Hetzner VPS deployment
+        return "https://calcalcal.app"
         #endif
     }()
     

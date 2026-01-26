@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_URL</key>
-	<string>https://calycal-app-egy2b.ondigitalocean.app</string>
+	<string>https://calcalcal.app</string>
 	<key>CFBundleDisplayName</key>
 	<string>Calycal</string>
 	<key>CFBundleExecutable</key>
