@@ -625,11 +625,21 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     @objc private func handleMetadataNotification(_ notification: Notification) {
         guard let entryIdentifier,
-              let userInfo = notification.userInfo,
-              let notifiedEntryID = userInfo["entryId"] as? UUID,
-              notifiedEntryID == entryIdentifier else {
+              let userInfo = notification.userInfo else {
             return
         }
+        
+        // Handle both UUID and String for backwards compatibility
+        let notifiedEntryID: UUID?
+        if let uuidValue = userInfo["entryId"] as? UUID {
+            notifiedEntryID = uuidValue
+        } else if let stringValue = userInfo["entryId"] as? String {
+            notifiedEntryID = UUID(uuidString: stringValue)
+        } else {
+            return
+        }
+        
+        guard notifiedEntryID == entryIdentifier else { return }
         let analyzedBlocks = parseAnalyzedBlocks(from: userInfo["analyzedBlocks"])
         guard !analyzedBlocks.isEmpty else { return }
         applyAnalyzedMetadata(analyzedBlocks)

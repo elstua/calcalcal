@@ -508,6 +508,16 @@ extension DiaryAPI.Row {
         let dateValue = parsedDate ?? Date.distantPast // avoid collapsing to "today" when parse fails
         // Prefer local cached blocks for fast, lossless hydration across app restarts
         let cachedBlocks = BlocksCache.shared.load(entryId: uuid)
+        
+        if let cached = cachedBlocks {
+            DataFlowLogger.shared.entryMappingUsingCache(entryId: uuid, blockCount: cached.count)
+        } else {
+            DataFlowLogger.shared.entryMappingUsingBackendContent(
+                entryId: uuid, 
+                contentPreview: String((content ?? "").prefix(50))
+            )
+        }
+        
         let blocks = (cachedBlocks ?? (content ?? "").toTextBlocks()).withStableIdsAndChangeTracking()
         let updated: Date
         if let updated_at, let parsedUpdated = ISO8601DateFormatter().date(from: updated_at) { updated = parsedUpdated } else { updated = Date() }

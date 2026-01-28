@@ -19,8 +19,8 @@ struct DiaryTabView: View {
     
     // MARK: - Presentation State (iOS 18+ uses fullScreenCover with zoom transition)
     @State private var presentedEntry: DiaryEntry? = nil
-    @State private var presentedBlocks: [Block] = []
     @State private var shouldFocusEditor: Bool = false
+    @State private var justClosedEditor: Bool = false
     
     // MARK: - All Days View State
     @State private var showAllDaysView: Bool = false
@@ -35,22 +35,34 @@ struct DiaryTabView: View {
     var body: some View {
         mainContent
             .fullScreenCover(item: $presentedEntry) { entry in
-                // Just the card - no background
+                // Create a direct binding wrapper
                 EditorOverlay(
-                    entry: entry,
-                    blocks: $presentedBlocks,
+                    entry: Binding(
+                        get: { presentedEntry ?? entry },
+                        set: { presentedEntry = $0 }
+                    ),
                     shouldBecomeFirstResponder: $shouldFocusEditor,
                     namespace: editorNamespace,
-                    onClose: {
-                        handleOverlayClose(entry: entry)
+                    onClose: { finalEntry in
+                        handleOverlayClose(with: finalEntry)
                     }
                 )
                 .applyZoomTransition(id: entry.id, namespace: editorNamespace)
             }
             .fullScreenCover(isPresented: $showAllDaysView, onDismiss: {
-                Task {
-                    await viewModel.refreshVisibleEntries()
+                // IMPORTANT: Only refresh if we're not in the middle of editing
+                // This prevents overwriting recently saved data with stale backend data
+                if presentedEntry == nil && !justClosedEditor {
+                    Task {
+                        // Add small delay to ensure cache writes and backend saves complete
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                        await viewModel.refreshVisibleEntries()
+                    }
+                } else {
+                    let reason = presentedEntry != nil ? "editor active" : "just closed editor"
+                    DataFlowLogger.shared.backendRefreshSkipped(reason: reason)
                 }
+                
                 // If an entry was queued to open from the all-days view, present it now
                 if let entry = pendingEntryFromAllDays {
                     pendingEntryFromAllDays = nil
@@ -84,12 +96,6 @@ struct DiaryTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
             handleCanonicalIdResolved(notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .editorOverlayDidCommit)) { notification in
-            handleEditorCommit(notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryTotalsUpdated)) { notification in
-            handleTotalsUpdated(notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
             handleStreaksUpdated(notification)
@@ -262,31 +268,48 @@ struct DiaryTabView: View {
     
     // MARK: - Overlay Actions
     private func presentOverlay(for entry: DiaryEntry) {
-        shouldFocusEditor = false
-        presentedBlocks = entry.blocks
-        presentedEntry = entry
+        var entryWithStableIds = entry
+        entryWithStableIds.blocks = entry.blocks.withStableIdsAndChangeTracking()
+        presentedEntry = entryWithStableIds
+        shouldFocusEditor = true
     }
     
-    private func handleOverlayClose(entry: DiaryEntry) {
-        shouldFocusEditor = false
-
-        // Update entry data
-        viewModel.updateDayEntry(entryId: entry.id) { state in
-            state.entry.blocks = presentedBlocks
-            state.entry.lastModified = Date()
-            state.isPlaceholder = viewModel.isPlaceholderContent(presentedBlocks)
-        }
-        NotificationCenter.default.post(
-            name: .editorOverlayDidCommit,
-            object: nil,
-            userInfo: [
-                "entryId": entry.id,
-                "blocks": presentedBlocks
-            ]
+    private func handleOverlayClose(with updatedEntry: DiaryEntry) {
+        print("🟢 handleOverlayClose START - blocks=\(updatedEntry.blocks.count)")
+        
+        DataFlowLogger.shared.viewModelUpdating(
+            entryId: updatedEntry.id, 
+            blockCount: updatedEntry.blocks.count, 
+            isPlaceholder: viewModel.isPlaceholderContent(updatedEntry.blocks)
         )
-
-        // Dismiss the fullScreenCover - iOS 18+ handles the zoom animation automatically
+        
+        // CRITICAL: Clear presentedEntry FIRST to prevent re-triggering fullScreenCover
+        print("🟢 Setting presentedEntry = nil")
         presentedEntry = nil
+        shouldFocusEditor = false
+        
+        // Update the source entry in the view model
+        let isPlaceholder = viewModel.isPlaceholderContent(updatedEntry.blocks)
+        viewModel.updateDayEntry(entryId: updatedEntry.id) { state in
+            state.entry = updatedEntry
+            state.isPlaceholder = isPlaceholder
+        }
+        DataFlowLogger.shared.viewModelUpdated(entryId: updatedEntry.id, isPlaceholder: isPlaceholder)
+        
+        print("🟢 handleOverlayClose END")
+        
+        // Mark that we just closed the editor to prevent immediate refresh
+        justClosedEditor = true
+        DataFlowLogger.shared.editorJustClosedFlagSet()
+        
+        // After a delay, allow refreshes again
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            await MainActor.run {
+                justClosedEditor = false
+                DataFlowLogger.shared.editorJustClosedFlagCleared()
+            }
+        }
     }
     
     // MARK: - Notification Handlers
@@ -299,32 +322,6 @@ struct DiaryTabView: View {
             presentedEntry = current
         }
         viewModel.replaceEntryId(localId: localId, with: serverId)
-    }
-    
-    private func handleEditorCommit(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let entryId = info["entryId"] as? UUID,
-              let blocks = info["blocks"] as? [Block] else { return }
-        viewModel.updateDayEntry(entryId: entryId) { state in
-            state.entry.blocks = blocks
-            state.entry.lastModified = Date()
-            state.isPlaceholder = viewModel.isPlaceholderContent(blocks)
-        }
-    }
-    
-    private func handleTotalsUpdated(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let entryId = info["entryId"] as? UUID else { return }
-        let value = info["totalCalories"]
-        let total: Int?
-        if value is NSNull {
-            total = nil
-        } else {
-            total = value as? Int
-        }
-        viewModel.updateDayEntry(entryId: entryId) { state in
-            state.entry.totalCalories = total
-        }
     }
     
     private func handleStreaksUpdated(_ notification: Notification) {

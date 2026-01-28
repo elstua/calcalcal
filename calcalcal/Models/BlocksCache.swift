@@ -204,22 +204,69 @@ final class BlocksCache {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             blocks: encodeBlocks(blocks)
         )
+        DataFlowLogger.shared.cacheSaveStarted(
+            entryId: entryId, 
+            blockCount: blocks.count, 
+            contentPreview: DataFlowLogger.preview(from: blocks)
+        )
         ioQueue.async {
             do {
                 let data = try JSONEncoder().encode(dto)
                 try data.write(to: url, options: .atomic)
+                DataFlowLogger.shared.cacheSaveCompleted(entryId: entryId)
             } catch {
-                // ignore
+                DataFlowLogger.shared.cacheSaveFailed(entryId: entryId, error: error.localizedDescription)
+            }
+        }
+    }
+    
+    /// Synchronous save - waits for completion before returning
+    func saveSync(entryId: UUID, blocks: [Block]) {
+        let url = fileURL(for: entryId)
+        let dto = CachedEntry(
+            entryId: entryId.uuidString,
+            updatedAt: ISO8601DateFormatter().string(from: Date()),
+            blocks: encodeBlocks(blocks)
+        )
+        DataFlowLogger.shared.cacheSaveStarted(
+            entryId: entryId, 
+            blockCount: blocks.count, 
+            contentPreview: DataFlowLogger.preview(from: blocks)
+        )
+        ioQueue.sync {
+            do {
+                let data = try JSONEncoder().encode(dto)
+                try data.write(to: url, options: .atomic)
+                DataFlowLogger.shared.cacheSaveCompleted(entryId: entryId)
+            } catch {
+                DataFlowLogger.shared.cacheSaveFailed(entryId: entryId, error: error.localizedDescription)
             }
         }
     }
 
     func load(entryId: UUID) -> [Block]? {
+        DataFlowLogger.shared.cacheLoadStarted(entryId: entryId)
+        
         let url = fileURL(for: entryId)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        guard let dto = try? JSONDecoder().decode(CachedEntry.self, from: data) else { return nil }
-        guard dto.entryId == entryId.uuidString else { return nil }
-        return decodeBlocks(dto.blocks)
+        guard let data = try? Data(contentsOf: url) else { 
+            DataFlowLogger.shared.cacheLoadMissing(entryId: entryId)
+            return nil 
+        }
+        guard let dto = try? JSONDecoder().decode(CachedEntry.self, from: data) else { 
+            DataFlowLogger.shared.cacheLoadFailed(entryId: entryId, reason: "decode failed")
+            return nil 
+        }
+        guard dto.entryId == entryId.uuidString else { 
+            DataFlowLogger.shared.cacheLoadFailed(entryId: entryId, reason: "ID mismatch")
+            return nil 
+        }
+        let blocks = decodeBlocks(dto.blocks)
+        DataFlowLogger.shared.cacheLoadSuccess(
+            entryId: entryId, 
+            blockCount: blocks.count, 
+            contentPreview: DataFlowLogger.preview(from: blocks)
+        )
+        return blocks
     }
 
     /// Rename/migrate cached blocks when a placeholder entry receives its canonical server id.

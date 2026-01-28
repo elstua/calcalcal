@@ -94,30 +94,6 @@ struct DiaryListView: View {
             recalcTimeline()
             Task { await loadInitialEntries() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .editorOverlayDidCommit)) { notification in
-            guard let userInfo = notification.userInfo,
-                  let entryId = userInfo["entryId"] as? UUID,
-                  let blocks = userInfo["blocks"] as? [Block] else { return }
-            logger.debug("editorOverlayDidCommit - entryId=\(entryId.uuidString), blocks count=\(blocks.count)")
-            if let index = entries.firstIndex(where: { $0.id == entryId }) {
-                logger.debug("Found entry at index \(index), updating blocks")
-                entries[index].blocks = blocks
-                entries[index].lastModified = Date()
-                BlocksCache.shared.save(entryId: entryId, blocks: blocks)
-                recalcTimeline()
-            } else {
-                logger.warning("Entry \(entryId.uuidString) not found in entries array!")
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryTotalsUpdated)) { notification in
-            guard let userInfo = notification.userInfo,
-                  let entryId = userInfo["entryId"] as? UUID,
-                  let total = userInfo["totalCalories"] as? Int? else { return }
-            if let index = entries.firstIndex(where: { $0.id == entryId }) {
-                entries[index].totalCalories = total
-                recalcTimeline()
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
             guard let info = notification.userInfo,
                   let localId = info["localId"] as? UUID,
@@ -475,17 +451,8 @@ struct DiaryEntryPopupView: View {
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
-                    // Update visible totals in the editor footer
+                    // Update visible totals in the editor footer and list
                     entry.totalCalories = row.total_calories
-                    // Broadcast to update day list cards in place
-                    NotificationCenter.default.post(
-                        name: .diaryEntryTotalsUpdated,
-                        object: nil,
-                        userInfo: [
-                            "entryId": canonicalEntryId,
-                            "totalCalories": row.total_calories as Any
-                        ]
-                    )
                 }
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                 
@@ -518,10 +485,6 @@ struct DiaryEntryPopupView: View {
     }
 }
 
-// MARK: - Notifications
-extension Notification.Name {
-    static let diaryEntryTotalsUpdated = Notification.Name("diaryEntryTotalsUpdated")
-}
 
 extension DiaryEntryPopupView {
     @MainActor

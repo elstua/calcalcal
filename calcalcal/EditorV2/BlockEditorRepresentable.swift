@@ -149,12 +149,22 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         private func handleMetadataNotification(_ notification: Notification) {
             guard
                 let entryId = parent.entryId,
-                let userInfo = notification.userInfo,
-                let notifiedEntryID = userInfo["entryId"] as? UUID,
-                notifiedEntryID == entryId
+                let userInfo = notification.userInfo
             else {
                 return
             }
+            
+            // Handle both UUID and String for backwards compatibility
+            let notifiedEntryID: UUID?
+            if let uuidValue = userInfo["entryId"] as? UUID {
+                notifiedEntryID = uuidValue
+            } else if let stringValue = userInfo["entryId"] as? String {
+                notifiedEntryID = UUID(uuidString: stringValue)
+            } else {
+                return
+            }
+            
+            guard notifiedEntryID == entryId else { return }
             scheduleSnapshot()
         }
     }

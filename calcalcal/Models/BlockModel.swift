@@ -114,6 +114,17 @@ extension Array where Element == Block {
             if block.nutrition?.userModified == true {
                 dict["userModified"] = true
             }
+            
+            // Include metadata to preserve client-side state
+            if let imageUrl = block.imageUrl {
+                dict["imageUrl"] = imageUrl
+            }
+            if let imageObjectKey = block.imageObjectKey {
+                dict["imageObjectKey"] = imageObjectKey
+            }
+            if let stableId = block.stableId {
+                dict["stableId"] = stableId.uuidString
+            }
 
             result.append(dict)
         }

@@ -150,7 +150,10 @@ final class DiaryTabViewModel: ObservableObject {
         clampSelectedDayIfNeeded()
         ensurePlaceholdersForVisibleDays()
         
-        guard !isLoadingRecentDays else { return }
+        guard !isLoadingRecentDays else { 
+            DataFlowLogger.shared.backendRefreshSkipped(reason: "already loading")
+            return 
+        }
         isLoadingRecentDays = true
         
         let dates = visibleDates
@@ -158,16 +161,19 @@ final class DiaryTabViewModel: ObservableObject {
         let oldest = dates.last ?? anchorDate
         let newest = dates.first ?? anchorDate
         
+        let dateFrom = LocalDayMath.yyyymmdd(for: oldest, offsetMinutes: offset)
+        let dateTo = LocalDayMath.yyyymmdd(for: newest, offsetMinutes: offset)
+        DataFlowLogger.shared.backendRefreshStarted(dateFrom: dateFrom, dateTo: dateTo)
+        
         do {
-            let rows = try await DiaryAPI.listEntries(
-                dateFrom: LocalDayMath.yyyymmdd(for: oldest, offsetMinutes: offset),
-                dateTo: LocalDayMath.yyyymmdd(for: newest, offsetMinutes: offset)
-            )
+            let rows = try await DiaryAPI.listEntries(dateFrom: dateFrom, dateTo: dateTo)
             let mapped = rows.map { $0.toDiaryEntry() }
             apply(entries: mapped)
             isLoadingRecentDays = false
+            DataFlowLogger.shared.backendRefreshCompleted(entryCount: mapped.count)
         } catch {
             isLoadingRecentDays = false
+            DataFlowLogger.shared.backendRefreshFailed(error: error.localizedDescription)
         }
     }
     
@@ -184,7 +190,29 @@ final class DiaryTabViewModel: ObservableObject {
         
         for entry in entries {
             let key = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offset)
+            
+            DataFlowLogger.shared.entryApplied(
+                dayKey: key, 
+                entryId: entry.id, 
+                blockCount: entry.blocks.count
+            )
+            
             if updated[key] != nil {
+                // Check if we're about to overwrite a newer version
+                if let existing = updated[key] {
+                    let existingContent = existing.entry.blocks.toContentString()
+                    let newContent = entry.blocks.toContentString()
+                    if existingContent != newContent {
+                        DataFlowLogger.shared.entryOverwritten(
+                            dayKey: key,
+                            oldBlockCount: existing.entry.blocks.count,
+                            newBlockCount: entry.blocks.count,
+                            oldContent: String(existingContent.prefix(50)),
+                            newContent: String(newContent.prefix(50))
+                        )
+                    }
+                }
+                
                 updated[key] = DayEntryState(entry: entry, isPlaceholder: isPlaceholderContent(entry.blocks))
             }
         }
