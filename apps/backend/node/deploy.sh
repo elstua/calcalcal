@@ -33,13 +33,18 @@ cd ../../..  # Go to repo root
 git pull origin main
 cd apps/backend/node
 
+# Stop existing API container to avoid image conflicts
+echo -e "${YELLOW}🛑 Stopping existing API container...${NC}"
+docker-compose -f docker-compose.production.yml stop api || true
+docker-compose -f docker-compose.production.yml rm -f api || true
+
 # Build new Docker images
 echo -e "${YELLOW}🔨 Building Docker images...${NC}"
 docker-compose -f docker-compose.production.yml build --no-cache api
 
 # Run database migrations (before restarting API)
 echo -e "${YELLOW}🗄️  Running database migrations...${NC}"
-# Temporarily start postgres if not running
+# Ensure postgres is running
 docker-compose -f docker-compose.production.yml up -d postgres
 sleep 5  # Wait for postgres to be ready
 
@@ -49,7 +54,7 @@ docker-compose -f docker-compose.production.yml run --rm \
     api npm run migrate
 
 # Deploy updated containers
-echo -e "${YELLOW}🔄 Restarting containers...${NC}"
+echo -e "${YELLOW}🔄 Starting containers...${NC}"
 docker-compose -f docker-compose.production.yml up -d
 
 # Wait for health check
