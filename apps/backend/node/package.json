@@ -11,7 +11,8 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "migrate": "ts-node src/scripts/runMigrations.ts",
+    "migrate": "node dist/scripts/runMigrationsProgrammatic.js",
+    "migrate:dev": "ts-node src/scripts/runMigrations.ts",
     "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts",
     "test": "jest",
     "cleanup-images": "ts-node src/scripts/cleanup-images.ts"
