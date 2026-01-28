@@ -1,5 +1,8 @@
 import SwiftUI
 import UIKit
+import os.log
+
+private let logger = Logger(subsystem: "com.calcalcal.app", category: "EditorOverlay")
 
 struct EditorOverlay: View {
     let entry: DiaryEntry
@@ -143,13 +146,13 @@ struct EditorOverlay: View {
             // Fetch existing per-block calories for this entry (if already analyzed)
             loadTask = Task {
                 do {
-                    print("🐛 DEBUG: Loading blocks for entry.id=\(canonicalEntryId.uuidString)")
+                    logger.debug("Loading blocks for entry.id=\(self.canonicalEntryId.uuidString)")
                     let dbBlocks = try await DiaryAPI.getBlocksById(canonicalEntryId.uuidString)
-                    print("🐛 DEBUG: getBlocksById returned \(dbBlocks.count) blocks: \(dbBlocks.map { $0.content ?? "nil" })")
+                    logger.debug("getBlocksById returned \(dbBlocks.count) blocks")
 
                     // Check if task was cancelled before applying results
                     if Task.isCancelled {
-                        print("🐛 DEBUG: Load task cancelled, not applying blocks")
+                        logger.debug("Load task cancelled, not applying blocks")
                         return
                     }
 
@@ -205,9 +208,8 @@ struct EditorOverlay: View {
             loadTask?.cancel()
             loadTask = nil
             autosaveTask?.cancel()
-            print("🐛 DEBUG: EditorOverlay dismissed, calling cancel() on autosaveTask for entry.id=\(canonicalEntryId.uuidString)")
+            logger.debug("EditorOverlay dismissed, cancelled autosaveTask for entry.id=\(self.canonicalEntryId.uuidString)")
             autosaveTask = nil
-            print("🐛 DEBUG: EditorOverlay dismissed, cancelled load and autosave tasks for entry.id=\(canonicalEntryId.uuidString)")
 
             flushSave()
             // Apply any queued remote updates only after editor closes
@@ -219,11 +221,11 @@ struct EditorOverlay: View {
         }
         // Listen for paragraph-level commit/edit notifications to control autosave
         .onReceive(NotificationCenter.default.publisher(for: .editorParagraphCommitted)) { _ in
-            print("📝 Paragraph committed -> schedule autosave")
+            logger.debug("Paragraph committed -> schedule autosave")
             scheduleAutosave(blocks: blocks)
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorSavedParagraphEdited)) { _ in
-            print("✏️ Saved paragraph edited -> schedule autosave")
+            logger.debug("Saved paragraph edited -> schedule autosave")
             scheduleAutosave(blocks: blocks)
         }
     }
@@ -512,7 +514,7 @@ extension EditorOverlay {
 
         let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
         if content == lastSavedContent {
-            print("⏭️ Autosave skipped (text unchanged)")
+            logger.debug("Autosave skipped (text unchanged)")
             return
         }
         // Do not autosave on every keystroke anymore. Wait for paragraph-level notifications.
@@ -521,9 +523,9 @@ extension EditorOverlay {
     private func scheduleAutosave(blocks: [Block]) {
         debounceWorkItem?.cancel()
         autosaveTask?.cancel() // Cancel any existing autosave to prevent overlap
-        print("🕐 Autosave scheduled in 1s…")
+        logger.debug("Autosave scheduled in 1s…")
         let workItem = DispatchWorkItem {
-            print("💾 Autosave firing…")
+            logger.debug("Autosave firing…")
             autosaveTask = Task { await save(blocks: blocks) }
         }
         debounceWorkItem = workItem
@@ -536,7 +538,7 @@ extension EditorOverlay {
             debounceWorkItem = nil
         }
         autosaveTask?.cancel() // Cancel any existing autosave before flush
-        print("🔚 Flushing autosave on close…")
+        logger.debug("Flushing autosave on close…")
         // Do immediate save without AI analysis to prevent contamination
         Task { await saveWithoutAIAnalysis(blocks: blocks) }
     }
@@ -544,7 +546,7 @@ extension EditorOverlay {
     private func save(blocks: [Block]) async {
         // Check if task was cancelled before starting save
         if Task.isCancelled {
-            print("🐛 DEBUG: Save task cancelled for entry.id=\(canonicalEntryId.uuidString)")
+            logger.debug("Save task cancelled for entry.id=\(self.canonicalEntryId.uuidString)")
             return
         }
 
@@ -555,22 +557,23 @@ extension EditorOverlay {
             "write what you ate this day"
         ]
         if trimmed.isEmpty || placeholders.contains(trimmed) {
-            print("⏭️ Autosave skipped (empty/placeholder content)")
+            logger.debug("Autosave skipped (empty/placeholder content)")
             return
         }
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        print("🐛 DEBUG: entry.id=\(canonicalEntryId.uuidString), entry.date=\(entry.date), computed day=\(day)")
+        logger.debug("Autosave: entry.id=\(self.canonicalEntryId.uuidString), computed day=\(day)")
         do {
             // Ensure we have a valid authenticated session for writes (RLS requires it)
             guard let _ = try? KeychainManager.shared.loadTokens() else {
-                print("⚠️ Missing auth session; autosave deferred until user signs in")
+                logger.warning("Missing auth session; autosave deferred until user signs in")
                 return
             }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
-                print("⬆️ Upserting content for day \(day)… (overlay)")
-                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
-                print("🐛 DEBUG: Autosave result - local_id=\(canonicalEntryId.uuidString), db_id=\(row.id), db_date=\(row.date)")
+                logger.debug("Upserting content for day \(day)…")
+                let blocksPayload = blocks.toAnalyzeBlocks()
+                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content, blocks: blocksPayload)
+                logger.debug("Autosave result - local_id=\(self.canonicalEntryId.uuidString), db_id=\(row.id)")
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
                 }
@@ -579,7 +582,7 @@ extension EditorOverlay {
 
                 // Check if task was cancelled before starting AI analysis
                 if Task.isCancelled {
-                    print("🐛 DEBUG: Save task cancelled before AI analysis for entry.id=\(canonicalEntryId.uuidString)")
+                    logger.debug("Save task cancelled before AI analysis for entry.id=\(self.canonicalEntryId.uuidString)")
                     return
                 }
 
@@ -674,13 +677,13 @@ extension EditorOverlay {
 
                                 // Check if task was cancelled before making database calls
                                 if Task.isCancelled {
-                                    print("🐛 DEBUG: Autosave polling cancelled for entry \(row.id)")
+                                    logger.debug("Autosave polling cancelled for entry \(row.id)")
                                     return
                                 }
 
                                 let refreshed = try? await DiaryAPI.getById(row.id)
                                 let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
-                                print("🐛 DEBUG: Polling call getBlocksById(\(row.id)) returned \(dbBlocks?.count ?? 0) blocks: \(dbBlocks?.map { $0.content ?? "nil" } ?? [])")
+                                logger.debug("Polling call getBlocksById(\(row.id)) returned \(dbBlocks?.count ?? 0) blocks")
 
                                 await MainActor.run {
                                     if let refreshed {
@@ -768,7 +771,7 @@ extension EditorOverlay {
                     )
                 }
             } else {
-                print("⚠️ Missing user id; deferring insert until available")
+                logger.warning("Missing user id; deferring insert until available")
                 return
             }
             lastSavedAt = Date()
@@ -786,13 +789,13 @@ extension EditorOverlay {
                         )
                     }
                 } catch {
-                    print("⚠️ Failed to refresh streaks after autosave: \(error)")
+                    logger.warning("Failed to refresh streaks after autosave: \(error.localizedDescription)")
                 }
             }
             
-            print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
+            logger.info("Autosave success")
         } catch {
-            print("❌ Autosave error: \(error)")
+            logger.error("Autosave error: \(error.localizedDescription)")
         }
     }
 
@@ -805,7 +808,7 @@ extension EditorOverlay {
             "write what you ate this day"
         ]
         if trimmed.isEmpty || placeholders.contains(trimmed) {
-            print("⏭️ Flush save skipped (empty/placeholder content)")
+            logger.debug("Flush save skipped (empty/placeholder content)")
             return
         }
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
@@ -813,20 +816,21 @@ extension EditorOverlay {
 
         do {
             guard let _ = try? KeychainManager.shared.loadTokens() else {
-                print("⚠️ Missing auth session; flush save deferred")
+                logger.warning("Missing auth session; flush save deferred")
                 return
             }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
-                print("⬆️ Flush saving content for day \(day)… (overlay)")
-                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
-                print("🐛 DEBUG: Flush save result - local_id=\(canonicalEntryId.uuidString), db_id=\(row.id)")
+                logger.debug("Flush saving content for day \(day)…")
+                let blocksPayload = blocks.toAnalyzeBlocks()
+                let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content, blocks: blocksPayload)
+                logger.debug("Flush save result - local_id=\(self.canonicalEntryId.uuidString), db_id=\(row.id)")
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
                 }
 
                 lastSavedAt = Date()
                 lastSavedContent = trimmed
-                print("✅ Flush save success (no AI analysis)")
+                logger.info("Flush save success (no AI analysis)")
                 // Save blocks cache on flush as well
                 BlocksCache.shared.save(entryId: canonicalEntryId, blocks: blocks)
                 
@@ -842,14 +846,14 @@ extension EditorOverlay {
                             )
                         }
                     } catch {
-                        print("⚠️ Failed to refresh streaks after flush save: \(error)")
+                        logger.warning("Failed to refresh streaks after flush save: \(error.localizedDescription)")
                     }
                 }
             } else {
-                print("⚠️ Missing user id; deferring flush save")
+                logger.warning("Missing user id; deferring flush save")
             }
         } catch {
-            print("❌ Flush save error: \(error)")
+            logger.error("Flush save error: \(error.localizedDescription)")
         }
     }
 }

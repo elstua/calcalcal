@@ -36,8 +36,35 @@ function queueAnalysisJob(entryId: string, blocks: any[], userId: string, entryD
       `[ai:analyze] job start entry=${entryId} blocks=${safeBlocks.length}`,
     );
     try {
+      // Fetch existing blocks to preserve client metadata
+      const existingEntry = await DiaryEntryModel.getById(entryId);
+      const existingBlocks = existingEntry?.blocks || [];
+
+      // Build a map of block IDs to preserve client metadata
+      const blockMap = new Map();
+      for (const block of existingBlocks) {
+        if (block.id) {
+          blockMap.set(block.id, block);
+        }
+      }
+
       const analyzedBlocks = await AIService.analyzeBlocks(safeBlocks);
-      const totals = AIService.calculateTotals(analyzedBlocks);
+
+      // Merge: preserve imageUrl, imageObjectKey, stableId from existing blocks
+      const mergedBlocks = analyzedBlocks.map((analyzed: any) => {
+        const existing = blockMap.get(analyzed.id);
+        if (existing) {
+          return {
+            ...analyzed,
+            imageUrl: existing.imageUrl || analyzed.imageUrl,
+            imageObjectKey: existing.imageObjectKey || analyzed.imageObjectKey,
+            stableId: existing.stableId || analyzed.stableId,
+          };
+        }
+        return analyzed;
+      });
+
+      const totals = AIService.calculateTotals(mergedBlocks);
 
       const isLatest = activeAnalysisJobs.get(entryId) === jobToken;
       if (!isLatest) {
@@ -59,7 +86,7 @@ function queueAnalysisJob(entryId: string, blocks: any[], userId: string, entryD
            ai_analysis_error = NULL
          WHERE id = $10`,
         [
-          JSON.stringify(analyzedBlocks),
+          JSON.stringify(mergedBlocks),
           totals.total_calories,
           totals.total_protein,
           totals.total_fat,

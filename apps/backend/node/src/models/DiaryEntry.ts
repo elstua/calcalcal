@@ -94,6 +94,17 @@ export class DiaryEntryModel {
     return result.rows[0] || null;
   }
 
+  static async updateContentAndBlocks(entryId: string, userId: string, content: string, blocks: any[]) {
+    const result = await Database.query(
+      `UPDATE diary_entries
+       SET content = $1, blocks = $2, updated_at = NOW()
+       WHERE id = $3 AND user_id = $4
+       RETURNING *`,
+      [content, JSON.stringify(blocks), entryId, userId]
+    );
+    return result.rows[0] || null;
+  }
+
   static async delete(entryId: string, userId: string) {
     const result = await Database.query(
       `DELETE FROM diary_entries

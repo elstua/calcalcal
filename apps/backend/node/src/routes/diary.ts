@@ -74,14 +74,22 @@ router.post('/entries', async (req: AuthRequest, res) => {
 router.patch('/entries/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, blocks } = req.body;
     const userId = req.userId!;
 
     if (!content) {
       return res.status(400).json({ error: 'content is required' });
     }
 
-    const entry = await DiaryEntryModel.updateContent(id, userId, content);
+    let entry;
+    if (blocks && Array.isArray(blocks)) {
+      // Update both content and blocks if blocks provided
+      entry = await DiaryEntryModel.updateContentAndBlocks(id, userId, content, blocks);
+    } else {
+      // Fallback to content-only update
+      entry = await DiaryEntryModel.updateContent(id, userId, content);
+    }
+
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
     }

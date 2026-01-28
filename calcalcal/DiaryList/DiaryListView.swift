@@ -1,7 +1,9 @@
 import SwiftUI
 import Foundation
 import UIKit
-// Explicit imports for model visibility
+import os.log
+
+private let logger = Logger(subsystem: "com.calcalcal.app", category: "DiaryListView")
 
 // MARK: - DiaryListView
 struct DiaryListView: View {
@@ -96,17 +98,15 @@ struct DiaryListView: View {
             guard let userInfo = notification.userInfo,
                   let entryId = userInfo["entryId"] as? UUID,
                   let blocks = userInfo["blocks"] as? [Block] else { return }
-            print("🐛 DEBUG: editorOverlayDidCommit - entryId=\(entryId.uuidString), blocks=\(blocks.map { $0.type })")
-            print("🐛 DEBUG: Current entries in DiaryListView: \(entries.map { "ID: \($0.id.uuidString.prefix(8)), blocks: \($0.blocks.map { $0.type })" })")
+            logger.debug("editorOverlayDidCommit - entryId=\(entryId.uuidString), blocks count=\(blocks.count)")
             if let index = entries.firstIndex(where: { $0.id == entryId }) {
-                print("🐛 DEBUG: Found entry at index \(index), ID=\(entries[index].id.uuidString), was: \(entries[index].blocks.map { $0.type })")
+                logger.debug("Found entry at index \(index), updating blocks")
                 entries[index].blocks = blocks
                 entries[index].lastModified = Date()
                 BlocksCache.shared.save(entryId: entryId, blocks: blocks)
-                print("🐛 DEBUG: Updated entry at index \(index), now: \(entries[index].blocks.map { $0.type })")
                 recalcTimeline()
             } else {
-                print("🐛 DEBUG: WARNING - entryId \(entryId.uuidString) not found in entries array!")
+                logger.warning("Entry \(entryId.uuidString) not found in entries array!")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryTotalsUpdated)) { notification in
@@ -303,7 +303,7 @@ struct DiaryListView: View {
                 self.recalcTimeline()
             }
         } catch {
-            print("Failed to load entries: \(error)")
+            logger.error("Failed to load entries: \(error.localizedDescription)")
         }
         isLoadingRemote = false
     }
@@ -328,9 +328,9 @@ struct DiaryListView: View {
                 self.recalcTimeline()
                 self.isLoadingMore = false
             }
-            print("📥 Loaded \(newDaysCount) days of entries")
+            logger.info("Loaded \(newDaysCount) days of entries")
         } catch {
-            print("Failed to load more entries: \(error)")
+            logger.error("Failed to load more entries: \(error.localizedDescription)")
             await MainActor.run {
                 self.isLoadingMore = false
             }

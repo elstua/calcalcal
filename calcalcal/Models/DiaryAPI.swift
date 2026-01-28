@@ -291,11 +291,14 @@ struct DiaryAPI {
         return try decoder.decode(Row.self, from: data)
     }
 
-    static func updateContent(id: String, content: String) async throws -> Row {
+    static func updateContent(id: String, content: String, blocks: [[String: Any]]? = nil) async throws -> Row {
         let base = Configuration.apiURL
         let urlString = "\(base)/api/diary/entries/\(id)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        let payload: [String: Any] = ["content": content]
+        var payload: [String: Any] = ["content": content]
+        if let blocks = blocks {
+            payload["blocks"] = blocks
+        }
         let body = try JSONSerialization.data(withJSONObject: payload)
         let request = try makeRequest(url: url, method: "PATCH", body: body)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -310,9 +313,9 @@ struct DiaryAPI {
         return try decoder.decode(Row.self, from: data)
     }
 
-    static func upsertContent(date: String, userId: String, content: String) async throws -> Row {
+    static func upsertContent(date: String, userId: String, content: String, blocks: [[String: Any]]? = nil) async throws -> Row {
         if let existing = try await getByDate(date) {
-            return try await updateContent(id: existing.id, content: content)
+            return try await updateContent(id: existing.id, content: content, blocks: blocks)
         } else {
             return try await insert(date: date, content: content, userId: userId)
         }
