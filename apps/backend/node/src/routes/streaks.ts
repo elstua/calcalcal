@@ -12,25 +12,39 @@ router.use(authenticateToken);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
+    const recalculate = req.query.recalculate === 'true';
+    console.log(`[GET /api/streaks] Request for user=${userId}, recalculate=${recalculate}`);
+
+    // If recalculate flag is set, force recalculation from entries
+    if (recalculate) {
+      console.log(`[GET /api/streaks] Force recalculating streaks for user=${userId}`);
+      await StreakCalculator.recalculateAllStreaks(userId);
+    }
 
     // Get current streaks data
     let streaksData = await StreaksModel.getStreaksData(userId);
+    console.log(`[GET /api/streaks] Found streaks: current=${streaksData?.currentStreak}, total=${streaksData?.totalDaysWithEntries}`);
     
-    // If no streaks data exists, initialize it
-    if (!streaksData || streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0) {
+    // If no streaks data exists, initialize and recalculate
+    if (!streaksData || (streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0)) {
+      console.log(`[GET /api/streaks] No streak data found, initializing and recalculating for user=${userId}`);
       await StreakCalculator.initializeUserStreaks(userId);
+      await StreakCalculator.recalculateAllStreaks(userId);
       streaksData = await StreaksModel.getStreaksData(userId);
     }
 
-    res.json({
+    const response = {
       currentStreak: streaksData?.currentStreak || 0,
       longestStreak: streaksData?.longestStreak || 0,
       totalDaysWithEntries: streaksData?.totalDaysWithEntries || 0,
       lastEntryDate: streaksData?.lastEntryDate || null,
       streakStartDate: streaksData?.streakStartDate || null,
-    });
+    };
+    
+    console.log(`[GET /api/streaks] Returning: current=${response.currentStreak}, longest=${response.longestStreak}, total=${response.totalDaysWithEntries}`);
+    res.json(response);
   } catch (error) {
-    console.error('Error getting streaks:', error);
+    console.error('[GET /api/streaks] Error:', error);
     res.status(500).json({ error: 'Failed to get streaks' });
   }
 });

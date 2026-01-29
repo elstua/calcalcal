@@ -10,6 +10,10 @@ export class StreakCalculator {
   private static readonly DEFAULT_OPTIONS: Required<StreakCalculationOptions> = {
     timezoneOffset: 0,
   };
+  
+  // Debouncing map to prevent race conditions from multiple simultaneous analysis jobs
+  private static pendingUpdates = new Map<string, NodeJS.Timeout>();
+  private static readonly DEBOUNCE_MS = 1000;
 
   /**
    * Get user's timezone-aware date for a given timestamp
@@ -32,14 +36,17 @@ export class StreakCalculator {
     userId: string,
     options: StreakCalculationOptions = {}
   ): Promise<StreaksData> {
+    console.log(`[StreakCalculator] Starting calculation for user=${userId}`);
     const opts = { ...this.DEFAULT_OPTIONS, ...options };
 
     // Get user's timezone offset
     const userTimezone = await this.getUserTimezoneOffset(userId);
     const timezoneOffset = opts.timezoneOffset || userTimezone;
+    console.log(`[StreakCalculator] Using timezone offset=${timezoneOffset} minutes`);
 
     // Get today's local date
     const todayLocal = this.getTimezoneAwareDate(new Date(), timezoneOffset);
+    console.log(`[StreakCalculator] Today (local)=${todayLocal}`);
 
     // Calculate "tomorrow" to be safe and include any future entries (e.g. crossing timezones)
     // We fetch EVERYTHING analyzed.
@@ -48,9 +55,13 @@ export class StreakCalculator {
       '2020-01-01',
       '2100-01-01' // Cover all future dates
     );
+    console.log(`[StreakCalculator] Found ${entries.length} analyzed entries`);
 
     // Process entries to calculate streaks
-    return this.processEntriesForStreaks(userId, entries, todayLocal);
+    const result = await this.processEntriesForStreaks(userId, entries, todayLocal);
+    console.log(`[StreakCalculator] Result: current=${result.currentStreak}, longest=${result.longestStreak}, total=${result.totalDaysWithEntries}, lastEntry=${result.lastEntryDate}`);
+    
+    return result;
   }
 
   /**
@@ -157,13 +168,31 @@ export class StreakCalculator {
 
   /**
    * Update streaks when AI analysis completes successfully
+   * Debounced to prevent race conditions from multiple simultaneous analysis jobs
    */
   static async updateStreaksOnAnalysisComplete(
     userId: string,
     entryDate: string | Date
   ): Promise<void> {
-    // Just recalculate everything. It's safe and robust.
-    await this.calculateUserStreaks(userId);
+    // Clear existing pending update for this user
+    if (this.pendingUpdates.has(userId)) {
+      clearTimeout(this.pendingUpdates.get(userId)!);
+      console.log(`[StreakCalculator] Debouncing - clearing previous update for user=${userId}`);
+    }
+    
+    // Schedule new update after debounce period
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(async () => {
+        this.pendingUpdates.delete(userId);
+        console.log(`[StreakCalculator] Debounced update executing for user=${userId}`);
+        await this.calculateUserStreaks(userId);
+        console.log(`[StreakCalculator] Debounced update completed for user=${userId}`);
+        resolve();
+      }, this.DEBOUNCE_MS);
+      
+      this.pendingUpdates.set(userId, timeoutId);
+      console.log(`[StreakCalculator] Streak update scheduled for user=${userId} (${this.DEBOUNCE_MS}ms debounce)`);
+    });
   }
 
   /**

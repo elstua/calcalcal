@@ -27,9 +27,24 @@ class AppState: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // ✅ FIX: Observe authentication state and refresh streaks when auth completes
+        // This ensures streaks load correctly even if authentication finishes after init
+        authManager.$isAuthenticated
+            .removeDuplicates()
+            .filter { $0 == true } // Only when authenticated becomes true
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    print("🔐 [Streaks] Authentication completed, refreshing streaks...")
+                    await self?.refreshStreaks()
+                }
+            }
+            .store(in: &cancellables)
+        
         // Sync HealthKit data on app launch if authorized
         Task {
             await syncHealthKitDataOnLaunch()
+            // Note: Streaks will be refreshed by the authentication observer above
+            // but we still try here in case auth is already complete
             await refreshStreaks()
         }
     }
@@ -337,15 +352,20 @@ class AppState: ObservableObject {
     // MARK: - Streaks
     
     func refreshStreaks() async {
-        guard authManager.isAuthenticated else { return }
+        guard authManager.isAuthenticated else {
+            print("⚠️ [Streaks] Cannot refresh - not authenticated")
+            return
+        }
         
+        print("🔄 [Streaks] Fetching from backend...")
         do {
             let data = try await DiaryAPI.getStreaks()
             await MainActor.run {
                 self.streaksData = data
+                print("✅ [Streaks] Updated: current=\(data.currentStreak), longest=\(data.longestStreak), total=\(data.totalDaysWithEntries)")
             }
         } catch {
-             print("[AppState] Failed to fetch streaks: \(error.localizedDescription)")
+            print("❌ [Streaks] Failed: \(error.localizedDescription)")
         }
     }
 } 
