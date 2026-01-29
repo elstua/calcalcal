@@ -48,29 +48,37 @@ export class StreakCalculator {
     const todayLocal = this.getTimezoneAwareDate(new Date(), timezoneOffset);
     console.log(`[StreakCalculator] Today (local)=${todayLocal}`);
 
-    // Calculate "tomorrow" to be safe and include any future entries (e.g. crossing timezones)
-    // We fetch EVERYTHING analyzed.
+    // Fetch all analyzed entries (we filter retrospectively-added ones below)
     const entries = await DiaryEntryModel.listAnalyzedByDateRange(
       userId,
       '2020-01-01',
-      '2100-01-01' // Cover all future dates
+      '2100-01-01'
     );
     console.log(`[StreakCalculator] Found ${entries.length} analyzed entries`);
 
-    // Process entries to calculate streaks
-    const result = await this.processEntriesForStreaks(userId, entries, todayLocal);
+    // Process entries to calculate streaks (excludes retrospective backfills)
+    const result = await this.processEntriesForStreaks(
+      userId,
+      entries,
+      todayLocal,
+      timezoneOffset
+    );
     console.log(`[StreakCalculator] Result: current=${result.currentStreak}, longest=${result.longestStreak}, total=${result.totalDaysWithEntries}, lastEntry=${result.lastEntryDate}`);
     
     return result;
   }
 
   /**
-   * Process diary entries array to calculate streaks
+   * Process diary entries array to calculate streaks.
+   * Excludes "retrospective" entries: we only count a day if the user logged it on or
+   * before that calendar day (created_at local date <= entry date). Editing a past day
+   * later does not add to streak.
    */
   private static async processEntriesForStreaks(
     userId: string,
     entries: any[],
-    todayLocal: string
+    todayLocal: string,
+    timezoneOffset: number
   ): Promise<StreaksData> {
     let currentStreak = 0;
     let longestStreak = 0;
@@ -79,14 +87,30 @@ export class StreakCalculator {
     let streakStartDate: string | null = null;
     let currentStreakStart: string | null = null;
 
-    // Unique dates set to handle multiple entries per day (though usually one per day)
-    // List is already sorted by date ASC from the query, but we ensure it here.
-    // Convert to strings YYYY-MM-DD to deduplicate, then sort.
-    const uniqueDateStrings = Array.from(new Set(entries.map(e => {
-      // e.date comes from postgres as Date object usually.
+    // Filter out retrospective backfills: only count entries logged on or before their date
+    const createdAt = (e: any): Date => (e.created_at ? new Date(e.created_at) : new Date(0));
+    const entryDateStr = (e: any): string => {
       const d = new Date(e.date);
       return d.toISOString().split('T')[0];
-    }))).sort();
+    };
+    const loggedDateStr = (e: any): string =>
+      this.getTimezoneAwareDate(createdAt(e), timezoneOffset);
+
+    const nonRetrospective = entries.filter((e) => {
+      const logged = loggedDateStr(e);
+      const entryDate = entryDateStr(e);
+      const ok = logged <= entryDate;
+      if (!ok) {
+        console.log(`[StreakCalculator] Excluding retrospective: date=${entryDate} logged=${logged}`);
+      }
+      return ok;
+    });
+    console.log(`[StreakCalculator] After retrospective filter: ${nonRetrospective.length} entries`);
+
+    // Unique dates from filtered list, deduplicated and sorted
+    const uniqueDateStrings = Array.from(
+      new Set(nonRetrospective.map(entryDateStr))
+    ).sort();
 
     for (let i = 0; i < uniqueDateStrings.length; i++) {
       const entryDate = uniqueDateStrings[i];

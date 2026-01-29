@@ -32,13 +32,25 @@ describe('Streaks Functionality', () => {
     await StreakCalculator.initializeUserStreaks(testUserId);
   });
 
-  // Helper function to mark entries as analyzed for streak testing
+  // Helper: mark entry as analyzed and set created_at to entry date (noon UTC).
+  // This simulates "logged on that day" so streak retrospective filter includes them.
   async function markEntryAsAnalyzed(userId: string, date: string) {
     await Database.query(
       `UPDATE diary_entries 
        SET ai_analysis_status = 'completed', 
-           total_calories = 100 
-       WHERE user_id = $1 AND date = $2`,
+           total_calories = 100,
+           created_at = ((date::text || ' 12:00:00')::timestamp AT TIME ZONE 'UTC')
+       WHERE user_id = $1 AND date = $2::date`,
+      [userId, date]
+    );
+  }
+
+  // Like markEntryAsAnalyzed but does not change created_at (used for retrospective test).
+  async function markEntryAsAnalyzedOnly(userId: string, date: string) {
+    await Database.query(
+      `UPDATE diary_entries 
+       SET ai_analysis_status = 'completed', total_calories = 100 
+       WHERE user_id = $1 AND date = $2::date`,
       [userId, date]
     );
   }
@@ -230,6 +242,21 @@ describe('Streaks Functionality', () => {
       expect(stats.totalCompletedStreaks).toBe(2);
       expect(stats.averageStreakLength).toBe(4); // (3 + 5) / 2
       expect(stats.recentStreaks).toHaveLength(2);
+    });
+
+    test('should not count retrospectively added days', async () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().split('T')[0];
+
+      await DiaryEntryModel.upsert(testUserId, dateStr, 'Backfilled: had salad.');
+      await markEntryAsAnalyzedOnly(testUserId, dateStr);
+
+      const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
+
+      expect(streaks.currentStreak).toBe(0);
+      expect(streaks.totalDaysWithEntries).toBe(0);
+      expect(streaks.lastEntryDate).toBeNull();
     });
   });
 
