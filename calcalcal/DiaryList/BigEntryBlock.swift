@@ -9,7 +9,7 @@ struct BigEntryBlock: View {
     let entry: DiaryEntry
     /// Optional fixed height. When nil, the view expands to fill available space.
     var height: CGFloat? = nil
-    var cornerRadius: CGFloat = 24
+    var cornerRadius: CGFloat = 32
     var showShadow: Bool = true
     var useExternalDecoration: Bool = false
     var onAddImage: (() -> Void)? = nil
@@ -22,6 +22,10 @@ struct BigEntryBlock: View {
     var onBlocksChange: (([Block]) -> Void)? = nil
     // Optional override for displaying totals while editing/live-updating
     var overrideTotalCalories: Int? = nil
+    // Callback for scroll offset changes (used for header progressive blur)
+    var onScrollOffsetChange: ((CGFloat) -> Void)? = nil
+    // Custom top content inset (used by EditorOverlay to leave space for header)
+    var topContentInset: CGFloat? = nil
     
     // When provided, this binding will be used as the source of truth
     // for the editor content to keep multiple views in perfect sync.
@@ -40,7 +44,7 @@ struct BigEntryBlock: View {
     
     init(entry: DiaryEntry,
          height: CGFloat? = nil,
-         cornerRadius: CGFloat = 24,
+         cornerRadius: CGFloat = 32,
          showShadow: Bool = true,
          useExternalDecoration: Bool = false,
          onAddImage: (() -> Void)? = nil,
@@ -51,6 +55,8 @@ struct BigEntryBlock: View {
          forceExpanded: Bool = false,
          onBlocksChange: (([Block]) -> Void)? = nil,
          overrideTotalCalories: Int? = nil,
+         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
+         topContentInset: CGFloat? = nil,
          externalBlocks: Binding<[Block]>? = nil) {
         self.entry = entry
         self.height = height
@@ -65,6 +71,8 @@ struct BigEntryBlock: View {
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
+        self.onScrollOffsetChange = onScrollOffsetChange
+        self.topContentInset = topContentInset
         self.externalBlocks = externalBlocks
         _internalBlocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
     }
@@ -72,13 +80,6 @@ struct BigEntryBlock: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header with date
-            HStack {
-                Text(formattedDate(entry.date))
-                    .font(.title3.bold())
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding([.top, .horizontal])
             
             // Always show the full editor
             BlockEditorRepresentable(
@@ -90,11 +91,12 @@ struct BigEntryBlock: View {
                 onBlocksChange: { newBlocks in
                     self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
-                }
+                },
+                onScrollOffsetChange: onScrollOffsetChange,
+                topContentInset: topContentInset
             )
             .frame(maxHeight: .infinity)
-            .padding(.horizontal)
-            
+
             // Footer
             EntryFooterView(
                 blocks: effectiveBlocks.wrappedValue,
@@ -105,7 +107,7 @@ struct BigEntryBlock: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(useExternalDecoration ? Color.clear : Color.white)
         .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
-        .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+        .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 2, x: 0, y: 0)
         // Only add tap gesture when onTap is provided AND editing is disabled.
         // When isEditable is true, we must NOT add a tap gesture because it would
         // intercept taps meant for the UITextView and prevent text editing.

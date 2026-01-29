@@ -41,7 +41,7 @@ struct DSColors {
     static let backgroundTertiary = Color(uiColor: .secondarySystemGroupedBackground)
     
     /// Surface color for cards and elevated content
-    static let surface = Color(uiColor: .systemBackground)
+    static let surface = Color(hex: 0xFAFAFA)
     
     /// Subtle surface color for info sections
     static let surfaceSecondary = Color(uiColor: .systemGray6)

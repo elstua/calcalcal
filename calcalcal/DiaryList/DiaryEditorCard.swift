@@ -20,6 +20,8 @@ struct DiaryEditorCard: View {
     var forceExpanded: Bool
     var onBlocksChange: (([Block]) -> Void)?
     var overrideTotalCalories: Int?
+    var onScrollOffsetChange: ((CGFloat) -> Void)?
+    var topContentInset: CGFloat?
     private var externalBlocks: Binding<[Block]>?
     @Binding private var shouldBecomeFirstResponder: Bool
     var displayMode: DisplayMode
@@ -42,6 +44,8 @@ struct DiaryEditorCard: View {
          forceExpanded: Bool = true,
          onBlocksChange: (([Block]) -> Void)? = nil,
          overrideTotalCalories: Int? = nil,
+         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
+         topContentInset: CGFloat? = nil,
          externalBlocks: Binding<[Block]>? = nil,
          displayMode: DisplayMode = .fullEditor) {
         self.entry = entry
@@ -57,6 +61,8 @@ struct DiaryEditorCard: View {
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
+        self.onScrollOffsetChange = onScrollOffsetChange
+        self.topContentInset = topContentInset
         self.externalBlocks = externalBlocks
         self.displayMode = displayMode
     }
@@ -88,6 +94,8 @@ struct DiaryEditorCard: View {
             forceExpanded: forceExpanded,
             onBlocksChange: onBlocksChange,
             overrideTotalCalories: overrideTotalCalories,
+            onScrollOffsetChange: onScrollOffsetChange,
+            topContentInset: topContentInset,
             externalBlocks: externalBlocks
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

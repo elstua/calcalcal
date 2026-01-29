@@ -66,6 +66,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     /// Entry identifier used to scope metadata notifications and backend synchronization.
     var entryIdentifier: UUID?
+    
+    /// External scroll delegate to forward scroll events (used by BlockEditorRepresentable coordinator)
+    weak var scrollDelegate: UIScrollViewDelegate?
 
     /// Flag to prevent re-entry during style application.
     private var isApplyingStyles = false
@@ -103,6 +106,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         backgroundColor = .clear
         alwaysBounceVertical = true
         contentInsetAdjustmentBehavior = .automatic
+        // Padding inside the scrollable text area (matches DS: top xxl 40pt, sides lg 24pt, bottom md 16pt)
+        // Note: When used in EditorOverlay, this will be adjusted via setTopInset() to account for the sticky header
+        textContainerInset = UIEdgeInsets(top: 40, left: 24, bottom: 16, right: 24)
         textDragInteraction?.isEnabled = true
         isScrollEnabled = true
         allowsEditingTextAttributes = false
@@ -167,6 +173,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         attributedText = NSAttributedString(string: text, attributes: attrs)
         typingAttributes = attrs
         blockDocumentController.forceRebuild()
+    }
+    
+    /// Sets a custom top inset for the text content (used by EditorOverlay to leave space for header)
+    func setTopInset(_ topInset: CGFloat) {
+        guard textContainerInset.top != topInset else { return }
+        textContainerInset = UIEdgeInsets(
+            top: topInset,
+            left: textContainerInset.left,
+            bottom: textContainerInset.bottom,
+            right: textContainerInset.right
+        )
     }
 
     /// Helper to insert an image block at the current cursor position.
@@ -621,6 +638,19 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     func textViewDidEndEditing(_ textView: UITextView) {
         NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // Forward scroll events to external delegate (for header blur)
+        scrollDelegate?.scrollViewDidScroll?(scrollView)
+        
+        // Also post notification for backward compatibility
+        guard let entryId = entryIdentifier else { return }
+        NotificationCenter.default.post(
+            name: .editorScrollOffsetDidChange,
+            object: nil,
+            userInfo: ["entryId": entryId, "offsetY": scrollView.contentOffset.y]
+        )
     }
 
     @objc private func handleMetadataNotification(_ notification: Notification) {

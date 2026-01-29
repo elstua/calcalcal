@@ -9,6 +9,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var entryId: UUID?
     var onBlocksChange: (([Block]) -> Void)?
     var onTextViewReady: ((BlockEditorTextView) -> Void)?
+    var onScrollOffsetChange: ((CGFloat) -> Void)?
+    var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
     
     init(blocks: Binding<[Block]>,
          imageMap: [UUID: UIImage] = [:],
@@ -16,7 +18,9 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
          entryId: UUID? = nil,
          onBlocksChange: (([Block]) -> Void)? = nil,
-         onTextViewReady: ((BlockEditorTextView) -> Void)? = nil) {
+         onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
+         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
+         topContentInset: CGFloat? = nil) {
         self._blocks = blocks
         self.imageMap = imageMap
         self.isEditable = isEditable
@@ -24,6 +28,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.entryId = entryId
         self.onBlocksChange = onBlocksChange
         self.onTextViewReady = onTextViewReady
+        self.onScrollOffsetChange = onScrollOffsetChange
+        self.topContentInset = topContentInset
     }
     
     func makeCoordinator() -> Coordinator {
@@ -40,23 +46,24 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     
     func updateUIView(_ uiView: BlockEditorTextView, context: Context) {
         context.coordinator.parent = self
-//        #if DEBUG
-//        print("🔧 BlockEditorRepresentable.updateUIView - isEditable: \(isEditable), uiView.isEditable before: \(uiView.isEditable)")
-//        #endif
         uiView.isEditable = isEditable
-        uiView.isUserInteractionEnabled = true // Ensure interaction is enabled
-//        #if DEBUG
-//        print("🔧 BlockEditorRepresentable.updateUIView - uiView.isEditable after: \(uiView.isEditable)")
-//        #endif
+        uiView.isUserInteractionEnabled = true
         uiView.entryIdentifier = entryId
+        // Apply custom top inset if provided (for EditorOverlay header space)
+        if let topInset = topContentInset {
+            uiView.setTopInset(topInset)
+        }
+        // Update scroll callback so coordinator can forward scroll events
+        context.coordinator.onScrollOffsetChange = onScrollOffsetChange
         context.coordinator.applyIfNeeded(blocks: blocks, imageMap: imageMap)
         context.coordinator.handleFirstResponderIfNeeded(textView: uiView)
     }
     
-    final class Coordinator {
+    final class Coordinator: NSObject, UIScrollViewDelegate {
         var parent: BlockEditorRepresentable
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
+        var onScrollOffsetChange: ((CGFloat) -> Void)?
         private var notificationToken: NSObjectProtocol?
         private var metadataToken: NSObjectProtocol?
         private var pendingSnapshot: DispatchWorkItem?
@@ -64,6 +71,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         
         init(parent: BlockEditorRepresentable) {
             self.parent = parent
+            super.init()
         }
         
         deinit {
@@ -84,6 +92,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             textView.isUserInteractionEnabled = true
             textView.isSelectable = true
             textView.entryIdentifier = parent.entryId
+            // Set coordinator as the scroll delegate to capture scroll events
+            textView.scrollDelegate = self
             bridge = BlockEditorBridge(textView: textView)
             bridge?.apply(blocks: parent.blocks, imageMap: parent.imageMap)
             lastAppliedBlocks = parent.blocks
@@ -105,6 +115,21 @@ struct BlockEditorRepresentable: UIViewRepresentable {
                 queue: .main
             ) { [weak self] notification in
                 self?.handleMetadataNotification(notification)
+            }
+        }
+        
+        // MARK: - UIScrollViewDelegate
+        
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            let offsetY = scrollView.contentOffset.y
+            onScrollOffsetChange?(offsetY)
+            // Also post the notification for backward compatibility
+            if let entryId = textView?.entryIdentifier {
+                NotificationCenter.default.post(
+                    name: .editorScrollOffsetDidChange,
+                    object: nil,
+                    userInfo: ["entryId": entryId, "offsetY": offsetY]
+                )
             }
         }
         

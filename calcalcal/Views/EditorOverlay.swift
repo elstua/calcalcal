@@ -23,8 +23,6 @@ struct EditorOverlay: View {
 
     @State private var showImagePicker: Bool = false
     @State private var pickedImage: UIImage? = nil
-    @GestureState private var dragOffset: CGSize = .zero
-    @State private var hasDismissedKeyboardForDrag: Bool = false
     @State private var isClosing: Bool = false  // Prevent autosaves during close
     @State private var hasCalledOnClose: Bool = false  // Prevent double-calling onClose
     @State private var debounceWorkItem: DispatchWorkItem? = nil
@@ -37,7 +35,8 @@ struct EditorOverlay: View {
     @State private var autosaveTask: Task<Void, Error>? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
     @State private var keyboardHeight: CGFloat = 0
-    
+    @State private var headerScrollOffsetY: CGFloat = 0  // Drives progressive blur (0 = none, ~60+ = full)
+
     @Environment(\.dismiss) private var dismiss
 
     init(entry: Binding<DiaryEntry>,
@@ -59,7 +58,7 @@ struct EditorOverlay: View {
                 // The actual card - this is what zooms
                 cardContent
                     .padding(.horizontal, 12)
-                    .padding(.top, 2)
+                    .padding(.top, 0) // Reduced from 2 to move header higher
                     .padding(.bottom, max(keyboardHeight, -8))
             )
             .ignoresSafeArea(.keyboard)
@@ -69,42 +68,48 @@ struct EditorOverlay: View {
     private var cardContent: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Drag handle at the top
-                dragHandle
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                
-                DiaryEditorCard(
-                    entry: localEntry,
-                    height: nil, // Let it fill available space
-                    cornerRadius: 24,
-                    showShadow: false,
-                    useExternalDecoration: true,
-                    onAddImage: { showImagePicker = true },
-                    imageMap: imageMap,
-                    isEditable: true,
-                    shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
-                    forceExpanded: true, // Expand to fill
-                    onBlocksChange: { updated in
-                        localEntry.blocks = updated
-                        BlocksCache.shared.save(entryId: localEntry.id, blocks: updated)
-                        scheduleAutosaveIfTextChanged(blocks: updated)
-                    },
-                    overrideTotalCalories: liveTotalCalories,
-                    externalBlocks: blocks
-                )
-                .onChange(of: localEntry.blocks) { newValue in
-                    let updatedBlocks = newValue.map { block in
-                        if block.stableId == nil {
-                            return block.withUpdatedChangeTracking()
+                // Editor with sticky header overlaid on top (content scrolls under)
+                ZStack(alignment: .top) {
+                    DiaryEditorCard(
+                        entry: localEntry,
+                        height: nil, // Let it fill available space
+                        cornerRadius: 24,
+                        showShadow: false,
+                        useExternalDecoration: true,
+                        onAddImage: { showImagePicker = true },
+                        imageMap: imageMap,
+                        isEditable: true,
+                        shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                        forceExpanded: true, // Expand to fill
+                        onBlocksChange: { updated in
+                            localEntry.blocks = updated
+                            BlocksCache.shared.save(entryId: localEntry.id, blocks: updated)
+                            scheduleAutosaveIfTextChanged(blocks: updated)
+                        },
+                        overrideTotalCalories: liveTotalCalories,
+                        onScrollOffsetChange: { offsetY in
+                            // Update header blur based on scroll position
+                            headerScrollOffsetY = max(0, offsetY)
+                        },
+                        topContentInset: 56, // Extra space for the sticky header
+                        externalBlocks: blocks
+                    )
+                    .onChange(of: localEntry.blocks) { newValue in
+                        let updatedBlocks = newValue.map { block in
+                            if block.stableId == nil {
+                                return block.withUpdatedChangeTracking()
+                            }
+                            return block
                         }
-                        return block
+                        if updatedBlocks != newValue {
+                            localEntry.blocks = updatedBlocks
+                        }
+                        BlocksCache.shared.save(entryId: localEntry.id, blocks: updatedBlocks)
+                        scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
                     }
-                    if updatedBlocks != newValue {
-                        localEntry.blocks = updatedBlocks
-                    }
-                    BlocksCache.shared.save(entryId: localEntry.id, blocks: updatedBlocks)
-                    scheduleAutosaveIfTextChanged(blocks: updatedBlocks)
+
+                    // Sticky header (date + close) – content scrolls underneath
+                    stickyHeader
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -113,15 +118,6 @@ struct EditorOverlay: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color(.systemBackground))
         )
-        .overlay(alignment: .topTrailing) {
-            Button(action: { dismissEditor() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.secondary)
-            }
-            .padding(12)
-        }
-        .offset(y: max(0, dragOffset.height))
         .fullScreenCover(isPresented: $showImagePicker) {
             UnifiedMediaPickerView(
                 onImageSelected: { image in
@@ -146,8 +142,9 @@ struct EditorOverlay: View {
             }
         }
         .onAppear {
+            headerScrollOffsetY = 0
             liveTotalCalories = localEntry.totalCalories
-            
+
             // Auto-focus the editor after a short delay to let the transition complete
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 shouldBecomeFirstResponder = true
@@ -264,6 +261,13 @@ struct EditorOverlay: View {
             logger.debug("Saved paragraph edited -> schedule autosave")
             scheduleAutosave(blocks: localEntry.blocks)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .editorScrollOffsetDidChange)) { notification in
+            guard let userInfo = notification.userInfo,
+                  let offsetY = userInfo["offsetY"] as? CGFloat else { return }
+            let notifiedId: UUID? = (userInfo["entryId"] as? UUID) ?? (userInfo["entryId"] as? String).flatMap(UUID.init(uuidString:))
+            guard notifiedId == localEntry.id else { return }
+            headerScrollOffsetY = max(0, offsetY)
+        }
     }
 }
 
@@ -303,6 +307,7 @@ extension Notification.Name {
     // Editor-internal notifications (not for cross-component sync)
     static let editorParagraphCommitted = Notification.Name("editorParagraphCommitted")
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
+    static let editorScrollOffsetDidChange = Notification.Name("editorScrollOffsetDidChange")
     
     // AI analysis results from backend (async, needs notifications)
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
@@ -345,40 +350,50 @@ struct ConditionalMatchedGeometry<ID: Hashable>: ViewModifier {
 
 // MARK: - Private helpers
 extension EditorOverlay {
-    /// Drag handle view - a small pill that indicates the overlay can be dismissed
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-            .fill(Color.secondary.opacity(0.3))
-            .frame(width: 36, height: 5)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($dragOffset) { value, state, _ in
-                        // Only allow downward drags
-                        if value.translation.height > 0 {
-                            state = value.translation
-                        }
-                        // Dismiss keyboard when dragging down
-                        if value.translation.height > 8 && !hasDismissedKeyboardForDrag {
-                            shouldBecomeFirstResponder = false
-                            hasDismissedKeyboardForDrag = true
-                        }
-                    }
-                    .onEnded { value in
-                        // Check if drag was far enough or fast enough to dismiss
-                        let shouldDismiss = value.translation.height > 120 || value.predictedEndTranslation.height > 180
-                        if shouldDismiss {
-                            dismissEditor()
-                        } else {
-                            // Restore keyboard if we dismissed it but didn't close
-                            if hasDismissedKeyboardForDrag {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    shouldBecomeFirstResponder = true
-                                    hasDismissedKeyboardForDrag = false
-                                }
-                            }
-                        }
-                    }
+    /// Sticky header – title left, button right. Progressive blur that fades content as it scrolls underneath.
+    /// Background covers from the very top edge and fades to transparent below the header content.
+    private var stickyHeader: some View {
+        // Calculate background opacity based on scroll (0 → 1 over ~15pt scroll)
+        let scrollProgress = min(1.0, max(0, headerScrollOffsetY) / 15)
+        
+        return ZStack(alignment: .top) {
+            // Layer 1: Background that covers from the very top, with gradient fade at bottom
+            LinearGradient(
+                stops: [
+                    .init(color: Color(.systemBackground).opacity(scrollProgress), location: 0),
+                    .init(color: Color(.systemBackground).opacity(scrollProgress), location: 0.6),
+                    .init(color: Color(.systemBackground).opacity(scrollProgress * 0.5), location: 0.8),
+                    .init(color: Color.clear, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
             )
+            .frame(height: 80)  // Total height of blur zone
+            .allowsHitTesting(false)
+            
+            // Layer 2: Header content positioned at top
+            HStack {
+                Text(formattedDate(localEntry.date))
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.primary)
+                Spacer(minLength: 0)
+                Button(action: { dismissEditor() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(DSColors.textSecondary)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 6)  // Small top padding - sits near the top edge
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .animation(.easeOut(duration: 0.1), value: headerScrollOffsetY)
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMMM"
+        return formatter.string(from: date)
     }
     
     private func dismissEditor() {
