@@ -23,11 +23,31 @@ router.get('/', async (req: AuthRequest, res) => {
 
     // Get current streaks data
     let streaksData = await StreaksModel.getStreaksData(userId);
-    console.log(`[GET /api/streaks] Found streaks: current=${streaksData?.currentStreak}, total=${streaksData?.totalDaysWithEntries}`);
+    console.log(`[GET /api/streaks] Found streaks: current=${streaksData?.currentStreak}, total=${streaksData?.totalDaysWithEntries}, lastEntry=${streaksData?.lastEntryDate}`);
     
-    // If no streaks data exists, initialize and recalculate
-    if (!streaksData || (streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0)) {
-      console.log(`[GET /api/streaks] No streak data found, initializing and recalculating for user=${userId}`);
+    // Check if data seems stale (last entry date is old but we have recent analyzed entries)
+    // This helps catch cases where streak calculation got out of sync
+    const { DiaryEntryModel } = await import('../models/DiaryEntry');
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const recentEntries = await DiaryEntryModel.listAnalyzedByDateRange(userId, yesterday, today);
+    
+    const hasRecentEntries = recentEntries.length > 0;
+    const lastEntryIsRecent = streaksData?.lastEntryDate && 
+      (streaksData.lastEntryDate === today || streaksData.lastEntryDate === yesterday);
+    
+    console.log(`[GET /api/streaks] Recent entries check: hasRecent=${hasRecentEntries}, lastIsRecent=${lastEntryIsRecent}, recentCount=${recentEntries.length}`);
+    
+    // If we have recent analyzed entries but streak data is missing or stale, recalculate
+    const dataIsStale = hasRecentEntries && !lastEntryIsRecent;
+    
+    // If no streaks data exists OR data seems stale, initialize and recalculate
+    if (!streaksData || (streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0) || dataIsStale) {
+      if (dataIsStale) {
+        console.log(`[GET /api/streaks] Streak data is stale (have recent entries but last entry date is ${streaksData?.lastEntryDate}), recalculating`);
+      } else {
+        console.log(`[GET /api/streaks] No streak data found, initializing and recalculating for user=${userId}`);
+      }
       await StreakCalculator.initializeUserStreaks(userId);
       await StreakCalculator.recalculateAllStreaks(userId);
       streaksData = await StreaksModel.getStreaksData(userId);
@@ -41,7 +61,7 @@ router.get('/', async (req: AuthRequest, res) => {
       streakStartDate: streaksData?.streakStartDate || null,
     };
     
-    console.log(`[GET /api/streaks] Returning: current=${response.currentStreak}, longest=${response.longestStreak}, total=${response.totalDaysWithEntries}`);
+    console.log(`[GET /api/streaks] Returning: current=${response.currentStreak}, longest=${response.longestStreak}, total=${response.totalDaysWithEntries}, lastEntry=${response.lastEntryDate}`);
     res.json(response);
   } catch (error) {
     console.error('[GET /api/streaks] Error:', error);

@@ -77,14 +77,15 @@ router.patch('/entries/:id', async (req: AuthRequest, res) => {
     const { content, blocks } = req.body;
     const userId = req.userId!;
 
-    if (!content) {
-      return res.status(400).json({ error: 'content is required' });
+    if (content === undefined && !blocks) {
+      return res.status(400).json({ error: 'content or blocks is required' });
     }
 
     let entry;
     if (blocks && Array.isArray(blocks)) {
       // Update both content and blocks if blocks provided
-      entry = await DiaryEntryModel.updateContentAndBlocks(id, userId, content, blocks);
+      // Note: updateContentAndBlocks preserves nutrition data from AI analysis
+      entry = await DiaryEntryModel.updateContentAndBlocks(id, userId, content || '', blocks);
     } else {
       // Fallback to content-only update
       entry = await DiaryEntryModel.updateContent(id, userId, content);

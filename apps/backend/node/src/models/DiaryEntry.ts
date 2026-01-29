@@ -95,14 +95,72 @@ export class DiaryEntryModel {
   }
 
   static async updateContentAndBlocks(entryId: string, userId: string, content: string, blocks: any[]) {
+    // ⚠️ CRITICAL: When updating blocks from iOS, we must preserve nutrition data from AI analysis
+    // iOS sends blocks without nutrition data (just id, content, position)
+    // We need to merge with existing blocks to keep calories, protein, etc.
+    
+    console.log(`[DiaryEntry] updateContentAndBlocks entry=${entryId}, incoming blocks=${blocks.length}`);
+    
+    // First, get existing blocks to preserve nutrition data
+    const existing = await this.getById(entryId);
+    const existingBlocks = existing?.blocks || [];
+    const existingStatus = existing?.ai_analysis_status;
+    
+    console.log(`[DiaryEntry] Existing: status=${existingStatus}, blocks=${existingBlocks.length}`);
+    
+    // Check if content actually changed (to avoid unnecessary re-analysis)
+    const contentChanged = existing?.content !== content;
+    console.log(`[DiaryEntry] Content changed: ${contentChanged}`);
+    
+    // Create a map of existing blocks by ID for fast lookup
+    const existingBlocksMap = new Map();
+    for (const block of existingBlocks) {
+      if (block.id) {
+        existingBlocksMap.set(block.id, block);
+      }
+    }
+    
+    // Merge: keep nutrition data from existing blocks, update content/position from new blocks
+    const mergedBlocks = blocks.map((newBlock: any) => {
+      const existingBlock = existingBlocksMap.get(newBlock.id);
+      if (existingBlock) {
+        // Keep all nutrition data from existing block, but update content/position if changed
+        const merged = {
+          ...existingBlock,
+          content: newBlock.content !== undefined ? newBlock.content : existingBlock.content,
+          position: newBlock.position !== undefined ? newBlock.position : existingBlock.position,
+          // Preserve these from existing:
+          // calories, protein, fat, carbs, fiber, sugar, sodium, weight,
+          // metric_description, confidence, ai_analysis, imageUrl, imageObjectKey, etc.
+        };
+        
+        // Check if this specific block's content changed
+        const blockContentChanged = newBlock.content !== existingBlock.content;
+        if (blockContentChanged) {
+          console.log(`[DiaryEntry] Block ${newBlock.id} content changed, preserving nutrition data`);
+        }
+        
+        return merged;
+      }
+      // New block (not in existing) - use as-is
+      console.log(`[DiaryEntry] New block ${newBlock.id} added`);
+      return newBlock;
+    });
+    
+    console.log(`[DiaryEntry] Merged blocks=${mergedBlocks.length}, preserving nutrition data`);
+    
     const result = await Database.query(
       `UPDATE diary_entries
        SET content = $1, blocks = $2, updated_at = NOW()
        WHERE id = $3 AND user_id = $4
        RETURNING *`,
-      [content, JSON.stringify(blocks), entryId, userId]
+      [content, JSON.stringify(mergedBlocks), entryId, userId]
     );
-    return result.rows[0] || null;
+    
+    const updated = result.rows[0] || null;
+    console.log(`[DiaryEntry] Update complete: status=${updated?.ai_analysis_status}`);
+    
+    return updated;
   }
 
   static async delete(entryId: string, userId: string) {
