@@ -50,10 +50,38 @@ function queueAnalysisJob(entryId: string, blocks: any[], userId: string, entryD
 
       const analyzedBlocks = await AIService.analyzeBlocks(safeBlocks);
 
-      // Merge: preserve imageUrl, imageObjectKey, stableId from existing blocks
+      // Merge: preserve metadata AND nutrition data from user-modified blocks
+      // CRITICAL: User-modified blocks should NEVER have their nutrition overwritten
       const mergedBlocks = analyzedBlocks.map((analyzed: any) => {
         const existing = blockMap.get(analyzed.id);
         if (existing) {
+          // If the existing block was user-modified, preserve ALL its nutrition data
+          // The AI service already skips re-analyzing userModified blocks,
+          // but we must also preserve the data during the merge
+          if (existing.userModified) {
+            console.log(`[ai:analyze] Preserving user-modified block ${analyzed.id} with calories=${existing.calories}`);
+            return {
+              ...analyzed,
+              // Preserve ALL nutrition fields from user-modified block
+              calories: existing.calories,
+              protein: existing.protein,
+              fat: existing.fat,
+              carbs: existing.carbs,
+              fiber: existing.fiber,
+              sugar: existing.sugar,
+              sodium: existing.sodium,
+              weight: existing.weight,
+              metric_description: existing.metric_description,
+              confidence: existing.confidence,
+              userModified: true,
+              lastAnalyzedAt: existing.lastAnalyzedAt,
+              // Preserve other metadata
+              imageUrl: existing.imageUrl || analyzed.imageUrl,
+              imageObjectKey: existing.imageObjectKey || analyzed.imageObjectKey,
+              stableId: existing.stableId || analyzed.stableId,
+            };
+          }
+          // Non-user-modified blocks: just preserve metadata
           return {
             ...analyzed,
             imageUrl: existing.imageUrl || analyzed.imageUrl,
