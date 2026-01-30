@@ -109,30 +109,35 @@ struct ImageAPI {
         }
     }
 
+    /// Analyze an image using the unified analyze-block endpoint (single source of truth for AI analysis).
     static func analyzeImage(imageUrl: String, entryId: String, blockId: String) async throws -> AnalyzeImageResponse {
-        // For now, use the legacy analyze-image endpoint
-        // The unified endpoint integration will be done separately
-        return try await analyzeImageLegacy(imageUrl: imageUrl, entryId: entryId, blockId: blockId)
+        return try await analyzeBlock(imageUrl: imageUrl, entryId: entryId, blockId: blockId, text: nil, userModified: false)
     }
-    
-    /// Legacy method for backward compatibility - requires entryId and blockId
-    static func analyzeImageLegacy(imageUrl: String, entryId: String? = nil, blockId: String? = nil) async throws -> AnalyzeImageResponse {
+
+    /// Unified analyze-block: supports image-only, text-only, or both. Used for image analysis and any future block analysis.
+    private static func analyzeBlock(imageUrl: String?, entryId: String, blockId: String, text: String?, userModified: Bool) async throws -> AnalyzeImageResponse {
         let base = Configuration.apiURL
-        guard let url = URL(string: "\(base)/api/ai/analyze-image") else { throw URLError(.badURL) }
+        guard let url = URL(string: "\(base)/api/ai/analyze-block") else { throw URLError(.badURL) }
         var request = try authorizedRequest(url: url, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let absoluteImageUrl = normalizeImageURL(imageUrl)
-        var payload: [String: Any] = ["imageUrl": absoluteImageUrl]
-        if let entryId = entryId { payload["entryId"] = entryId }
-        if let blockId = blockId { payload["blockId"] = blockId }
+
+        let absoluteImageUrl = imageUrl.map { normalizeImageURL($0) }
+        var content: [String: Any] = [
+            "text": (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+        ]
+        if let url = absoluteImageUrl, !url.isEmpty { content["imageUrl"] = url }
+
+        let payload: [String: Any] = [
+            "entryId": entryId,
+            "blockId": blockId,
+            "content": content,
+            "userModified": userModified,
+        ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         #if DEBUG
-        print("🤖 Legacy Analyze start imageUrl=\(absoluteImageUrl)")
-        print("🤖 Legacy Analyze input imageUrl=\(imageUrl), length=\(imageUrl.count), last10='\(String(imageUrl.suffix(10)))'")
-        print("🤖 Legacy Analyze normalized imageUrl=\(absoluteImageUrl), length=\(absoluteImageUrl.count), last10='\(String(absoluteImageUrl.suffix(10)))'")
-        if absoluteImageUrl.hasSuffix(".") {
-            print("⚠️ WARNING: imageUrl ends with a trailing dot!")
+        if let img = absoluteImageUrl {
+            print("🤖 Analyze-block (image) imageUrl=\(img.suffix(30))... entryId=\(entryId) blockId=\(blockId)")
         }
         #endif
 
@@ -140,14 +145,51 @@ struct ImageAPI {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Legacy Analyze failed HTTP=\(http.statusCode) body=\(bodyText)")
-            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Legacy Analyze failed: HTTP \(http.statusCode)"])
+            print("❌ Analyze-block failed HTTP=\(http.statusCode) body=\(bodyText)")
+            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Analyze failed: HTTP \(http.statusCode)"])
         }
-        let decoder = JSONDecoder()
-        let result = try decoder.decode(AnalyzeImageResponse.self, from: data)
+
+        let raw = try JSONDecoder().decode(AnalyzeBlockRawResponse.self, from: data)
+        let result = raw.toAnalyzeImageResponse()
         #if DEBUG
-        print("✅ Legacy Analyze success desc='\(result.description)' calories=\(String(describing: result.calories))")
+        print("✅ Analyze-block success desc='\(result.description)' calories=\(String(describing: result.calories))")
         #endif
         return result
+    }
+
+    /// Raw response from POST /api/ai/analyze-block (flat fields from backend).
+    private struct AnalyzeBlockRawResponse: Codable {
+        let blockId: String?
+        let entryId: String?
+        let description: String?
+        let calories: Int?
+        let protein: Double?
+        let fat: Double?
+        let carbs: Double?
+        let fiber: Double?
+        let sugar: Double?
+        let sodium: Double?
+        let weight: Double?
+        let metric_description: String?
+        let confidence: Double?
+
+        func toAnalyzeImageResponse() -> AnalyzeImageResponse {
+            let macros = AnalyzeImageResponse.Macros(
+                protein: protein,
+                fat: fat,
+                carbs: carbs,
+                fiber: fiber,
+                sugar: sugar,
+                sodium: sodium,
+                weight: weight,
+                metric_description: metric_description
+            )
+            return AnalyzeImageResponse(
+                description: description ?? "",
+                calories: calories,
+                macros: macros,
+                confidence: confidence
+            )
+        }
     }
 }

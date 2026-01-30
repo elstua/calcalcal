@@ -490,7 +490,7 @@ extension EditorOverlay {
             // Kick off upload + analyze pipeline
             let capturedUUID = uuid
             let blockId = newBlock.id
-            let entryIdString: String? = nil // optional for backend
+            let entryIdString = localEntry.id.uuidString // backend requires entryId for analyze-image
             Task.detached(priority: .userInitiated) {
                 do {
                     #if DEBUG
@@ -517,7 +517,7 @@ extension EditorOverlay {
                             BlocksCache.shared.save(entryId: localEntry.id, blocks: localEntry.blocks)
                         }
                     }
-                    let analysis = try await ImageAPI.analyzeImageLegacy(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+                    let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
 
                     #if DEBUG
                     print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
