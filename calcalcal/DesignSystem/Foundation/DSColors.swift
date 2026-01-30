@@ -23,10 +23,14 @@ struct DSColors {
     static let primary = Color(hex: 0x3F68E5)
     
     /// Secondary brand color - used for accents and highlights
-    static let secondary = Color.orange
+    static let secondary = Color(hex: 0xFF7249)
     
     /// Accent color for special highlights (calories, achievements)
-    static let accent = Color.green
+    static let accentGreen = Color.green
+    
+    static let accentBlue = Color.blue
+    
+    static let accentOrange = Color.orange
     
     // MARK: - Background Colors
     // These adapt automatically to light/dark mode
@@ -35,7 +39,7 @@ struct DSColors {
     static let background = Color(hex: 0xEDECE8)  // RGB: 237, 236, 232 - warm off-white
     
     /// Secondary background for grouped content (like list sections)
-    static let backgroundSecondary = Color(uiColor: .systemGroupedBackground)
+    static let backgroundSecondary = Color(hex: 0xEDF0F4)
     
     /// Tertiary background for nested grouped content
     static let backgroundTertiary = Color(uiColor: .secondarySystemGroupedBackground)
@@ -65,16 +69,16 @@ struct DSColors {
     // These match iOS text hierarchy and adapt to light/dark mode
     
     /// Primary text - most important content
-    static let textPrimary = Color.primary
+    static let textPrimary = Color(hex: 0x1D2744)
     
     /// Secondary text - supporting content, labels
-    static let textSecondary = Color.secondary
+    static let textSecondary = Color(hex: 0x7E8494)
     
     /// Tertiary text - least important content, hints
     static let textTertiary = Color(uiColor: .tertiaryLabel)
     
     /// Placeholder text - empty states, placeholders
-    static let textPlaceholder = Color(uiColor: .placeholderText)
+    static let textPlaceholder = Color(hex: 0xA9AEBC)
     
     /// Inverted text - for use on dark backgrounds
     static let textInverted = Color.white
@@ -128,7 +132,6 @@ extension DSColors {
     struct Configuration {
         var primaryColor: Color = DSColors.primary
         var secondaryColor: Color = DSColors.secondary
-        var accentColor: Color = DSColors.accent
     }
 }
 

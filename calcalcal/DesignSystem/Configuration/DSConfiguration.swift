@@ -28,7 +28,6 @@ struct DSConfiguration {
     struct ColorsConfiguration {
         var primaryColor: Color = DSColors.primary
         var secondaryColor: Color = DSColors.secondary
-        var accentColor: Color = DSColors.accent
         var errorColor: Color = DSColors.error
         var successColor: Color = DSColors.success
         var warningColor: Color = DSColors.warning

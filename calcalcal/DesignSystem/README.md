@@ -47,7 +47,9 @@ All colors are semantic and automatically adapt to light/dark mode.
 |----------|-------|-------|
 | **Brand** | `DSColors.primary` | Main CTAs, links, emphasis |
 | | `DSColors.secondary` | Accents, highlights |
-| | `DSColors.accent` | Special highlights (achievements) |
+| | `DSColors.accentGreen` | Green accent (e.g. calories, achievements) |
+| | `DSColors.accentBlue` | Blue accent |
+| | `DSColors.accentOrange` | Orange accent |
 | **Background** | `DSColors.background` | Main app background |
 | | `DSColors.backgroundSecondary` | Grouped content |
 | | `DSColors.surface` | Cards, elevated content |

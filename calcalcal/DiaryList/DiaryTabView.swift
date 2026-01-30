@@ -317,10 +317,15 @@ struct DiaryTabView: View {
         guard let info = notification.userInfo,
               let localId = info["localId"] as? UUID,
               let serverId = info["serverId"] as? UUID else { return }
-        if var current = presentedEntry, current.id == localId {
-            current.id = serverId
-            presentedEntry = current
-        }
+        
+        // IMPORTANT: Do NOT update presentedEntry while the editor is open.
+        // EditorOverlay already updates its own localEntry.id internally.
+        // Updating presentedEntry here would cause SwiftUI's fullScreenCover(item:)
+        // to see a "different" item (because DiaryEntry identity is based on id),
+        // which triggers dismiss + re-present, losing user content.
+        // 
+        // We only update the view model's backing data, which will sync when
+        // the overlay closes via handleOverlayClose().
         viewModel.replaceEntryId(localId: localId, with: serverId)
     }
     

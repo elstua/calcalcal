@@ -110,12 +110,12 @@ extension View {
         }
     }
     
-    /// Sets the accent color throughout the design system
-    func dsAccentColor(_ color: Color) -> some View {
-        transformEnvironment(\.dsConfiguration) { config in
-            config.colors.accentColor = color
-        }
-    }
+//    /// Sets the accent color throughout the design system
+//    func dsAccentColor(_ color: Color) -> some View {
+//        transformEnvironment(\.dsConfiguration) { config in
+//            config.colors.accentColor = color
+//        }
+//    }
     
     /// Disables shadows on cards in this view tree
     func dsDisableShadows() -> some View {

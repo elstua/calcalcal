@@ -25,6 +25,7 @@ struct EditorOverlay: View {
     @State private var pickedImage: UIImage? = nil
     @State private var isClosing: Bool = false  // Prevent autosaves during close
     @State private var hasCalledOnClose: Bool = false  // Prevent double-calling onClose
+    @State private var hasRefreshedStreaksOnClose: Bool = false  // Refresh streaks once when leaving editor
     @State private var debounceWorkItem: DispatchWorkItem? = nil
     @State private var lastSavedAt: Date? = nil
     @State private var lastSavedContent: String? = nil
@@ -243,6 +244,7 @@ struct EditorOverlay: View {
                 print("🟣 onDisappear calling onClose to sync data (dismissEditor was NOT called)")
                 hasCalledOnClose = true
                 onClose(localEntry)
+                refreshStreaksOnceOnClose()
             } else {
                 print("🟣 onDisappear skipping onClose (already called from dismissEditor)")
             }
@@ -415,8 +417,29 @@ extension EditorOverlay {
             hasCalledOnClose = true
             onClose(localEntry)
             print("🔵 dismissEditor() onClose completed")
+            refreshStreaksOnceOnClose()
         } else {
             print("🔵 dismissEditor() skipping onClose (already called)")
+        }
+    }
+
+    /// Fetch streaks once when leaving editor so the list shows updated count (backend already updated on analysis).
+    private func refreshStreaksOnceOnClose() {
+        guard !hasRefreshedStreaksOnClose else { return }
+        hasRefreshedStreaksOnClose = true
+        Task {
+            do {
+                let streaks = try await DiaryAPI.getStreaks()
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .streaksDataUpdated,
+                        object: nil,
+                        userInfo: ["streaks": streaks]
+                    )
+                }
+            } catch {
+                logger.debug("Streaks refresh on close failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -657,24 +680,19 @@ extension EditorOverlay {
                     return
                 }
 
-                // Trigger AI analysis after successful upsert (incremental when possible)
+                // Run AI analysis + polling in same Task so cancelling autosaveTask cancels everything (avoids overlapping PATCH/analyze)
                 let payload = blocks.toAnalyzeBlocks()
                 let isContentEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-                autosaveTask = Task {
+                if isContentEmpty {
+                    try await DiaryAPI.clearEntryNutrition(entryId: row.id)
+                    await MainActor.run {
+                        localEntry.totalCalories = 0
+                        self.liveTotalCalories = 0
+                    }
+                } else {
                     do {
-                        if isContentEmpty {
-                            // Content is empty - clear all nutrition data and totals
-                            try await DiaryAPI.clearEntryNutrition(entryId: row.id)
-
-                            await MainActor.run {
-                                localEntry.totalCalories = 0
-                                self.liveTotalCalories = 0
-                            }
-                        } else {
-                            // Content exists - run normal analysis
-                            do {
-                                let analyzedBlocks = try await DiaryAPI.getAnalyzedBlocksById(row.id)
+                        let analyzedBlocks = try await DiaryAPI.getAnalyzedBlocksById(row.id)
 
                                 // Check if any blocks have actual nutrition data (not just empty analysis)
                                 let hasActualNutritionData = analyzedBlocks.contains { block in
@@ -712,26 +730,23 @@ extension EditorOverlay {
                                             blocksPayload: blocksNeedingAnalysis,
                                             existingBlocks: analyzedBlocks
                                         )
-                                        print("🤖 Incremental analyze triggered for entry \(row.id) with \(blocksNeedingAnalysis.count) blocks")
+                                        logger.debug("Incremental analyze triggered for entry \(row.id) with \(blocksNeedingAnalysis.count) blocks")
                                     } else {
-                                        print("⏭️ No blocks need analysis for entry \(row.id)")
+                                        logger.debug("No blocks need analysis for entry \(row.id)")
                                     }
                                 } else {
                                     // No existing analysis or no actual nutrition data, use full analysis
                                     _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
-                                    print("🤖 Full analyze triggered for entry \(row.id) with \(payload.count) blocks")
+                                    logger.debug("Full analyze triggered for entry \(row.id) with \(payload.count) blocks")
                                 }
                             } catch {
-                                // Fallback to full analysis if incremental fails
-                                print("⚠️ Incremental analysis failed, falling back to full analysis: \(error)")
-                                _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
-                                print("🤖 Full analyze triggered for entry \(row.id) with \(payload.count) blocks")
+                                _ = try? await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
+                                logger.debug("Fallback full analyze for entry \(row.id)")
                             }
 
-                            // Poll for updated totals and per-block calories after analysis completes
-                            // Extend window to tolerate slower analysis completion
+                            // Poll for updated totals and per-block calories (fewer rounds to reduce requests)
                             var hasReceivedNutritionData = false
-                            let delays: [Double] = [0.8, 1.2, 2.0, 2.8, 4.0, 5.5, 7.5, 10.0, 13.0, 16.0]
+                            let delays: [Double] = [1.2, 2.5, 4.0, 6.0, 9.0]
                             for delay in delays {
                                 if hasReceivedNutritionData {
                                     break
@@ -747,75 +762,39 @@ extension EditorOverlay {
 
                                 let refreshed = try? await DiaryAPI.getById(row.id)
                                 let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
-                                logger.debug("Polling call getBlocksById(\(row.id)) returned \(dbBlocks?.count ?? 0) blocks")
-
-                    await MainActor.run {
-                        if let refreshed {
-                            localEntry.totalCalories = refreshed.total_calories
-                            self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
-                        }
-
-                                    if let dbBlocks {
-                                        // Check if we now have actual nutrition data
-                                        let nowHasNutritionData = dbBlocks.contains { block in
-                                            (block.calories ?? 0) > 0 ||
-                                            (block.protein ?? 0) > 0 ||
-                                            (block.fat ?? 0) > 0 ||
-                                            (block.carbs ?? 0) > 0
+                                await MainActor.run {
+                                    if let refreshed {
+                                        localEntry.totalCalories = refreshed.total_calories
+                                        self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
+                                    }
+                                    if let dbBlocks,
+                                       dbBlocks.contains(where: { ($0.calories ?? 0) > 0 || ($0.protein ?? 0) > 0 || ($0.fat ?? 0) > 0 || ($0.carbs ?? 0) > 0 }) {
+                                        hasReceivedNutritionData = true
+                                        let payload: [[String: Any]] = dbBlocks.map { block in
+                                            [
+                                                "id": block.id ?? "",
+                                                "position": block.position ?? 0,
+                                                "content": block.content ?? "",
+                                                "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
+                                                "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
+                                                "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
+                                                "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
+                                                "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
+                                                "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
+                                                "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
+                                                "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
+                                                "metric_description": (block.metric_description as Any?) ?? NSNull(),
+                                                "confidence": (block.confidence as Any?) ?? NSNull()
+                                            ]
                                         }
-
-                                        if nowHasNutritionData {
-                                            hasReceivedNutritionData = true
-                                            let payload: [[String: Any]] = dbBlocks.map { block in
-                                                return [
-                                                    "id": block.id ?? "",
-                                                    "position": block.position ?? 0,
-                                                    "content": block.content ?? "",
-                                                    "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
-                                                    "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
-                                                    "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
-                                                    "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
-                                                    "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
-                                                    "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
-                                                    "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
-                                                    "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
-                                                    "metric_description": (block.metric_description as Any?) ?? NSNull(),
-                                                    "confidence": (block.confidence as Any?) ?? NSNull()
-                                                ]
-                                            }
-                                            NotificationCenter.default.post(
-                                                name: .editorApplyPerBlockMetadata,
-                                                object: nil,
-                                                userInfo: [
-                                                    "entryId": localEntry.id.uuidString,
-                                                    "analyzedBlocks": payload
-                                                ]
-                                            )
-                                            
-                                            // Refresh streaks now that we have nutrition data (analysis complete)
-                                            Task {
-                                                do {
-                                                    let streaks = try await DiaryAPI.getStreaks()
-                                                    await MainActor.run {
-                                                        NotificationCenter.default.post(
-                                                            name: .streaksDataUpdated,
-                                                            object: nil,
-                                                            userInfo: ["streaks": streaks]
-                                                        )
-                                                    }
-                                                    print("🔥 Streaks refreshed after analysis completion")
-                                                } catch {
-                                                    print("⚠️ Failed to refresh streaks after analysis: \(error)")
-                                                }
-                                            }
-                                        }
+                                        NotificationCenter.default.post(
+                                            name: .editorApplyPerBlockMetadata,
+                                            object: nil,
+                                            userInfo: ["entryId": localEntry.id.uuidString, "analyzedBlocks": payload]
+                                        )
                                     }
                                 }
                             }
-
-
-                        }
-                    }
                 }
                 await MainActor.run {
                     localEntry.totalCalories = row.total_calories
@@ -826,23 +805,6 @@ extension EditorOverlay {
             }
             lastSavedAt = Date()
             lastSavedContent = trimmed
-            
-            // Refresh streaks after save
-            Task {
-                do {
-                    let streaks = try await DiaryAPI.getStreaks()
-                    await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: .streaksDataUpdated,
-                            object: nil,
-                            userInfo: ["streaks": streaks]
-                        )
-                    }
-                } catch {
-                    logger.warning("Failed to refresh streaks after autosave: \(error.localizedDescription)")
-                }
-            }
-            
             logger.info("Autosave success")
         } catch {
             logger.error("Autosave error: \(error.localizedDescription)")
@@ -883,22 +845,6 @@ extension EditorOverlay {
                 logger.info("Flush save success (no AI analysis)")
                 // Save blocks cache on flush as well
                 BlocksCache.shared.save(entryId: localEntry.id, blocks: blocks)
-                
-                // Refresh streaks after save
-                Task {
-                    do {
-                        let streaks = try await DiaryAPI.getStreaks()
-                        await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .streaksDataUpdated,
-                                object: nil,
-                                userInfo: ["streaks": streaks]
-                            )
-                        }
-                    } catch {
-                        logger.warning("Failed to refresh streaks after flush save: \(error.localizedDescription)")
-                    }
-                }
             } else {
                 logger.warning("Missing user id; deferring flush save")
             }
