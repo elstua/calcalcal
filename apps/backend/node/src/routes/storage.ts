@@ -10,12 +10,17 @@ const router = Router();
 
 router.use(authenticateToken);
 
+// Uploads directory: must match the path used by express.static in app.ts
+// In Docker: /app/uploads (compiled files are in /app/dist, so we go up two levels: dist/routes -> dist -> app)
+// Locally: same relative path from compiled output works
+const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+
 // Multer storage for multipart
 const storage: StorageEngine = multer.diskStorage({
   destination: (req: AuthRequest, file: Express.Multer.File, cb: (error: any, destination: string) => void) => {
     const userId = (req as AuthRequest).userId!;
     const today = new Date().toISOString().slice(0, 10);
-    const dest = path.resolve(process.cwd(), 'apps', 'backend', 'node', 'uploads', userId, today);
+    const dest = path.join(uploadsRoot, userId, today);
     fs.mkdirSync(dest, { recursive: true });
     cb(null, dest);
   },
@@ -41,7 +46,6 @@ router.post('/upload', upload.single('file'), async (req: AuthRequest, res) => {
     const userId = req.userId!;
     // req.file.path is absolute path
     // Build objectKey relative to /uploads
-    const uploadsRoot = path.resolve(process.cwd(), 'apps', 'backend', 'node', 'uploads');
     const objectKey = path
       .relative(uploadsRoot, req.file.path)
       .replace(/\\/g, '/'); // normalize windows slashes
@@ -95,9 +99,9 @@ router.post('/upload-base64', async (req: AuthRequest, res) => {
     })();
 
     const today = new Date().toISOString().slice(0, 10);
-    const objectKey = path.join('uploads', userId, today, `${randomUUID()}.${ext}`).replace(/\\/g, '/');
-    const uploadsRoot = path.resolve(process.cwd(), 'apps', 'backend', 'node', 'uploads');
-    const fullPath = path.resolve(uploadsRoot, path.relative('uploads', objectKey));
+    const generatedFilename = `${randomUUID()}.${ext}`;
+    const objectKey = path.join(userId, today, generatedFilename).replace(/\\/g, '/');
+    const fullPath = path.join(uploadsRoot, objectKey);
 
     // Ensure directory exists
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
@@ -110,12 +114,12 @@ router.post('/upload-base64', async (req: AuthRequest, res) => {
     fs.writeFileSync(fullPath, buffer);
 
     // Build public URL (relative under /uploads, or absolute if PUBLIC_BASE_URL / R2_PUBLIC_BASE_URL set)
-    const relativeUrl = `/${objectKey}`;
+    const relativeUrl = `/uploads/${objectKey}`;
     const base = (process.env.PUBLIC_BASE_URL || process.env.R2_PUBLIC_BASE_URL || '').trim();
     const publicUrl = base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
 
     res.json({
-      objectKey,
+      objectKey: `uploads/${objectKey}`,
       publicUrl,
       relativeUrl,
       contentType,
