@@ -1,6 +1,7 @@
 import Foundation
 
 struct Configuration {
+    /// Base URL for API calls (auth, diary, storage upload endpoint). e.g. https://api.calcalcal.app
     static let apiURL: String = {
         #if DEBUG
         if let s = Bundle.main.object(forInfoDictionaryKey: "API_URL") as? String, !s.isEmpty {
@@ -11,15 +12,20 @@ struct Configuration {
         print("🔧 Configuration: Using default local URL: \(localURL)")
         return localURL  // Local development
         #else
-        // Try to read from Info.plist first, but hardcode production URL as fallback
-        // This ensures the app works even if Info.plist values aren't accessible in release builds
         if let plistURL = Bundle.main.object(forInfoDictionaryKey: "API_URL") as? String, !plistURL.isEmpty {
             return plistURL
         }
-        // Hardcoded production URL for release builds (TestFlight/App Store)
-        // Updated for Hetzner VPS deployment - using API subdomain
         return "https://api.calcalcal.app"
         #endif
+    }()
+
+    /// Base URL for image/media assets (where uploads are served). e.g. https://media.calcalcal.app
+    /// Used when turning relative image URLs (e.g. /uploads/...) into absolute URLs. If unset, falls back to apiURL.
+    static let mediaBaseURL: String = {
+        if let s = Bundle.main.object(forInfoDictionaryKey: "MEDIA_URL") as? String, !s.isEmpty {
+            return s
+        }
+        return apiURL
     }()
     
     static let appleClientId = "stua.calcalcal" // Your actual bundle identifier

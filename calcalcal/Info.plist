@@ -4,6 +4,8 @@
 <dict>
 	<key>API_URL</key>
 	<string>https://api.calcalcal.app</string>
+	<key>MEDIA_URL</key>
+	<string>https://media.calcalcal.app</string>
 	<key>CFBundleDisplayName</key>
 	<string>Calycal</string>
 	<key>CFBundleExecutable</key>

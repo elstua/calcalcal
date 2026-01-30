@@ -37,6 +37,20 @@ struct ImageAPI {
         return request
     }
 
+    /// Transient network errors where retrying often helps (e.g. connection reset on mobile).
+    private static func isRetryableUploadError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .networkConnectionLost, .timedOut, .cannotConnectToHost:
+                return true
+            default:
+                break
+            }
+        }
+        let code = (error as NSError).code
+        return code == -1021 // CFNetwork connection reset (no URLError.Code in Swift)
+    }
+
     static func uploadJPEG(data: Data, filename: String = "image.jpg", contentType: String = "image/jpeg") async throws -> UploadResponse {
         let base = Configuration.apiURL
         guard let url = URL(string: "\(base)/api/storage/upload") else { throw URLError(.badURL) }
@@ -60,23 +74,43 @@ struct ImageAPI {
         print("📤 Upload start -> \(filename) (\(data.count) bytes)")
         #endif
 
-        let (respData, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if !(200..<300).contains(http.statusCode) {
-            let bodyText = String(data: respData, encoding: .utf8) ?? "<no body>"
-            print("❌ Upload failed HTTP=\(http.statusCode) body=\(bodyText)")
-            throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Upload failed: HTTP \(http.statusCode)"])
+        let maxAttempts = 3
+        var lastError: Error?
+        for attempt in 1...maxAttempts {
+            do {
+                let (respData, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                if !(200..<300).contains(http.statusCode) {
+                    let bodyText = String(data: respData, encoding: .utf8) ?? "<no body>"
+                    print("❌ Upload failed HTTP=\(http.statusCode) body=\(bodyText)")
+                    throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Upload failed: HTTP \(http.statusCode)"])
+                }
+                let decoder = JSONDecoder()
+                let decoded = try decoder.decode(UploadResponse.self, from: respData)
+                #if DEBUG
+                print("✅ Upload success publicUrl=\(decoded.publicUrl)")
+                print("✅ Upload publicUrl length=\(decoded.publicUrl.count), last10='\(String(decoded.publicUrl.suffix(10)))'")
+                if decoded.publicUrl.hasSuffix(".") {
+                    print("⚠️ WARNING: Upload response publicUrl ends with a trailing dot!")
+                }
+                #endif
+                return decoded
+            } catch {
+                lastError = error
+                let retryable = isRetryableUploadError(error)
+                #if DEBUG
+                if retryable && attempt < maxAttempts {
+                    print("📤 Upload attempt \(attempt) failed (retryable): \(error.localizedDescription); retrying…")
+                }
+                #endif
+                if retryable && attempt < maxAttempts {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                    continue
+                }
+                throw error
+            }
         }
-        let decoder = JSONDecoder()
-        let decoded = try decoder.decode(UploadResponse.self, from: respData)
-        #if DEBUG
-        print("✅ Upload success publicUrl=\(decoded.publicUrl)")
-        print("✅ Upload publicUrl length=\(decoded.publicUrl.count), last10='\(String(decoded.publicUrl.suffix(10)))'")
-        if decoded.publicUrl.hasSuffix(".") {
-            print("⚠️ WARNING: Upload response publicUrl ends with a trailing dot!")
-        }
-        #endif
-        return decoded
+        throw lastError ?? URLError(.unknown)
     }
 
     /// Ensure we send an absolute URL to backend (required by server to fetch or inline image)
@@ -99,8 +133,8 @@ struct ImageAPI {
         if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
             return trimmed
         }
-        // Prepend base API URL for relative paths like "uploads/..." or "/uploads/..."
-        var base = Configuration.apiURL
+        // Prepend media base URL for relative paths (images are served from media, not API)
+        var base = Configuration.mediaBaseURL
         if base.hasSuffix("/") { base.removeLast() }
         if trimmed.hasPrefix("/") {
             return "\(base)\(trimmed)"

@@ -46,13 +46,14 @@ router.post('/upload', upload.single('file'), async (req: AuthRequest, res) => {
       .relative(uploadsRoot, req.file.path)
       .replace(/\\/g, '/'); // normalize windows slashes
     const relativeUrl = `/uploads/${objectKey}`;
-    const base = process.env.PUBLIC_BASE_URL?.trim();
-    const publicUrl = base && base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
+    // Use PUBLIC_BASE_URL for image URLs (e.g. https://media.calcalcal.app); fall back to R2_PUBLIC_BASE_URL so one env can drive both
+    const base = (process.env.PUBLIC_BASE_URL || process.env.R2_PUBLIC_BASE_URL || '').trim();
+    const publicUrl = base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
     
     // Debug: Log URL components to detect trailing characters
     console.log(`[upload] objectKey="${objectKey}", length=${objectKey.length}`);
     console.log(`[upload] relativeUrl="${relativeUrl}", length=${relativeUrl.length}`);
-    console.log(`[upload] PUBLIC_BASE_URL="${base || '(not set)'}"`);
+    console.log(`[upload] public base URL="${base || '(not set)'}"`);
     console.log(`[upload] publicUrl="${publicUrl}", length=${publicUrl.length}, last10="${publicUrl.slice(-10)}"`);
     if (publicUrl.endsWith('.')) {
       console.warn('[upload] ⚠️ WARNING: publicUrl ends with a trailing dot!');
@@ -108,10 +109,10 @@ router.post('/upload-base64', async (req: AuthRequest, res) => {
 
     fs.writeFileSync(fullPath, buffer);
 
-    // Build public URL (relative under /uploads, optionally absolute if PUBLIC_BASE_URL set)
+    // Build public URL (relative under /uploads, or absolute if PUBLIC_BASE_URL / R2_PUBLIC_BASE_URL set)
     const relativeUrl = `/${objectKey}`;
-    const base = process.env.PUBLIC_BASE_URL?.trim();
-    const publicUrl = base && base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
+    const base = (process.env.PUBLIC_BASE_URL || process.env.R2_PUBLIC_BASE_URL || '').trim();
+    const publicUrl = base.length > 0 ? `${base.replace(/\/+$/, '')}${relativeUrl}` : relativeUrl;
 
     res.json({
       objectKey,

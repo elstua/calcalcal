@@ -35,8 +35,8 @@ final class ImageCache {
         // Absolute
         let lower = trimmed.lowercased()
         if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return trimmed }
-        // Relative → prepend API base
-        var base = Configuration.apiURL
+        // Relative → prepend media base (images served from media, not API)
+        var base = Configuration.mediaBaseURL
         if base.hasSuffix("/") { base.removeLast() }
         if trimmed.hasPrefix("/") {
             return "\(base)\(trimmed)"
