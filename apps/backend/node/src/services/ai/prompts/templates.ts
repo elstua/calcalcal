@@ -1,3 +1,13 @@
+export interface MealContextItem {
+  description?: string;
+  calories?: number;
+  protein?: number;
+  fat?: number;
+  carbs?: number;
+  weight?: number;
+  metric_description?: string;
+}
+
 export interface PromptContext {
   text?: string;
   imageUrl?: string;
@@ -13,6 +23,7 @@ export interface PromptContext {
     sodium?: number;
   };
   scenario: 'text-only' | 'image-only' | 'multimodal' | 'manual-update' | 'voice-validation';
+  mealContext?: MealContextItem[];  // Nutrition data of other items in this entry
 }
 
 export interface PromptTemplate {
@@ -41,7 +52,9 @@ class BaseAnalysisPrompt implements PromptTemplate {
     prompt += `  "sodium": <mg>,\n`;
     prompt += `  "weight": <number in grams, optional but recommended>,\n`;
     prompt += `  "metric_description": <string with weight unit, e.g., "100 g", "1 cup", "1 serving">,\n`;
-    prompt += `  "confidence": <0..1>\n`;
+    prompt += `  "confidence": <0..1>,\n`;
+    prompt += `  "groupId": <optional string, unique ID if this item belongs to a group>,\n`;
+    prompt += `  "groupName": <optional string, e.g., "Breakfast", "Lunch", "Recipe: Pasta">\n`;
     prompt += `}\n`;
 
     // Add scenario-specific instructions
@@ -59,6 +72,47 @@ class BaseAnalysisPrompt implements PromptTemplate {
       prompt += `- Analyze the food based on the description: "${context.text}"\n`;
       prompt += `- Use nutritional knowledge to estimate portion sizes and nutrients\n`;
     }
+
+    // Add meal context if available
+    if (context.mealContext && context.mealContext.length > 0) {
+      prompt += `\nMeal Context (other items already logged in this meal):\n`;
+      for (const item of context.mealContext) {
+        const parts: string[] = [];
+        if (item.description) {
+          parts.push(item.description);
+        }
+        if (item.calories !== undefined) {
+          parts.push(`${item.calories} cal`);
+        }
+        if (item.weight !== undefined) {
+          parts.push(`${item.weight}g`);
+        } else if (item.metric_description) {
+          parts.push(item.metric_description);
+        }
+        if (item.protein !== undefined || item.fat !== undefined || item.carbs !== undefined) {
+          const macros: string[] = [];
+          if (item.protein !== undefined) macros.push(`${item.protein}g protein`);
+          if (item.fat !== undefined) macros.push(`${item.fat}g fat`);
+          if (item.carbs !== undefined) macros.push(`${item.carbs}g carbs`);
+          if (macros.length > 0) {
+            parts.push(`(${macros.join(', ')})`);
+          }
+        }
+        prompt += `- ${parts.join(' | ')}\n`;
+      }
+      prompt += `\nUse this context to:\n`;
+      prompt += `- Understand references like "one more", "another", "same thing", "half portion"\n`;
+      prompt += `- Calculate totals when asked (e.g., "total for all", "1 portion of everything")\n`;
+      prompt += `- Determine portion sizes relative to previous items\n`;
+      prompt += `If the input clearly refers to a previous item, provide nutrition for that referenced item.\n`;
+    }
+
+    // Add grouping detection instructions
+    prompt += `\nGrouping Detection:\n`;
+    prompt += `- If the input suggests a meal grouping (e.g., "For breakfast:", "My lunch:", "Recipe for pasta:"), set groupId and groupName.\n`;
+    prompt += `- groupId should be a short unique identifier (e.g., "breakfast-1", "lunch", "recipe-pasta").\n`;
+    prompt += `- groupName should be human-readable (e.g., "Breakfast", "Lunch", "Recipe: Pasta").\n`;
+    prompt += `- If no grouping is detected, omit these fields.\n`;
 
     // Add user data constraints
     if (hasUserData) {

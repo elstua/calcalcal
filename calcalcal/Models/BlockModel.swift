@@ -26,6 +26,9 @@ struct Block: Equatable, Identifiable {
     var imageObjectKey: String? = nil
     // Stable identifier used for change tracking within editor sessions
     var stableId: UUID? = nil
+    // Grouping fields (prepared for future use)
+    var groupId: String? = nil      // Unique group identifier
+    var groupName: String? = nil    // Human-readable group name (e.g., "Breakfast")
     // Add more metadata as needed
 }
 
@@ -39,6 +42,8 @@ extension Block {
         && lhs.imageUrl == rhs.imageUrl
         && lhs.imageObjectKey == rhs.imageObjectKey
         && lhs.stableId == rhs.stableId
+        && lhs.groupId == rhs.groupId
+        && lhs.groupName == rhs.groupName
     }
 }
 
@@ -124,6 +129,14 @@ extension Array where Element == Block {
             }
             if let stableId = block.stableId {
                 dict["stableId"] = stableId.uuidString
+            }
+            
+            // Include grouping fields if present
+            if let groupId = block.groupId {
+                dict["groupId"] = groupId
+            }
+            if let groupName = block.groupName {
+                dict["groupName"] = groupName
             }
 
             result.append(dict)

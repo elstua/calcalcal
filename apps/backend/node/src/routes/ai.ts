@@ -182,6 +182,20 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
       return res.status(404).json({ error: "Entry not found" });
     }
 
+    // Extract nutrition data from other blocks for context
+    const mealContext = (entry.blocks || [])
+      .filter((b: any) => b.id !== blockId && (b.description || b.text))
+      .map((b: any) => ({
+        description: b.description || b.text,
+        calories: b.calories,
+        protein: b.protein,
+        fat: b.fat,
+        carbs: b.carbs,
+        weight: b.weight,
+        metric_description: b.metric_description,
+      }))
+      .filter((item: any) => item.description);
+
     // Determine analysis scenario and build context
     const hasText = !!(content.text && content.text.trim());
     const hasImage = !!(content.imageUrl && content.imageUrl.trim());
@@ -205,6 +219,7 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
       userModified,
       userProvidedData: content.userProvidedData || undefined,
       scenario,
+      mealContext: mealContext.length > 0 ? mealContext : undefined,
     };
 
     console.log(
