@@ -196,6 +196,12 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
       }))
       .filter((item: any) => item.description);
 
+    console.log(`[analyze-block] Extracted meal context:`, JSON.stringify({
+      totalBlocks: entry.blocks?.length || 0,
+      contextItems: mealContext.length,
+      context: mealContext
+    }, null, 2));
+
     // Determine analysis scenario and build context
     const hasText = !!(content.text && content.text.trim());
     const hasImage = !!(content.imageUrl && content.imageUrl.trim());
@@ -225,6 +231,9 @@ async function unifiedAnalyzeBlockHandler(req: AuthRequest, res: any) {
     console.log(
       `[analyze-block] user=${userId} entry=${entryId} block=${blockId} scenario=${scenario} hasText=${hasText} hasImage=${hasImage} userModified=${userModified}`,
     );
+
+    // Log the prompt context for debugging
+    console.log(`[analyze-block] Prompt context:`, JSON.stringify(promptContext, null, 2));
 
     // Get nutrition provider and perform analysis
     const provider = getNutritionProvider();

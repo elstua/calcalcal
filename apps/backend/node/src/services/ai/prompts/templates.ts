@@ -145,7 +145,15 @@ class BaseAnalysisPrompt implements PromptTemplate {
 
     prompt += `\nIf uncertain, provide your best estimate. Always return valid JSON.`;
 
-    return prompt.trim();
+    const finalPrompt = prompt.trim();
+    
+    // Log the full prompt for debugging
+    console.log(`[BaseAnalysisPrompt] Generated prompt (${finalPrompt.length} chars):`);
+    console.log('='.repeat(80));
+    console.log(finalPrompt);
+    console.log('='.repeat(80));
+    
+    return finalPrompt;
   }
 }
 
