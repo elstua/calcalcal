@@ -90,8 +90,14 @@ struct DiaryTabView: View {
             }
         .onAppear {
             viewModel.ensurePlaceholdersForVisibleDays()
-            Task {
-                await viewModel.refreshVisibleEntries()
+            // IMPORTANT: Don't refresh if we just closed the editor
+            // The onClose callback will update the view model with the latest data
+            if !justClosedEditor {
+                Task {
+                    await viewModel.refreshVisibleEntries()
+                }
+            } else {
+                DataFlowLogger.shared.backendRefreshSkipped(reason: "just closed editor (onAppear)")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
@@ -99,6 +105,9 @@ struct DiaryTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
             handleStreaksUpdated(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCaloriesUpdated)) { notification in
+            handleEntryCaloriesUpdated(notification)
         }
     }
     
@@ -213,7 +222,7 @@ struct DiaryTabView: View {
                 forceExpanded: false
             )
             .padding(.horizontal, 8)
-            .id(entry.id)
+            .id(entry.stableViewId)
             .zoomTransitionSource(id: entry.id, namespace: editorNamespace)
             .allowsHitTesting(isActive)
             .frame(height: cardHeight, alignment: .top)
@@ -333,6 +342,16 @@ struct DiaryTabView: View {
         guard let info = notification.userInfo,
               let streaks = info["streaks"] as? StreaksData else { return }
         appState.streaksData = streaks
+    }
+
+    private func handleEntryCaloriesUpdated(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let entryId = info["entryId"] as? UUID else { return }
+
+        // Update the entry in the view model with the new calorie data
+        if let totalCalories = info["totalCalories"] as? Int {
+            viewModel.updateEntryCalories(entryId: entryId, totalCalories: totalCalories)
+        }
     }
 }
 

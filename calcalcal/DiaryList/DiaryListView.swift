@@ -107,6 +107,17 @@ struct DiaryListView: View {
                 selectedEntry = current
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCaloriesUpdated)) { notification in
+            guard let info = notification.userInfo,
+                  let entryId = info["entryId"] as? UUID,
+                  let totalCalories = info["totalCalories"] as? Int else { return }
+
+            // Update the entry's calories in the list
+            if let index = entries.firstIndex(where: { $0.id == entryId }) {
+                entries[index].totalCalories = totalCalories
+                recalcTimeline()
+            }
+        }
     }
 
     @ViewBuilder

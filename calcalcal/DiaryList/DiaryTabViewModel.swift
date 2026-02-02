@@ -142,6 +142,18 @@ final class DiaryTabViewModel: ObservableObject {
             dayEntryStates[key] = state
         }
     }
+
+    /// Updates the calorie count for a specific entry
+    /// Used when backend AI analysis completes and sends updated nutrition data
+    func updateEntryCalories(entryId: UUID, totalCalories: Int?) {
+        for key in dayEntryStates.keys {
+            guard var state = dayEntryStates[key], state.entry.id == entryId else { continue }
+            state.entry.totalCalories = totalCalories
+            dayEntryStates[key] = state
+            DataFlowLogger.shared.entryCaloriesUpdated(dayKey: key, entryId: entryId, calories: totalCalories)
+            break
+        }
+    }
     
     // MARK: - Data Fetching
     
@@ -210,6 +222,20 @@ final class DiaryTabViewModel: ObservableObject {
                             oldContent: String(existingContent.prefix(50)),
                             newContent: String(newContent.prefix(50))
                         )
+                    }
+                    
+                    // Preserve local calorie updates if they are more recent
+                    // This prevents the DayStripView from flickering to 0 when backend returns stale data
+                    let localCalories = existing.entry.totalCalories
+                    let remoteCalories = entry.totalCalories
+                    let shouldPreserveLocalCalories = localCalories != nil && remoteCalories == nil
+                    
+                    if shouldPreserveLocalCalories {
+                        var entryWithPreservedCalories = entry
+                        entryWithPreservedCalories.totalCalories = localCalories
+                        updated[key] = DayEntryState(entry: entryWithPreservedCalories, isPlaceholder: isPlaceholderContent(entry.blocks))
+                        DataFlowLogger.shared.caloriesPreserved(dayKey: key, entryId: entry.id, calories: localCalories)
+                        continue
                     }
                 }
                 

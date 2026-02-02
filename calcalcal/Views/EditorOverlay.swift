@@ -218,28 +218,27 @@ struct EditorOverlay: View {
                 contentPreview: DataFlowLogger.preview(from: finalBlocks)
             )
             
+            // CRITICAL: Set isClosing to prevent any new autosaves during dismissal
+            // This is especially important for swipe-to-close gesture where dismissEditor() isn't called
+            isClosing = true
+            
             // Cancel any pending async tasks to prevent contamination with new overlays
             loadTask?.cancel()
             loadTask = nil
             autosaveTask?.cancel()
             logger.debug("EditorOverlay dismissed, cancelled autosaveTask for localEntry.id=\(self.localEntry.id.uuidString)")
             autosaveTask = nil
+            
+            // Cancel any pending debounced work
+            debounceWorkItem?.cancel()
+            debounceWorkItem = nil
 
             // CRITICAL: Save to cache SYNCHRONOUSLY before view disappears
             BlocksCache.shared.saveSync(entryId: finalEntryId, blocks: finalBlocks)
             DataFlowLogger.shared.editorCacheSyncComplete(entryId: finalEntryId)
             
-            flushSave()
-            
-            // Apply any queued remote updates only after editor closes
-            if let pending = pendingRemoteBlocks {
-                localEntry.blocks = pending
-                pendingRemoteBlocks = nil
-            }
-            suppressRemoteBlockUpdates = false
-            
-            // CRITICAL: Call onClose to pass data back, in case dismissEditor() wasn't called
-            // This happens when SwiftUI auto-dismisses (e.g., swipe gesture)
+            // CRITICAL: Call onClose BEFORE flushSave to ensure parent has latest data
+            // This prevents race conditions where backend refresh happens before parent is updated
             if !hasCalledOnClose {
                 print("🟣 onDisappear calling onClose to sync data (dismissEditor was NOT called)")
                 hasCalledOnClose = true
@@ -248,6 +247,16 @@ struct EditorOverlay: View {
             } else {
                 print("🟣 onDisappear skipping onClose (already called from dismissEditor)")
             }
+            
+            // Now flush any pending save after parent has been notified
+            flushSave()
+            
+            // Apply any queued remote updates only after editor closes
+            if let pending = pendingRemoteBlocks {
+                localEntry.blocks = pending
+                pendingRemoteBlocks = nil
+            }
+            suppressRemoteBlockUpdates = false
             
             DataFlowLogger.shared.editorDisappeared(entryId: finalEntryId)
             print("🟣 onDisappear END")
@@ -310,13 +319,18 @@ extension Notification.Name {
     static let editorParagraphCommitted = Notification.Name("editorParagraphCommitted")
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
     static let editorScrollOffsetDidChange = Notification.Name("editorScrollOffsetDidChange")
-    
+
     // AI analysis results from backend (async, needs notifications)
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
-    
+
     // Global app-level events
     static let diaryEntryCanonicalIdResolved = Notification.Name("diaryEntryCanonicalIdResolved")
     static let streaksDataUpdated = Notification.Name("streaksDataUpdated")
+
+    /// Posted when an entry's calories/nutrition data is updated from the backend
+    /// Used to refresh UI components like DayStripView
+    /// userInfo: ["entryId": UUID, "totalCalories": Int?]
+    static let diaryEntryCaloriesUpdated = Notification.Name("diaryEntryCaloriesUpdated")
 }
 
 // MARK: - Utilities
@@ -766,6 +780,16 @@ extension EditorOverlay {
                                     if let refreshed {
                                         localEntry.totalCalories = refreshed.total_calories
                                         self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
+
+                                        // Notify other UI components that calories have been updated
+                                        NotificationCenter.default.post(
+                                            name: .diaryEntryCaloriesUpdated,
+                                            object: nil,
+                                            userInfo: [
+                                                "entryId": localEntry.id,
+                                                "totalCalories": refreshed.total_calories as Any
+                                            ]
+                                        )
                                     }
                                     if let dbBlocks,
                                        dbBlocks.contains(where: { ($0.calories ?? 0) > 0 || ($0.protein ?? 0) > 0 || ($0.fat ?? 0) > 0 || ($0.carbs ?? 0) > 0 }) {

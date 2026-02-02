@@ -2,10 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- API Configuration - Values are injected from xcconfig files -->
 	<key>API_URL</key>
-	<string>https://api.calcalcal.app</string>
+	<string>${API_URL}</string>
 	<key>MEDIA_URL</key>
-	<string>https://media.calcalcal.app</string>
+	<string>${MEDIA_URL}</string>
+	
+	<!-- Bundle Info -->
 	<key>CFBundleDisplayName</key>
 	<string>Calycal</string>
 	<key>CFBundleExecutable</key>
@@ -22,6 +25,10 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	
+	<!-- URL Schemes for OAuth -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -35,19 +42,46 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	
+	<!-- Google Sign-In -->
 	<key>GIDClientID</key>
 	<string>719863771026-al64a24evjcndbtcn7395eqq1to8m5n2.apps.googleusercontent.com</string>
 	<key>GOOGLE_CLIENT_ID</key>
 	<string>719863771026-al64a24evjcndbtcn7395eqq1to8m5n2.apps.googleusercontent.com</string>
+	
+	<!-- App Category -->
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.healthcare-fitness</string>
+	
+	<!-- App Transport Security -->
+	<!-- WARNING: NSAllowsArbitraryLoads is enabled for local development (HTTP) -->
+	<!-- Debug builds allow HTTP to localhost, Release builds require HTTPS -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<false/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- Allow HTTP for local development -->
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<!-- Allow HTTP for local network IP addresses (192.168.x.x) -->
+			<key>192.168.0.0</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
+	
+	<!-- Permissions -->
 	<key>NSCameraUsageDescription</key>
 	<string>We need camera access to take photos of your food for calorie tracking.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -56,6 +90,10 @@
 	<string>We need permission to save your calorie intake and nutrition data to Apple Health so you can track your nutrition in one place.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Need to get the images for calorie tracking.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs to access your local network to connect to the development server.</string>
+	
+	<!-- Custom Fonts -->
 	<key>UIAppFonts</key>
 	<array>
 		<string>InstrumentSans-Regular.ttf</string>
@@ -65,6 +103,8 @@
 		<string>InstrumentSansCondensed-Regular.ttf</string>
 		<string>InstrumentSansCondensed-Medium.ttf</string>
 	</array>
+	
+	<!-- Scene Configuration -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -75,6 +115,7 @@
 			<array/>
 		</dict>
 	</dict>
+	
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

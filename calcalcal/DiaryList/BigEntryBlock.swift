@@ -120,8 +120,9 @@ struct BigEntryBlock: View {
             }
             hydrateImages(for: newValue)
         }
-        // Do not force full refresh; rely on stableId-aware diffs to prevent state bleed
-        .id(entry.id)
+        // Use stableViewId to prevent view recreation during entry ID canonicalization
+        // This prevents flicker when local UUID is replaced with server UUID
+        .id(entry.stableViewId)
         .onAppear {
             hydrateImages(for: entry.blocks)
         }

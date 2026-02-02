@@ -120,7 +120,19 @@ final class DataFlowLogger {
     func editorJustClosedFlagCleared() {
         log("🚦 EDITOR JUST CLOSED FLAG CLEARED - refreshes allowed")
     }
-    
+
+    // MARK: - Calorie Updates
+
+    func entryCaloriesUpdated(dayKey: String, entryId: UUID, calories: Int?) {
+        let calStr = calories.map { "\($0)" } ?? "nil"
+        log("🔥 CALORIES UPDATED - day=\(dayKey), id=\(entryId.uuidString.prefix(8)), calories=\(calStr)")
+    }
+
+    func caloriesPreserved(dayKey: String, entryId: UUID, calories: Int?) {
+        let calStr = calories.map { "\($0)" } ?? "nil"
+        log("🛡️ CALORIES PRESERVED - day=\(dayKey), id=\(entryId.uuidString.prefix(8)), calories=\(calStr)")
+    }
+
     // MARK: - Helper
     
     /// Convenience method to get content preview (first 50 chars)

@@ -1,0 +1,28 @@
+# Development Dockerfile for CalCalCal Backend
+# This image is optimized for local development with hot-reload support
+
+FROM node:20-alpine
+
+# Install dependencies for native modules (if needed)
+RUN apk add --no-cache python3 make g++
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files first (for better layer caching)
+COPY package*.json ./
+
+# Install ALL dependencies (including devDependencies)
+RUN npm ci
+
+# Copy the rest of the application
+COPY . .
+
+# Build the TypeScript code initially
+RUN npm run build
+
+# Expose the port
+EXPOSE 3000
+
+# Default command (can be overridden in docker-compose)
+CMD ["npm", "run", "dev"]

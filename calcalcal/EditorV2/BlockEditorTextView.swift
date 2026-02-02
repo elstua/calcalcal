@@ -673,6 +673,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let analyzedBlocks = parseAnalyzedBlocks(from: userInfo["analyzedBlocks"])
         guard !analyzedBlocks.isEmpty else { return }
         applyAnalyzedMetadata(analyzedBlocks)
+
+        // Explicitly trigger overlay update after applying metadata
+        // This ensures CalorieBlockView overlays are created/updated immediately
+        scheduleCalorieOverlayUpdate()
     }
 
     /// Called when cursor moves - set typing attributes based on current block type.

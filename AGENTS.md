@@ -30,13 +30,55 @@ services/
 migrations/               # Sequential SQL migrations (001_init.sql, etc.)
 ```
 
+## Environments
+
+The project supports multiple environments via Xcode Build Configurations and xcconfig files:
+
+| Environment | iOS Config | API URL | Backend Location |
+|-------------|------------|---------|------------------|
+| **Local Dev** | Debug | `http://localhost:3000` | Docker on local machine |
+| **Staging** | Staging | (configurable) | Separate VPS |
+| **Production** | Release | `https://api.calcalcal.app` | Production VPS |
+
+### Configuration Files
+- `xcconfigs/Debug.xcconfig` - Local development settings (API_URL, build flags)
+- `xcconfigs/Release.xcconfig` - Production settings
+- `xcconfigs/Staging.xcconfig` - Staging settings
+- `calcalcal/Info.plist` - Reads `$(API_URL)` from xcconfig
+- `calcalcal/Models/Configuration.swift` - Runtime configuration with URL fixing
+
+### xcconfig URL Format Note
+Since `//` starts a comment in xcconfig files, URLs use single slashes and are fixed in code:
+```xcconfig
+// xcconfigs/Debug.xcconfig
+API_URL = http:/localhost:3000   // Code converts to http://localhost:3000
+```
+
+### Switching Environments
+1. In Xcode: **Product** → **Scheme** → **Edit Scheme** → **Run** → **Build Configuration**
+2. Select **Debug** for local backend, **Release** for production
+
 ## Build & Test Commands
-- **iOS Build**: `xcodebuild -scheme Calycal -project Calycal.xcodeproj build`
+
+### iOS App
+- **iOS Build (Debug/Local)**: `xcodebuild -scheme Calycal -project Calycal.xcodeproj -configuration Debug build`
+- **iOS Build (Release/Production)**: `xcodebuild -scheme Calycal -project Calycal.xcodeproj -configuration Release build`
 - **iOS Test**: `xcodebuild -scheme Calycal -project Calycal.xcodeproj test`
+
+### Backend
 - **Backend Build**: `cd apps/backend/node && npm run build`
 - **Backend Test**: `cd apps/backend/node && npm test` (tests in `src/test/**/*.test.ts`)
 - **Backend Dev**: `cd apps/backend/node && npm run dev`
 - **Backend Migrate**: `cd apps/backend/node && npm run migrate` (run SQL migrations)
+
+### Local Development Environment
+- **Start Local Backend**: `cd apps/backend/node && docker-compose -f docker-compose.dev.yml up -d`
+- **Run Migrations**: `cd apps/backend/node && npm run migrate:dev`
+- **View Backend Logs**: `cd apps/backend/node && docker-compose -f docker-compose.dev.yml logs -f api`
+- **Stop Local Backend**: `cd apps/backend/node && docker-compose -f docker-compose.dev.yml down`
+- **Setup iOS Configs**: `./scripts/setup-local-dev.sh`
+
+See [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md) for complete local dev setup.
 
 ## Code Style - TypeScript/Node Backend
 - **Imports**: Group by type (express, services, models, types), use named imports
