@@ -13,10 +13,9 @@ final class DiaryTabViewModel: ObservableObject {
     
     // MARK: - Constants
     let stripDayCount: Int = 6
-    let placeholderPrompts: Set<String> = [
-        "write what you ate today",
-        "write what you ate this day"
-    ]
+    
+    // MARK: - Placeholder Options
+    var placeholderOptions: PlaceholderOptions = .default
     
     // MARK: - Dependencies
     private let calendar: Calendar
@@ -257,9 +256,10 @@ final class DiaryTabViewModel: ObservableObject {
     }
     
     func placeholderPrompt(isToday: Bool) -> String {
-        isToday ? "write what you ate today" : "write what you ate this day"
+        let baseText = isToday ? "write what you ate today" : "write what you ate this day"
+        return "\(placeholderMarker)\(baseText)"
     }
-    
+
     func placeholderEntry(for date: Date) -> DiaryEntry {
         DiaryEntry(
             id: UUID(),
@@ -275,11 +275,18 @@ final class DiaryTabViewModel: ObservableObject {
             aiGeneratedSummary: nil
         )
     }
-    
+
     func isPlaceholderContent(_ blocks: [Block]) -> Bool {
-        let trimmed = blocks.toContentString()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        return placeholderPrompts.contains(trimmed)
+        // Check if any block contains the placeholder marker
+        return blocks.contains { block in
+            switch block.type {
+            case .text(let text):
+                return text.isPlaceholderText
+            case .imageText(_, _, let text):
+                return text.isPlaceholderText
+            default:
+                return false
+            }
+        }
     }
 }

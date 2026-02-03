@@ -243,7 +243,8 @@ struct DiaryListView: View {
     }
     
     private func placeholderPrompt(isToday: Bool) -> String {
-        isToday ? "write what you ate today" : "write what you ate this day"
+        let baseText = isToday ? "write what you ate today" : "write what you ate this day"
+        return "\(placeholderMarker)\(baseText)"
     }
 
     private func recalcTimeline() {
@@ -444,12 +445,18 @@ struct DiaryEntryPopupView: View {
     private func save(blocks: [Block]) async {
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Skip saving if content is empty or equals placeholder prompts
-        let placeholders: Set<String> = [
-            "write what you ate today",
-            "write what you ate this day"
-        ]
-        if trimmed.isEmpty || placeholders.contains(trimmed) {
+        // Skip saving if content is empty or contains only placeholder
+        let hasOnlyPlaceholder = blocks.allSatisfy { block in
+            switch block.type {
+            case .text(let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .imageText(_, _, let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default:
+                return true
+            }
+        }
+        if trimmed.isEmpty || hasOnlyPlaceholder {
             print("⏭️ Autosave skipped (empty/placeholder content)")
             return
         }
@@ -512,7 +519,8 @@ extension DiaryEntryPopupView {
 extension DiaryListView {
     static func initialPlaceholderEntries() -> [DiaryEntry] {
         let today = Date()
-        let placeholderBlock = Block(type: .text("write what you ate today"), calorieData: nil)
+        let placeholderText = "\(placeholderMarker)write what you ate today"
+        let placeholderBlock = Block(type: .text(placeholderText), calorieData: nil)
         let entry = DiaryEntry(
             id: UUID(),
             date: today,

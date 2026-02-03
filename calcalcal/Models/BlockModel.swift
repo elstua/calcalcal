@@ -5,6 +5,30 @@
 
 import Foundation
 
+// MARK: - Placeholder Constants
+/// Zero Width Space character used to mark placeholder text
+public let placeholderMarker: Character = "\u{200B}"
+
+/// Placeholder text options
+public struct PlaceholderOptions {
+    public let todayText: String
+    public let otherDayText: String
+
+    public init(todayText: String = "write what you ate today",
+                otherDayText: String = "write what you ate this day") {
+        self.todayText = todayText
+        self.otherDayText = otherDayText
+    }
+
+    public static let `default` = PlaceholderOptions()
+
+    public func text(for date: Date, calendar: Calendar = .current) -> String {
+        let isToday = calendar.isDateInToday(date)
+        let baseText = isToday ? todayText : otherDayText
+        return "\(placeholderMarker)\(baseText)"
+    }
+}
+
 /// Enum representing all possible block types in the unified editor
 enum BlockType: Equatable {
     case text(String)
@@ -55,14 +79,18 @@ extension Array where Element == Block {
     /// For imageText blocks, we prepend a hidden marker line that preserves the image URL and reference:
     /// [[IMG id=<uuid> url=<url>]]
     /// <user text...>
+    ///
+    /// Note: Placeholder markers are stripped from the output.
     func toContentString() -> String {
         let paragraphs: [String] = self.compactMap { block in
             switch block.type {
             case .text(let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .strippingPlaceholderMarker
                 return trimmed.isEmpty ? nil : trimmed
             case .imageText(_, let ref, let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .strippingPlaceholderMarker
                 if let url = block.imageUrl, !url.isEmpty {
                     // Escape closing marker in URL minimally by replacing "]]" if present
                     let safeUrl = url.replacingOccurrences(of: "]]", with: "%5D%5D")
@@ -200,6 +228,21 @@ extension String {
             }
             return Block(type: .text(paragraph), calorieData: nil, nutrition: nil)
         }
+    }
+
+    /// Checks if this string contains the placeholder marker
+    var containsPlaceholderMarker: Bool {
+        return self.contains(placeholderMarker)
+    }
+
+    /// Strips the placeholder marker from the string
+    var strippingPlaceholderMarker: String {
+        return self.replacingOccurrences(of: String(placeholderMarker), with: "")
+    }
+
+    /// Returns true if this string is a placeholder (starts with marker and has content)
+    var isPlaceholderText: Bool {
+        return self.hasPrefix(String(placeholderMarker)) && self.count > 1
     }
 }
 

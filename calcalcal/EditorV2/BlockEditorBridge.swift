@@ -76,8 +76,9 @@ final class BlockEditorBridge {
             switch metadata.kind {
             case .paragraph:
                 let paragraphText = trimTrailingNewlines(substring)
+                let trimmedText = paragraphText.trimmingCharacters(in: whitespaceAndNewlineCharacterSet)
                 let blockType: BlockType = {
-                    if paragraphText.trimmingCharacters(in: whitespaceAndNewlineCharacterSet).isEmpty,
+                    if trimmedText.isEmpty,
                        let previous,
                        case .spacer = previous.type {
                         return .spacer

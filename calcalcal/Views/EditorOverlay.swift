@@ -660,11 +660,17 @@ extension EditorOverlay {
 
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let placeholders: Set<String> = [
-            "write what you ate today",
-            "write what you ate this day"
-        ]
-        if trimmed.isEmpty || placeholders.contains(trimmed) {
+        let hasOnlyPlaceholder = blocks.allSatisfy { block in
+            switch block.type {
+            case .text(let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .imageText(_, _, let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default:
+                return true
+            }
+        }
+        if trimmed.isEmpty || hasOnlyPlaceholder {
             logger.debug("Autosave skipped (empty/placeholder content)")
             return
         }
@@ -839,11 +845,17 @@ extension EditorOverlay {
     private func saveWithoutAIAnalysis(blocks: [Block]) async {
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let placeholders: Set<String> = [
-            "write what you ate today",
-            "write what you ate this day"
-        ]
-        if trimmed.isEmpty || placeholders.contains(trimmed) {
+        let hasOnlyPlaceholder = blocks.allSatisfy { block in
+            switch block.type {
+            case .text(let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .imageText(_, _, let text):
+                return text.isPlaceholderText || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default:
+                return true
+            }
+        }
+        if trimmed.isEmpty || hasOnlyPlaceholder {
             logger.debug("Flush save skipped (empty/placeholder content)")
             return
         }

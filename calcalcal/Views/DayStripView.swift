@@ -20,7 +20,7 @@ struct DayStripView: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            DayStripStreakButton(streak: currentStreak, action: onShowAllDays)
+            DayStripStreakButton(action: onShowAllDays)
             
             ForEach(items) { item in
                 DayStripItemView(
@@ -88,23 +88,31 @@ private struct DayStripItemView: View {
 }
 
 private struct DayStripStreakButton: View {
-    let streak: Int
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
-                Text("🔥 \(streak)")
-                    .font(.headline)
-                    .foregroundColor(DSColors.secondary)
-                Text("Days")
-                    .font(.caption)
+            VStack(spacing: 4) {
+                
+                Image(systemName: "calendar")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DSColors.textPrimary)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white)
+                    )
+                
+                Text("all days")
+                    .dsTypography(.caption)
                     .foregroundColor(DSColors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
-            .cornerRadius(32)
+            
         }
         .buttonStyle(.plain)
     }

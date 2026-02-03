@@ -28,6 +28,15 @@ struct DiaryTabView: View {
     @State private var extendedSwipeDragOffset: CGFloat = 0
     @State private var showAllDaysPreviewCard: Bool = false
     
+    // MARK: - Streak Sheet State
+    @State private var showStreakSheet: Bool = false
+    
+    // MARK: - Streak Animation State
+    @State private var previousStreak: Int = 0
+    @State private var shouldAnimateStreak: Bool = false
+    @State private var isAnimatingStreak: Bool = false
+    @State private var streakAnimationTask: Task<Void, Never>? = nil
+    
     // Constant ID for all-days view zoom transition
     private let allDaysViewId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     
@@ -109,6 +118,16 @@ struct DiaryTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCaloriesUpdated)) { notification in
             handleEntryCaloriesUpdated(notification)
         }
+        .overlay {
+            if showStreakSheet {
+                StreakPopupContainer(
+                    streaksData: appState.streaksData,
+                    isPresented: showStreakSheet,
+                    onClose: { showStreakSheet = false }
+                )
+                .transition(.opacity)
+            }
+        }
     }
     
     // MARK: - Main Content
@@ -121,11 +140,38 @@ struct DiaryTabView: View {
             
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Diary")
-                        .font(.dsHeadline)
-                        .foregroundColor(DSColors.primary)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 8)
+                    // Header with Diary title and Streak button
+                    HStack {
+                        Text("Diary")
+                            .font(.dsHeadline)
+                            .foregroundColor(DSColors.primary)
+                        
+                        Spacer()
+                        
+                        // Streak button in header
+                        StreakButton(
+                            streak: appState.streaksData?.currentStreak ?? 0,
+                            isAddingToStreak: shouldAnimateStreak,
+                            previousStreak: previousStreak,
+                            action: {
+                                showStreakSheet = true
+                            }
+                        )
+                        
+                        #if DEBUG
+                        // Debug button to test streak animation
+                        Button(action: {
+                            testStreakAnimation()
+                        }) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.leading, 8)
+                        #endif
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
 
                     DayStripView(
                         items: viewModel.dayStripItems(streaksData: appState.streaksData),
@@ -279,6 +325,12 @@ struct DiaryTabView: View {
     private func presentOverlay(for entry: DiaryEntry) {
         var entryWithStableIds = entry
         entryWithStableIds.blocks = entry.blocks.withStableIdsAndChangeTracking()
+        
+        // Store current streak before opening editor (for animation comparison later)
+        previousStreak = appState.streaksData?.currentStreak ?? 0
+        shouldAnimateStreak = false
+        isAnimatingStreak = false
+        
         presentedEntry = entryWithStableIds
         shouldFocusEditor = true
     }
@@ -341,6 +393,40 @@ struct DiaryTabView: View {
     private func handleStreaksUpdated(_ notification: Notification) {
         guard let info = notification.userInfo,
               let streaks = info["streaks"] as? StreaksData else { return }
+        
+        let newStreak = streaks.currentStreak
+        let oldStreak = appState.streaksData?.currentStreak ?? 0
+        
+        // Check if streak increased after editor was closed
+        if newStreak > previousStreak && newStreak > oldStreak && !isAnimatingStreak {
+            // Only animate if app is in foreground
+            guard UIApplication.shared.applicationState == .active else { return }
+            
+            // Cancel any existing animation task
+            streakAnimationTask?.cancel()
+            
+            // Start animation with delay
+            isAnimatingStreak = true
+            shouldAnimateStreak = true
+            
+            streakAnimationTask = Task { @MainActor in
+                // Wait 0.4s for main screen to fully appear
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                
+                // Check if task was cancelled
+                guard !Task.isCancelled else { return }
+                
+                // Animation is now triggered via shouldAnimateStreak binding
+                // Reset after animation completes (animation takes ~0.8s)
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                
+                guard !Task.isCancelled else { return }
+                
+                shouldAnimateStreak = false
+                isAnimatingStreak = false
+            }
+        }
+        
         appState.streaksData = streaks
     }
 
@@ -353,6 +439,41 @@ struct DiaryTabView: View {
             viewModel.updateEntryCalories(entryId: entryId, totalCalories: totalCalories)
         }
     }
+    
+    #if DEBUG
+    /// Test function to manually trigger streak animation
+    private func testStreakAnimation() {
+        // Set up fake previous streak (current - 1)
+        let currentStreak = appState.streaksData?.currentStreak ?? 3
+        previousStreak = max(0, currentStreak - 1)
+        
+        // Cancel any existing animation task
+        streakAnimationTask?.cancel()
+        
+        // Start animation
+        isAnimatingStreak = true
+        shouldAnimateStreak = true
+        
+        print("🔥 DEBUG: Testing streak animation from \(previousStreak) to \(currentStreak)")
+        
+        streakAnimationTask = Task { @MainActor in
+            // Wait 0.4s delay
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            
+            guard !Task.isCancelled else { return }
+            
+            // Reset after animation completes
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            
+            guard !Task.isCancelled else { return }
+            
+            shouldAnimateStreak = false
+            isAnimatingStreak = false
+            
+            print("🔥 DEBUG: Animation test complete")
+        }
+    }
+    #endif
 }
 
 // MARK: - Preview

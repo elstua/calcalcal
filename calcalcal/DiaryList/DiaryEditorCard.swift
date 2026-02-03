@@ -26,10 +26,7 @@ struct DiaryEditorCard: View {
     @Binding private var shouldBecomeFirstResponder: Bool
     var displayMode: DisplayMode
     
-    private static let placeholderPrompts: Set<String> = [
-        "write what you ate today",
-        "write what you ate this day"
-    ]
+
     
     init(entry: DiaryEntry,
          height: CGFloat? = nil,
@@ -134,7 +131,13 @@ struct DiaryEditorCard: View {
     @ViewBuilder
     private func summaryTextView() -> some View {
         let display = summaryDisplayText()
-        if display.italic {
+        if display.isPlaceholder {
+            // Show placeholder in textTertiary (not italic)
+            Text(display.text)
+                .font(.body)
+                .foregroundColor(DSColors.textTertiary)
+                .lineLimit(2)
+        } else if display.italic {
             Text(display.text)
                 .font(.body)
                 .foregroundColor(.secondary)
@@ -148,26 +151,49 @@ struct DiaryEditorCard: View {
         }
     }
     
-    private func summaryDisplayText() -> (text: String, italic: Bool) {
+    private func summaryDisplayText() -> (text: String, italic: Bool, isPlaceholder: Bool) {
+        // First check if we have an AI-generated summary
         if let summary = entry.aiGeneratedSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
            !summary.isEmpty {
-            return (summary, false)
+            return (summary, false, false)
         }
-        blockLoop: for block in entry.blocks {
+
+        // Filter to only text-bearing blocks
+        let textBlocks = entry.blocks.compactMap { block -> (text: String, isPlaceholder: Bool)? in
             switch block.type {
             case .text(let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue blockLoop }
-                return (trimmed, Self.placeholderPrompts.contains(trimmed.lowercased()))
+                if trimmed.isEmpty { return nil }
+                return (trimmed, trimmed.isPlaceholderText)
             case .imageText(_, _, let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue blockLoop }
-                return (trimmed, false)
+                if trimmed.isEmpty { return nil }
+                return (trimmed, trimmed.isPlaceholderText)
             case .image, .spacer:
-                continue
+                return nil
             }
         }
-        return ("No entry yet. Start logging your food!", true)
+
+        // If we have content blocks
+        if !textBlocks.isEmpty {
+            // Check if the last block is a placeholder
+            if let lastBlock = textBlocks.last, lastBlock.isPlaceholder {
+                // If we have other content before the placeholder, show placeholder in gray
+                if textBlocks.count > 1 {
+                    return (lastBlock.text.strippingPlaceholderMarker, false, true)
+                } else {
+                    // Only placeholder exists - show it as placeholder
+                    return (lastBlock.text.strippingPlaceholderMarker, true, true)
+                }
+            }
+
+            // Return the first non-placeholder block
+            if let firstBlock = textBlocks.first(where: { !$0.isPlaceholder }) {
+                return (firstBlock.text, false, false)
+            }
+        }
+
+        return ("No entry yet. Start logging your food!", true, false)
     }
     
     private func resolvedCaloriesText() -> String {

@@ -12,6 +12,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// NSTextAttachment normally uses, but we don't actually attach anything.
     static let imageMarker: String = "\u{FFFC}"
 
+    /// Zero Width Space character used to mark placeholder text
+    static let placeholderMarker: String = "\u{200B}"
+
     // MARK: - Spacing Constants (centralized to avoid inconsistency)
 
     /// Spacing for regular paragraph blocks
@@ -604,7 +607,21 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     /// Intercept text changes to fix paragraph style inheritance.
     /// When Enter is pressed, reset typingAttributes to standard BEFORE the newline is inserted.
+    /// Also handles placeholder auto-deletion when user starts typing.
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        // Check if we're typing in a placeholder paragraph
+        if !text.isEmpty && text != "\n" {
+            if let placeholderRange = findPlaceholderRangeContaining(range.location) {
+                // Remove the entire placeholder and insert the new text
+                let mutable = NSMutableAttributedString(attributedString: attributedText)
+                mutable.replaceCharacters(in: placeholderRange, with: text)
+                attributedText = mutable
+                selectedRange = NSRange(location: placeholderRange.location + text.count, length: 0)
+                textViewDidChange(textView)
+                return false
+            }
+        }
+
         if text == "\n" {
             // Always use standard paragraph attributes for new paragraphs.
             // Image blocks are created explicitly via insertImageBlock(), not by pressing Enter.
@@ -612,6 +629,28 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             NotificationCenter.default.post(name: .editorParagraphCommitted, object: nil)
         }
         return true
+    }
+
+    /// Finds the range of a placeholder paragraph containing the given location
+    private func findPlaceholderRangeContaining(_ location: Int) -> NSRange? {
+        guard let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage,
+              location <= textStorage.length else {
+            return nil
+        }
+
+        // Find the paragraph containing this location
+        let string = textStorage.string as NSString
+        let paragraphRange = string.paragraphRange(for: NSRange(location: location, length: 0))
+
+        // Check if this paragraph starts with the placeholder marker
+        guard paragraphRange.location < textStorage.length else { return nil }
+
+        let paragraphText = string.substring(with: paragraphRange)
+        if paragraphText.hasPrefix(Self.placeholderMarker) {
+            return paragraphRange
+        }
+
+        return nil
     }
 
     /// Standard paragraph attributes (no indent needed since we use exclusion paths).
