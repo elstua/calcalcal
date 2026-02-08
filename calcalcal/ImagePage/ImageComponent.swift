@@ -5,78 +5,121 @@ import Photos
 struct ImageComponent: View {
     let asset: PHAsset?
     let uiImage: UIImage?
-    let isLarge: Bool
+    let config: GalleryDisplayConfig
     let onDelete: (() -> Void)?
-    let onLongPress: ((UIImage) -> Void)? // Callback for long press with loaded image
-    
+    let onLongPress: ((UIImage) -> Void)?
+
+    /// Large preview mode (used in sheet preview)
+    var isLargePreview: Bool = false
+
     @State private var loadedImage: UIImage? = nil
-    
+
+    private var displayImage: UIImage? { loadedImage ?? uiImage }
+
+    // Sizes derived from config or large-preview mode
+    private var imageSize: CGFloat {
+        isLargePreview ? 320 : (config.showFrame ? 40 : config.thumbnailHeight)
+    }
+    /// The white polaroid card dimensions (smaller than outer frame)
+    private var cardWidth: CGFloat { isLargePreview ? 350 : 60 }
+    private var cardHeight: CGFloat { isLargePreview ? 420 : 80 }
+    /// Outer frame including padding around the card
+    private var frameWidth: CGFloat { isLargePreview ? 350 : 100 }
+    private var frameHeight: CGFloat { isLargePreview ? 420 : 120 }
+    private var cornerRadius: CGFloat {
+        isLargePreview ? 16 : config.thumbnailCornerRadius
+    }
+
     var body: some View {
+        Group {
+            if config.showFrame || isLargePreview {
+                framedView
+            } else {
+                edgeToEdgeView
+            }
+        }
+        .onAppear { loadImageFromAsset() }
+    }
+
+    // MARK: - Edge-to-edge thumbnail (picker style)
+
+    private var edgeToEdgeView: some View {
+        Group {
+            if let img = displayImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: config.thumbnailHeight, maxHeight: config.thumbnailHeight)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .cornerRadius(cornerRadius)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: config.thumbnailHeight, maxHeight: config.thumbnailHeight)
+                    .cornerRadius(cornerRadius)
+            }
+        }
+        .onLongPressGesture {
+            if let image = displayImage { onLongPress?(image) }
+        }
+    }
+
+    // MARK: - Polaroid-framed thumbnail (editor style)
+
+    private var framedView: some View {
         ZStack {
-            // Polaroid background (white rectangle with border radius)
-            RoundedRectangle(cornerRadius: isLarge ? 16 : 8)
+            RoundedRectangle(cornerRadius: isLargePreview ? 16 : 8)
                 .fill(Color.white)
                 .shadow(radius: 1)
-                .frame(width: isLarge ? 350 : 60, height: isLarge ? 420 : 80)
-            
+                .frame(width: cardWidth, height: cardHeight)
+
             VStack(spacing: 0) {
-                // Image or placeholder
-                // Use loadedImage if available, otherwise fall back to passed uiImage
-                if let displayImage = loadedImage ?? uiImage {
-                    Image(uiImage: displayImage)
+                if let img = displayImage {
+                    Image(uiImage: img)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
+                        .frame(width: imageSize, height: imageSize)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    // Placeholder (grey square) while loading
-                    RoundedRectangle(cornerRadius: isLarge ? 10 : 8)
-                        .fill(Color.gray.opacity(1))
-                        .frame(width: isLarge ? 320 : 40, height: isLarge ? 320 : 40)
-                        .offset(x: 0, y: isLarge ? 0 : -8)
+                    RoundedRectangle(cornerRadius: isLargePreview ? 10 : 8)
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: imageSize, height: imageSize)
                 }
-                
-                if isLarge {
-                    Spacer() // This pushes the button to the bottom
-                
-                // Optional controls for large mode
+
+                if isLargePreview {
+                    Spacer()
                     if let onDelete = onDelete {
-                    Button(action: onDelete) {
-                        Text("Delete")
-                            .foregroundColor(.red)
+                        Button(action: onDelete) {
+                            Text("Delete")
+                                .foregroundColor(.red)
                         }
                         .padding(.bottom, 16)
                     }
                 }
             }
-            .padding(16)
+            .padding(isLargePreview ? 16 : 8)
             .onLongPressGesture {
-                // Pass the loaded image to the callback
-                if let image = loadedImage ?? uiImage {
-                    onLongPress?(image)
-                }
+                if let image = displayImage { onLongPress?(image) }
             }
         }
-        .frame(width: isLarge ? 350 : 100, height: isLarge ? 420 : 120)
-        .onAppear {
-            loadImageFromAsset()
-        }
+        .frame(width: frameWidth, height: frameHeight)
     }
-    
+
+    // MARK: - Loading
+
     private func loadImageFromAsset() {
-        // Only load if we have an asset and haven't loaded yet
         guard let asset = asset, loadedImage == nil else { return }
-        
-        let imageManager = PHCachingImageManager()
-        let targetSize = CGSize(width: 300, height: 300)
+
+        let imageManager = PHCachingImageManager.default() as! PHCachingImageManager
         let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic // Fast thumbnails first, then high quality
+        options.deliveryMode = .opportunistic
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
-        
+
         imageManager.requestImage(
             for: asset,
-            targetSize: targetSize,
+            targetSize: config.requestSize,
             contentMode: .aspectFill,
             options: options
         ) { image, _ in
@@ -87,18 +130,32 @@ struct ImageComponent: View {
     }
 }
 
+// MARK: - Convenience initializers
+
+extension ImageComponent {
+    /// Legacy initializer for backward compatibility
+    init(asset: PHAsset?, uiImage: UIImage?, isLarge: Bool, onDelete: (() -> Void)?, onLongPress: ((UIImage) -> Void)?) {
+        self.asset = asset
+        self.uiImage = uiImage
+        self.config = .editor
+        self.onDelete = onDelete
+        self.onLongPress = onLongPress
+        self.isLargePreview = isLarge
+    }
+}
+
 struct ImageComponent_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
-            // Small preview
-            ImageComponent(asset: nil, uiImage: nil as UIImage?, isLarge: false, onDelete: nil, onLongPress: nil)
-                .previewDisplayName("Small")
-            
-            // Large preview
-            ImageComponent(asset: nil, uiImage: nil as UIImage?, isLarge: true, onDelete: {}, onLongPress: nil)
+            ImageComponent(asset: nil, uiImage: nil, config: .editor, onDelete: nil, onLongPress: nil)
+                .previewDisplayName("Editor")
+            ImageComponent(asset: nil, uiImage: nil, config: .picker, onDelete: nil, onLongPress: nil)
+                .frame(width: 120, height: 130)
+                .previewDisplayName("Picker")
+            ImageComponent(asset: nil, uiImage: nil, config: .editor, onDelete: {}, onLongPress: nil, isLargePreview: true)
                 .previewDisplayName("Large")
         }
         .padding()
         .previewLayout(.sizeThatFits)
     }
-} 
+}

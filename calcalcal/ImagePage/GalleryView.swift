@@ -1,3 +1,4 @@
+
 import SwiftUI
 import UIKit
 import Photos
@@ -9,62 +10,35 @@ struct GalleryView: View {
     @State private var selectedImage: UIImage? = nil
     @State private var showLargeImage = false
     @State private var photoAccessDenied = false
-    
+    @State private var thumbnailFrames: [String: CGRect] = [:]
+
     private let batchSize = 50
-    
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
-    // Callback for when an image is tapped, passing the image and its global frame
+
+    /// Display configuration (editor vs picker)
+    var config: GalleryDisplayConfig = .editor
+
+    /// Namespace for matched geometry transitions (optional)
+    var geometryNamespace: Namespace.ID? = nil
+
+    /// Callback for when an image is tapped, passing the image and its global frame
     var onImageTap: ((UIImage, CGRect) -> Void)?
-    
+
+    /// Callback with PHAsset identifier and source frame for matched geometry (optional)
+    var onImageTapWithId: ((UIImage, String, CGRect) -> Void)?
+
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(photoAssets.indices, id: \.self) { idx in
-                    GeometryReader { geo in
-                        ImageComponent(
-                            asset: photoAssets[idx],
-                            uiImage: nil,
-                            isLarge: false,
-                            onDelete: nil,
-                            onLongPress: { image in
-                                selectedImage = image
-                                showLargeImage = true
-                            }
-                        )
-                        .onTapGesture {
-                            // Load the image for tap callback
-                            let imageManager = PHCachingImageManager()
-                            let options = PHImageRequestOptions()
-                            options.deliveryMode = .highQualityFormat
-                            options.isSynchronous = true
-                            imageManager.requestImage(
-                                for: photoAssets[idx],
-                                targetSize: CGSize(width: 300, height: 300),
-                                contentMode: .aspectFill,
-                                options: options
-                            ) { image, _ in
-                                if let image = image {
-                                    let frame = geo.frame(in: .global)
-                                    onImageTap?(image, frame)
-                                }
+            LazyVGrid(columns: config.gridItems, spacing: config.spacing) {
+                ForEach(photoAssets, id: \.localIdentifier) { asset in
+                    thumbnailCell(for: asset)
+                        .onAppear {
+                            if asset == photoAssets.last || photoAssets.suffix(10).contains(asset) {
+                                loadNextBatch()
                             }
                         }
-                    }
-                    .frame(height: 130)
-                    .onAppear {
-                        // Trigger loading next batch when approaching the end
-                        if idx >= photoAssets.count - 10 {
-                            loadNextBatch()
-                        }
-                    }
                 }
             }
-            .padding()
+            .padding(config.showFrame ? 16 : config.spacing)
         }
         .onAppear(perform: loadPhotos)
         .sheet(isPresented: $showLargeImage) {
@@ -84,10 +58,74 @@ struct GalleryView: View {
             }
         }
         .alert(isPresented: $photoAccessDenied) {
-            Alert(title: Text("Photo Access Denied"), message: Text("Please allow photo access in Settings to view your gallery."), dismissButton: .default(Text("OK")))
+            Alert(
+                title: Text("Photo Access Denied"),
+                message: Text("Please allow photo access in Settings to view your gallery."),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
-    
+
+    // MARK: - Thumbnail cell
+
+    @ViewBuilder
+    private func thumbnailCell(for asset: PHAsset) -> some View {
+        let assetId = asset.localIdentifier
+
+        ImageComponent(
+            asset: asset,
+            uiImage: nil,
+            config: config,
+            onDelete: nil,
+            onLongPress: { image in
+                selectedImage = image
+                showLargeImage = true
+            }
+        )
+        .aspectRatio(1, contentMode: .fill)
+        .modifier(OptionalMatchedGeometry(id: assetId, namespace: geometryNamespace))
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear {
+                        thumbnailFrames[assetId] = geo.frame(in: .global)
+                    }
+                    .onChange(of: geo.frame(in: .global)) { newFrame in
+                        thumbnailFrames[assetId] = newFrame
+                    }
+            }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            handleTap(asset: asset, id: assetId)
+        }
+    }
+
+    // MARK: - Tap handling (async)
+
+    private func handleTap(asset: PHAsset, id: String) {
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+
+        PHCachingImageManager.default().requestImage(
+            for: asset,
+            targetSize: CGSize(width: 600, height: 600),
+            contentMode: .aspectFill,
+            options: options
+        ) { image, _ in
+            guard let image = image else { return }
+            DispatchQueue.main.async {
+                let sourceFrame = thumbnailFrames[id] ?? .zero
+                onImageTapWithId?(image, id, sourceFrame)
+                onImageTap?(image, sourceFrame)
+            }
+        }
+    }
+
+    // MARK: - Photo loading
+
     private func loadPhotos() {
         let status = PHPhotoLibrary.authorizationStatus()
         if status == .authorized || status == .limited {
@@ -97,47 +135,40 @@ struct GalleryView: View {
                 if newStatus == .authorized || newStatus == .limited {
                     fetchPhotos()
                 } else {
-                    photoAccessDenied = true
+                    DispatchQueue.main.async { photoAccessDenied = true }
                 }
             }
         } else {
             photoAccessDenied = true
         }
     }
-    
+
     private func fetchPhotos() {
-        // Fetch all asset references (lightweight - no actual images loaded)
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         let assets = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-        
+
         DispatchQueue.main.async {
             self.allAssets = assets
             self.loadNextBatch()
         }
     }
-    
+
     private func loadNextBatch() {
         guard let allAssets = allAssets, !isLoadingMore else { return }
-        
+
         let currentCount = photoAssets.count
         let totalCount = allAssets.count
-        
-        // Check if we've already loaded all assets
         guard currentCount < totalCount else { return }
-        
+
         isLoadingMore = true
-        
-        // Calculate how many assets to load in this batch
-        let remainingCount = totalCount - currentCount
-        let loadCount = min(batchSize, remainingCount)
-        
-        // Extract the next batch of assets
+        let loadCount = min(batchSize, totalCount - currentCount)
+
         var newAssets: [PHAsset] = []
         for i in currentCount..<(currentCount + loadCount) {
             newAssets.append(allAssets.object(at: i))
         }
-        
+
         DispatchQueue.main.async {
             self.photoAssets.append(contentsOf: newAssets)
             self.isLoadingMore = false
@@ -145,8 +176,23 @@ struct GalleryView: View {
     }
 }
 
+// MARK: - Optional matched geometry modifier
+
+private struct OptionalMatchedGeometry: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let ns = namespace {
+            content.matchedGeometryEffect(id: id, in: ns)
+        } else {
+            content
+        }
+    }
+}
+
 struct GalleryView_Previews: PreviewProvider {
     static var previews: some View {
-        GalleryView()
+        GalleryView(config: .picker)
     }
-} 
+}

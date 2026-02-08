@@ -3,9 +3,9 @@ import Foundation
 import UIKit
 
 
-// MARK: - DiaryEntry Model (for preview/demo)
-
-struct BigEntryBlock: View {
+/// Entry card view that combines the block editor with footer.
+/// Used for displaying and editing diary entries in the main pager and editor overlay.
+struct EntryCard: View {
     let entry: DiaryEntry
     /// Optional fixed height. When nil, the view expands to fill available space.
     var height: CGFloat? = nil
@@ -26,6 +26,9 @@ struct BigEntryBlock: View {
     var onScrollOffsetChange: ((CGFloat) -> Void)? = nil
     // Custom top content inset (used by EditorOverlay to leave space for header)
     var topContentInset: CGFloat? = nil
+    // Fly-to animation support
+    var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil
+    var pendingFlyToAnimation: Bool = false
     
     // When provided, this binding will be used as the source of truth
     // for the editor content to keep multiple views in perfect sync.
@@ -57,6 +60,8 @@ struct BigEntryBlock: View {
          overrideTotalCalories: Int? = nil,
          onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
          topContentInset: CGFloat? = nil,
+         onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
+         pendingFlyToAnimation: Bool = false,
          externalBlocks: Binding<[Block]>? = nil) {
         self.entry = entry
         self.height = height
@@ -73,6 +78,8 @@ struct BigEntryBlock: View {
         self.overrideTotalCalories = overrideTotalCalories
         self.onScrollOffsetChange = onScrollOffsetChange
         self.topContentInset = topContentInset
+        self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
+        self.pendingFlyToAnimation = pendingFlyToAnimation
         self.externalBlocks = externalBlocks
         _internalBlocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
     }
@@ -93,6 +100,8 @@ struct BigEntryBlock: View {
                     self.onBlocksChange?(newBlocks)
                 },
                 onScrollOffsetChange: onScrollOffsetChange,
+                onNewImageOverlayPositioned: onNewImageOverlayPositioned,
+                pendingFlyToAnimation: pendingFlyToAnimation,
                 topContentInset: topContentInset
             )
             .frame(maxHeight: .infinity)
@@ -136,7 +145,7 @@ struct BigEntryBlock: View {
 }
 
 // MARK: - Image hydration
-extension BigEntryBlock {
+extension EntryCard {
     private func hydrateImages(for blocks: [Block]) {
         for block in blocks {
             switch block.type {
@@ -185,7 +194,7 @@ struct ConditionalTapGesture: ViewModifier {
     }
 }
 
-struct BigEntryBlock_Previews: PreviewProvider {
+struct EntryCard_Previews: PreviewProvider {
     static var previews: some View {
         let blocks = [
             Block(type: .text("Breakfast: 2 eggs, 1 toast, 1 orange juice"), calorieData: "320"),
@@ -201,7 +210,7 @@ struct BigEntryBlock_Previews: PreviewProvider {
             aiGeneratedSummary: "Breakfast: eggs, toast, juice. Lunch: salad, apple. Snack: bar."
         )
         VStack {
-            BigEntryBlock(entry: entry, isEditable: true)
+            EntryCard(entry: entry, isEditable: true)
                 .padding()
         }
         .background(Color(.systemGroupedBackground))

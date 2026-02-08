@@ -15,17 +15,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Zero Width Space character used to mark placeholder text
     static let placeholderMarker: String = "\u{200B}"
 
-    // MARK: - Spacing Constants (centralized to avoid inconsistency)
+    // MARK: - Spacing Constants (design system)
 
     /// Spacing for regular paragraph blocks
-    private static let paragraphSpacing: CGFloat = 10
-    private static let paragraphSpacingBefore: CGFloat = 10
+    private static let paragraphSpacing: CGFloat = DSSpacing.md
+    private static let paragraphSpacingBefore: CGFloat = 10  // Slightly tighter than smd (12) for paragraph break
 
     /// Spacing for image blocks when text is shorter than image (push next content below the image)
     private static let imageSpacingLarge: CGFloat = 88
     /// Spacing for image blocks when text is taller than image (text already pushed content down)
-    private static let imageSpacingSmall: CGFloat = 10
-    private static let imageSpacingBefore: CGFloat = 8
+    private static let imageSpacingSmall: CGFloat = DSSpacing.md
+    private static let imageSpacingBefore: CGFloat = DSSpacing.sm
 
     /// Max number of text lines that still use the larger spacing.
     private static let imageLineThreshold: Int = 2
@@ -69,6 +69,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     /// Entry identifier used to scope metadata notifications and backend synchronization.
     var entryIdentifier: UUID?
+
+    /// Called when a new image overlay is positioned for the first time, providing
+    /// the overlay's window-space frame. Used by EditorOverlay to animate a snapshot
+    /// from the picker to the editor destination.
+    var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
+
+    /// When true, newly created image overlays start hidden (alpha 0).
+    /// The fly-to animation coordinator will unhide them on completion.
+    var pendingFlyToAnimation: Bool = false
     
     /// External scroll delegate to forward scroll events (used by BlockEditorRepresentable coordinator)
     weak var scrollDelegate: UIScrollViewDelegate?
@@ -99,7 +108,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             // so we don't touch text storage while TextKit is still mutating it.
             self.scheduleBlockStyleApplication()
 
-            self.updateImageOverlays()
+            // Defer image overlay updates to the next run loop so TextKit has
+            // finished processing the edit. Calling during didProcessEditing can
+            // hit stale NSTextParagraph data and crash (index out of range).
+            DispatchQueue.main.async { [weak self] in
+                self?.updateImageOverlays()
+            }
             self.scheduleCalorieOverlayUpdate()
         }
 
@@ -109,9 +123,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         backgroundColor = .clear
         alwaysBounceVertical = true
         contentInsetAdjustmentBehavior = .automatic
-        // Padding inside the scrollable text area (matches DS: top xxl 40pt, sides lg 24pt, bottom md 16pt)
+        // Padding inside the scrollable text area (design system: top xxl, sides lg, bottom md)
         // Note: When used in EditorOverlay, this will be adjusted via setTopInset() to account for the sticky header
-        textContainerInset = UIEdgeInsets(top: 40, left: 24, bottom: 16, right: 24)
+        textContainerInset = UIEdgeInsets(
+            top: DSSpacing.xxl,
+            left: DSSpacing.lg,
+            bottom: DSSpacing.md,
+            right: DSSpacing.lg
+        )
         textDragInteraction?.isEnabled = true
         isScrollEnabled = true
         allowsEditingTextAttributes = false
@@ -122,12 +141,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Build a paragraph style with spacing that will be inherited by every
         // new paragraph as the user types. This keeps the storage and layout in
         // sync so caret/selection geometry matches what's drawn on screen.
-        let baseFont = UIFont.preferredFont(forTextStyle: .body)
-        let baseColor = UIColor.label
+        let baseFont = UIFont.dsBody
+        let baseColor = UIColor.dsTextPrimary
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
-        paragraphStyle.lineHeightMultiple = 1.14
+        paragraphStyle.lineHeightMultiple = 1.20
 
         let attrs: [NSAttributedString.Key: Any] = [
             .font: baseFont,
@@ -148,6 +167,11 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                                                selector: #selector(handleMetadataNotification(_:)),
                                                name: .editorApplyPerBlockMetadata,
                                                object: nil)
+
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(handleRevealOverlayNotification(_:)),
+                                               name: .editorRevealImageOverlay,
+                                               object: nil)
     }
 
     @available(*, unavailable)
@@ -161,8 +185,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     func updateTextIfNeeded(_ text: String) {
         guard self.text != text else { return }
-        let baseFont = UIFont.preferredFont(forTextStyle: .body)
-        let baseColor = UIColor.label
+        let baseFont = UIFont.dsBody
+        let baseColor = UIColor.dsTextPrimary
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
@@ -198,8 +222,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let blockID = BlockID()
         imagesByBlockID[blockID] = image
 
-        let baseFont = UIFont.preferredFont(forTextStyle: .body)
-        let baseColor = UIColor.label
+        let baseFont = UIFont.dsBody
+        let baseColor = UIColor.dsTextPrimary
 
         // Paragraph style for image block - NO headIndent!
         // Text will flow around the image via exclusion paths.
@@ -285,6 +309,14 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         imagesByBlockID[blockID]
     }
 
+    /// Reveals a previously hidden image overlay (used after fly-to animation completes).
+    func revealImageOverlay(for blockID: BlockID) {
+        guard let host = imageOverlays[blockID] else { return }
+        UIView.animate(withDuration: 0.15) {
+            host.view.alpha = 1
+        }
+    }
+
     // MARK: - Layout
 
     override func layoutSubviews() {
@@ -326,6 +358,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             guard let rect = rectForBlock(block) else { continue }
 
             let host: UIHostingController<ImageComponent>
+            var isNewOverlay = false
             if let existing = imageOverlays[block.id] {
                 host = existing
             } else {
@@ -338,8 +371,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 )
                 host = UIHostingController(rootView: view)
                 host.view.backgroundColor = .clear
+                let shouldHideForAnimation = pendingFlyToAnimation
+                if shouldHideForAnimation {
+                    host.view.alpha = 0
+                    // Consume the flag immediately so only this overlay is hidden
+                    pendingFlyToAnimation = false
+                }
                 addSubview(host.view)
                 imageOverlays[block.id] = host
+                isNewOverlay = true
             }
 
             // Position the overlay at the left edge of the text container,
@@ -352,12 +392,18 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             )
             host.view.frame = imageFrame
 
+            // Report destination rect for fly-to animation
+            if isNewOverlay, let callback = onNewImageOverlayPositioned {
+                let windowFrame = host.view.convert(host.view.bounds, to: nil)
+                callback(block.id, windowFrame)
+            }
+
             // Create exclusion path for this image in text container coordinates.
             // The exclusion path is relative to the text container, not the view.
             let exclusionRect = CGRect(
                 x: 0, // Start at left edge of text container
                 y: rect.minY,
-                width: imageComponentSize.width + 8, // Image width + padding
+                width: imageComponentSize.width + DSSpacing.sm, // Image width + DS padding
                 height: imageComponentSize.height
             )
             let exclusionPath = UIBezierPath(rect: exclusionRect)
@@ -479,17 +525,28 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private func rectForBlock(_ block: BlockMetadata) -> CGRect? {
         guard let textLayoutManager = textLayoutManager else { return nil }
         guard let contentManager = textLayoutManager.textContentManager else { return nil }
-        
-        // Validate block range before accessing text content.
-        // Block metadata can become stale during deletion, causing crashes
-        // if we pass invalid offsets to contentManager.location().
-        // We need location + 1 to be valid, so check for location + 1 <= length.
-        guard let textStorage = (contentManager as? NSTextContentStorage)?.textStorage,
-              block.range.location + 1 <= textStorage.length else {
+
+        // Validate block range against BOTH textStorage length and the content
+        // manager's document range. During didProcessEditing callbacks these can
+        // diverge, and passing a stale offset into NSTextContentStorage triggers
+        // an NSInvalidArgumentException inside NSTextParagraph.
+        guard let textStorage = (contentManager as? NSTextContentStorage)?.textStorage else {
+            return nil
+        }
+        let storageLen = textStorage.length
+        guard storageLen > 0,
+              block.range.location >= 0,
+              block.range.location + 1 <= storageLen else {
             return nil
         }
 
+        // Also validate against the content manager's own document range offset
         let docRange = contentManager.documentRange
+        let docEnd = contentManager.offset(from: docRange.location, to: docRange.endLocation)
+        guard docEnd > 0, block.range.location + 1 <= docEnd else {
+            return nil
+        }
+
         guard let startLocation = contentManager.location(docRange.location, offsetBy: block.range.location) else {
             return nil
         }
@@ -500,10 +557,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             return nil
         }
 
+        // Ensure layout is valid for this range before enumerating segments.
+        // If layout hasn't been performed yet for this range, enumerating can
+        // hit stale paragraph data and crash.
+        guard textLayoutManager.textLayoutFragment(for: startLocation) != nil else {
+            return nil
+        }
+
         var rect: CGRect?
         textLayoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, segmentRect, _, _ in
             rect = segmentRect
-            return false // stop after first
+            return false
         }
         return rect
     }
@@ -655,8 +719,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     /// Standard paragraph attributes (no indent needed since we use exclusion paths).
     private var standardParagraphAttributes: [NSAttributedString.Key: Any] {
-        let baseFont = UIFont.preferredFont(forTextStyle: .body)
-        let baseColor = UIColor.label
+        let baseFont = UIFont.dsBody
+        let baseColor = UIColor.dsTextPrimary
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.paragraphSpacingBefore = Self.paragraphSpacingBefore
         paragraphStyle.paragraphSpacing = Self.paragraphSpacing
@@ -716,6 +780,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Explicitly trigger overlay update after applying metadata
         // This ensures CalorieBlockView overlays are created/updated immediately
         scheduleCalorieOverlayUpdate()
+    }
+
+    @objc private func handleRevealOverlayNotification(_ notification: Notification) {
+        guard let uuid = notification.userInfo?["blockID"] as? UUID else { return }
+        let blockID = BlockID(rawValue: uuid)
+        revealImageOverlay(for: blockID)
     }
 
     /// Called when cursor moves - set typing attributes based on current block type.
@@ -890,8 +960,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             // In image block - use cached spacing
             let spacing = cachedSpacing(for: block)
 
-            let baseFont = UIFont.preferredFont(forTextStyle: .body)
-            let baseColor = UIColor.label
+            let baseFont = UIFont.dsBody
+            let baseColor = UIColor.dsTextPrimary
             let style = NSMutableParagraphStyle()
             style.paragraphSpacingBefore = Self.imageSpacingBefore
             style.paragraphSpacing = spacing

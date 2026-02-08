@@ -155,16 +155,38 @@ class CameraManager: NSObject, ObservableObject {
     }
     
     // MARK: - Session Control
-    
+
     func stopSession() {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            
+
             if self.session.isRunning {
                 self.session.stopRunning()
                 DispatchQueue.main.async {
                     self.isSessionRunning = false
                 }
+            }
+        }
+    }
+
+    /// Pause the session temporarily (e.g. when gallery is expanded)
+    func pauseSession() {
+        sessionQueue.async { [weak self] in
+            guard let self = self, self.session.isRunning else { return }
+            self.session.stopRunning()
+            DispatchQueue.main.async {
+                self.isSessionRunning = false
+            }
+        }
+    }
+
+    /// Resume a previously paused session
+    func resumeSession() {
+        sessionQueue.async { [weak self] in
+            guard let self = self, self.isConfigured, !self.session.isRunning else { return }
+            self.session.startRunning()
+            DispatchQueue.main.async {
+                self.isSessionRunning = self.session.isRunning
             }
         }
     }

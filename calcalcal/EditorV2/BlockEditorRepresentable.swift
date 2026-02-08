@@ -10,6 +10,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var onBlocksChange: (([Block]) -> Void)?
     var onTextViewReady: ((BlockEditorTextView) -> Void)?
     var onScrollOffsetChange: ((CGFloat) -> Void)?
+    var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
+    var pendingFlyToAnimation: Bool = false
     var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
     
     init(blocks: Binding<[Block]>,
@@ -20,6 +22,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          onBlocksChange: (([Block]) -> Void)? = nil,
          onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
          onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
+         onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
+         pendingFlyToAnimation: Bool = false,
          topContentInset: CGFloat? = nil) {
         self._blocks = blocks
         self.imageMap = imageMap
@@ -29,6 +33,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.onBlocksChange = onBlocksChange
         self.onTextViewReady = onTextViewReady
         self.onScrollOffsetChange = onScrollOffsetChange
+        self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
+        self.pendingFlyToAnimation = pendingFlyToAnimation
         self.topContentInset = topContentInset
     }
     
@@ -40,6 +46,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         let textView = BlockEditorTextView()
         context.coordinator.parent = self
         context.coordinator.bind(to: textView)
+        textView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
+        textView.pendingFlyToAnimation = pendingFlyToAnimation
         onTextViewReady?(textView)
         return textView
     }
@@ -55,6 +63,13 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         }
         // Update scroll callback so coordinator can forward scroll events
         context.coordinator.onScrollOffsetChange = onScrollOffsetChange
+        // Update fly-to animation callback
+        uiView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
+        // Only set pendingFlyToAnimation to true, never overwrite back to false
+        // (the text view clears it itself after the animation completes)
+        if pendingFlyToAnimation {
+            uiView.pendingFlyToAnimation = true
+        }
         context.coordinator.applyIfNeeded(blocks: blocks, imageMap: imageMap)
         context.coordinator.handleFirstResponderIfNeeded(textView: uiView)
     }

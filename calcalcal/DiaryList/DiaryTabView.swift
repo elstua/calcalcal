@@ -158,17 +158,17 @@ struct DiaryTabView: View {
                             }
                         )
                         
-                        #if DEBUG
-                        // Debug button to test streak animation
-                        Button(action: {
-                            testStreakAnimation()
-                        }) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.orange)
-                        }
-                        .padding(.leading, 8)
-                        #endif
+//                        #if DEBUG
+//                        // Debug button to test streak animation
+//                        Button(action: {
+//                            testStreakAnimation()
+//                        }) {
+//                            Image(systemName: "flame.fill")
+//                                .font(.system(size: 14))
+//                                .foregroundColor(.orange)
+//                        }
+//                        .padding(.leading, 8)
+//                        #endif
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
@@ -250,9 +250,14 @@ struct DiaryTabView: View {
     // MARK: - Card View
     private func cardView(for entry: DiaryEntry, isActive: Bool, availableHeight: CGFloat) -> some View {
         let cardHeight = max(0, availableHeight)
+        
+        // Create a content-aware ID that changes when blocks change
+        // This forces SwiftUI to re-render immediately when content updates
+        let contentHash = entry.blocks.toContentString().hashValue
+        let viewId = "\(entry.stableViewId)_\(contentHash)"
 
         return VStack(spacing: 0) {
-            BigEntryBlock(
+            EntryCard(
                 entry: entry,
                 height: cardHeight,
                 cornerRadius: 24,
@@ -268,7 +273,7 @@ struct DiaryTabView: View {
                 forceExpanded: false
             )
             .padding(.horizontal, 8)
-            .id(entry.stableViewId)
+            .id(viewId)  // Content-aware ID forces re-render when blocks change
             .zoomTransitionSource(id: entry.id, namespace: editorNamespace)
             .allowsHitTesting(isActive)
             .frame(height: cardHeight, alignment: .top)
@@ -304,12 +309,7 @@ struct DiaryTabView: View {
                         Text("All Days")
                             .font(.dsHeadline)
                             .foregroundColor(DSColors.textPrimary)
-                        
-                        if let streaks = appState.streaksData {
-                            Text("🔥 \(streaks.currentStreak) day streak")
-                                .font(.dsBody)
-                                .foregroundColor(DSColors.textSecondary)
-                        }
+
                     }
                 }
                 .padding(.horizontal, 8)
@@ -440,40 +440,40 @@ struct DiaryTabView: View {
         }
     }
     
-    #if DEBUG
-    /// Test function to manually trigger streak animation
-    private func testStreakAnimation() {
-        // Set up fake previous streak (current - 1)
-        let currentStreak = appState.streaksData?.currentStreak ?? 3
-        previousStreak = max(0, currentStreak - 1)
-        
-        // Cancel any existing animation task
-        streakAnimationTask?.cancel()
-        
-        // Start animation
-        isAnimatingStreak = true
-        shouldAnimateStreak = true
-        
-        print("🔥 DEBUG: Testing streak animation from \(previousStreak) to \(currentStreak)")
-        
-        streakAnimationTask = Task { @MainActor in
-            // Wait 0.4s delay
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            
-            guard !Task.isCancelled else { return }
-            
-            // Reset after animation completes
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            
-            guard !Task.isCancelled else { return }
-            
-            shouldAnimateStreak = false
-            isAnimatingStreak = false
-            
-            print("🔥 DEBUG: Animation test complete")
-        }
-    }
-    #endif
+//    #if DEBUG
+//    /// Test function to manually trigger streak animation
+//    private func testStreakAnimation() {
+//        // Set up fake previous streak (current - 1)
+//        let currentStreak = appState.streaksData?.currentStreak ?? 3
+//        previousStreak = max(0, currentStreak - 1)
+//        
+//        // Cancel any existing animation task
+//        streakAnimationTask?.cancel()
+//        
+//        // Start animation
+//        isAnimatingStreak = true
+//        shouldAnimateStreak = true
+//        
+//        print("🔥 DEBUG: Testing streak animation from \(previousStreak) to \(currentStreak)")
+//        
+//        streakAnimationTask = Task { @MainActor in
+//            // Wait 0.4s delay
+//            try? await Task.sleep(nanoseconds: 400_000_000)
+//            
+//            guard !Task.isCancelled else { return }
+//            
+//            // Reset after animation completes
+//            try? await Task.sleep(nanoseconds: 800_000_000)
+//            
+//            guard !Task.isCancelled else { return }
+//            
+//            shouldAnimateStreak = false
+//            isAnimatingStreak = false
+//            
+//            print("🔥 DEBUG: Animation test complete")
+//        }
+//    }
+//    #endif
 }
 
 // MARK: - Preview

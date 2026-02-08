@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Design System Typography
 /// Centralized typography system using InstrumentSans font family.
@@ -285,5 +286,15 @@ extension DSTypographyStyle {
         case .largeNumber, .mediumNumber, .compactNumber:
             return -0.5
         }
+    }
+}
+
+// MARK: - UIFont (Design System for UIKit)
+/// Use these in UIKit views (e.g. UITextView) so typography matches SwiftUI screens.
+extension UIFont {
+
+    /// Body text – 17pt InstrumentSans Regular. Use for editor content.
+    static var dsBody: UIFont {
+        UIFont(name: DSFontName.regular, size: 17) ?? .preferredFont(forTextStyle: .body)
     }
 }

@@ -100,4 +100,4 @@ open class VariableBlurUIView: UIVisualEffectView {
         }
         return CIContext().createCGImage(ciGradientFilter.outputImage!, from: CGRect(x: 0, y: 0, width: width, height: height))!
     }
-}
+}//

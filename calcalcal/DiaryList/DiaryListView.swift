@@ -182,16 +182,7 @@ struct DiaryListView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
                 .allowsHitTesting(false)
-            DiaryEditorCard(
-                entry: entry,
-                cornerRadius: 0,
-                showShadow: false,
-                useExternalDecoration: true,
-                isEditable: false,
-                shouldBecomeFirstResponder: .constant(false),
-                forceExpanded: false,
-                displayMode: .compactSummary
-            )
+            EntrySummaryCard(entry: entry)
         }
     }
 
@@ -366,7 +357,7 @@ struct DiaryEntryPopupView: View {
                         .padding()
                 }
             }
-            BigEntryBlock(
+            EntryCard(
                 entry: entry,
                 isEditable: true,
                 shouldBecomeFirstResponder: $shouldFocusEditor,
