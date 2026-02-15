@@ -13,6 +13,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
     var pendingFlyToAnimation: Bool = false
     var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
+    var bottomContentInset: CGFloat?  // Optional override for bottom inset (used by EditorOverlay for footer space)
     
     init(blocks: Binding<[Block]>,
          imageMap: [UUID: UIImage] = [:],
@@ -24,7 +25,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
-         topContentInset: CGFloat? = nil) {
+         topContentInset: CGFloat? = nil,
+         bottomContentInset: CGFloat? = nil) {
         self._blocks = blocks
         self.imageMap = imageMap
         self.isEditable = isEditable
@@ -36,6 +38,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.topContentInset = topContentInset
+        self.bottomContentInset = bottomContentInset
     }
     
     func makeCoordinator() -> Coordinator {
@@ -60,6 +63,10 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         // Apply custom top inset if provided (for EditorOverlay header space)
         if let topInset = topContentInset {
             uiView.setTopInset(topInset)
+        }
+        // Apply custom bottom inset if provided (for EditorOverlay footer space)
+        if let bottomInset = bottomContentInset {
+            uiView.setBottomInset(bottomInset)
         }
         // Update scroll callback so coordinator can forward scroll events
         context.coordinator.onScrollOffsetChange = onScrollOffsetChange

@@ -107,6 +107,7 @@ struct EditorOverlay: View {
                             headerScrollOffsetY = max(0, offsetY)
                         },
                         topContentInset: 56, // Extra space for the sticky header
+                        bottomContentInset: 80, // Extra space for the sticky footer
                         onNewImageOverlayPositioned: { blockID, destRect in
                             guard pendingAnimationSourceRect != nil else { return }
                             startFlyToAnimation(destinationRect: destRect, blockID: blockID)
@@ -122,6 +123,12 @@ struct EditorOverlay: View {
                     
                     // Sticky header content (date + close) – positioned with safe area padding
                     stickyHeaderContent(safeAreaTop: safeAreaTop)
+
+                    // Variable blur background for footer – inverted direction from header
+                    footerBlurBackground(safeAreaBottom: geometry.safeAreaInsets.bottom)
+
+                    // Sticky footer content (gallery button + calorie number)
+                    stickyFooterContent()
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -282,6 +289,32 @@ extension EditorOverlay {
         .padding(.horizontal, 24)
         .padding(.top, 4)  // Position below safe area with small offset
         .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    /// Variable blur background for the footer, extending over the bottom safe area.
+    /// Inverted from the header: strongest at top (where content scrolls from), clear at bottom.
+    private func footerBlurBackground(safeAreaBottom: CGFloat) -> some View {
+        let blurHeight = safeAreaBottom + 72
+
+        return VStack(spacing: 0) {
+            Spacer()
+            VariableBlurView(maxBlurRadius: 32, direction: .blurredBottomClearTop, startOffset: 0)
+                .frame(height: blurHeight)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .ignoresSafeArea(.container, edges: .bottom)
+    }
+
+    /// Footer content — gallery thumbnail button and animated calorie number.
+    private func stickyFooterContent() -> some View {
+        EditorFooterView(
+            blocks: localEntry.blocks,
+            remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
+            scrollOffset: headerScrollOffsetY,
+            onAddImage: { showImagePicker = true }
+        )
+        .padding(.bottom, DSSpacing.xs)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     private func formattedDate(_ date: Date) -> String {
