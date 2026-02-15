@@ -26,6 +26,8 @@ struct EntryCard: View {
     var onScrollOffsetChange: ((CGFloat) -> Void)? = nil
     // Custom top content inset (used by EditorOverlay to leave space for header)
     var topContentInset: CGFloat? = nil
+    // Custom bottom content inset (used by EditorOverlay to leave space for footer)
+    var bottomContentInset: CGFloat? = nil
     // Fly-to animation support
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil
     var pendingFlyToAnimation: Bool = false
@@ -60,6 +62,7 @@ struct EntryCard: View {
          overrideTotalCalories: Int? = nil,
          onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
          topContentInset: CGFloat? = nil,
+         bottomContentInset: CGFloat? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
          externalBlocks: Binding<[Block]>? = nil) {
@@ -78,6 +81,7 @@ struct EntryCard: View {
         self.overrideTotalCalories = overrideTotalCalories
         self.onScrollOffsetChange = onScrollOffsetChange
         self.topContentInset = topContentInset
+        self.bottomContentInset = bottomContentInset
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.externalBlocks = externalBlocks
@@ -102,16 +106,10 @@ struct EntryCard: View {
                 onScrollOffsetChange: onScrollOffsetChange,
                 onNewImageOverlayPositioned: onNewImageOverlayPositioned,
                 pendingFlyToAnimation: pendingFlyToAnimation,
-                topContentInset: topContentInset
+                topContentInset: topContentInset,
+                bottomContentInset: bottomContentInset
             )
             .frame(maxHeight: .infinity)
-
-            // Footer
-            EntryFooterView(
-                blocks: effectiveBlocks.wrappedValue,
-                remoteTotalCalories: overrideTotalCalories ?? entry.totalCalories,
-                onAddImage: { onAddImage?() }
-            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(useExternalDecoration ? Color.clear : Color.white)

@@ -213,6 +213,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         )
     }
 
+    /// Sets a custom bottom inset for the text content (used by EditorOverlay to leave space for footer)
+    func setBottomInset(_ bottomInset: CGFloat) {
+        guard textContainerInset.bottom != bottomInset else { return }
+        textContainerInset = UIEdgeInsets(
+            top: textContainerInset.top,
+            left: textContainerInset.left,
+            bottom: bottomInset,
+            right: textContainerInset.right
+        )
+    }
+
     /// Helper to insert an image block at the current cursor position.
     /// Instead of using an attachment (which would affect caret size), we insert
     /// a marker character and overlay `ImageComponent` as a subview.
