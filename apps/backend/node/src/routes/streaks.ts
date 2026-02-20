@@ -25,29 +25,28 @@ router.get('/', async (req: AuthRequest, res) => {
     let streaksData = await StreaksModel.getStreaksData(userId);
     console.log(`[GET /api/streaks] Found streaks: current=${streaksData?.currentStreak}, total=${streaksData?.totalDaysWithEntries}, lastEntry=${streaksData?.lastEntryDate}`);
     
-    // Check if data seems stale (last entry date is old but we have recent analyzed entries)
-    // This helps catch cases where streak calculation got out of sync
-    const { DiaryEntryModel } = await import('../models/DiaryEntry');
+    // Check if streak data needs recalculation
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const recentEntries = await DiaryEntryModel.listAnalyzedByDateRange(userId, yesterday, today);
-    
-    const hasRecentEntries = recentEntries.length > 0;
-    const lastEntryIsRecent = streaksData?.lastEntryDate && 
+
+    const lastEntryIsRecent = streaksData?.lastEntryDate &&
       (streaksData.lastEntryDate === today || streaksData.lastEntryDate === yesterday);
-    
-    console.log(`[GET /api/streaks] Recent entries check: hasRecent=${hasRecentEntries}, lastIsRecent=${lastEntryIsRecent}, recentCount=${recentEntries.length}`);
-    
-    // If we have recent analyzed entries but streak data is missing or stale, recalculate
-    const dataIsStale = hasRecentEntries && !lastEntryIsRecent;
-    
-    // If no streaks data exists OR data seems stale, initialize and recalculate
-    if (!streaksData || (streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0) || dataIsStale) {
-      if (dataIsStale) {
-        console.log(`[GET /api/streaks] Streak data is stale (have recent entries but last entry date is ${streaksData?.lastEntryDate}), recalculating`);
-      } else {
-        console.log(`[GET /api/streaks] No streak data found, initializing and recalculating for user=${userId}`);
-      }
+
+    // Streak has expired: last entry is older than yesterday but currentStreak still > 0
+    const streakExpired = streaksData && streaksData.currentStreak > 0 && !lastEntryIsRecent;
+
+    // New entries the DB doesn't know about yet
+    const { DiaryEntryModel } = await import('../models/DiaryEntry');
+    const recentEntries = await DiaryEntryModel.listAnalyzedByDateRange(userId, yesterday, today);
+    const hasRecentEntries = recentEntries.length > 0;
+    const outOfSync = hasRecentEntries && !lastEntryIsRecent;
+
+    const needsRecalc = streakExpired || outOfSync;
+    console.log(`[GET /api/streaks] Staleness check: lastEntryIsRecent=${lastEntryIsRecent}, streakExpired=${streakExpired}, outOfSync=${outOfSync}`);
+
+    // If no streaks data exists OR data needs recalculation, recalculate
+    if (!streaksData || (streaksData.currentStreak === 0 && streaksData.totalDaysWithEntries === 0) || needsRecalc) {
+      console.log(`[GET /api/streaks] Recalculating streaks for user=${userId} (expired=${streakExpired}, outOfSync=${outOfSync})`);
       await StreakCalculator.initializeUserStreaks(userId);
       await StreakCalculator.recalculateAllStreaks(userId);
       streaksData = await StreaksModel.getStreaksData(userId);
