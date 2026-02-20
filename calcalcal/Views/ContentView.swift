@@ -2,7 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var appState = AppState()
-    
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         Group {
             if appState.isAuthenticated {
@@ -38,6 +39,13 @@ struct ContentView: View {
             if !isAuthenticated {
                 print("[ContentView] User logged out, clearing session data")
                 APIClient.shared.clearSession()
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                Task {
+                    await appState.refreshStreaks()
+                }
             }
         }
     }

@@ -70,13 +70,14 @@ final class DiaryTabViewModel: ObservableObject {
             let key = dayKey(for: date)
             let state = dayEntryStates[key]
             
-            // Check if date is in streak range [streakStart, today]
+            // Check if date is in streak range AND has actual content
+            let hasEntry = !(state?.isPlaceholder ?? true)
             var isInStreak = false
-            if let start = streakStart {
+            if let start = streakStart, hasEntry {
                 let dayStart = calendar.startOfDay(for: date)
                 let streakDayStart = calendar.startOfDay(for: start)
                 let today = calendar.startOfDay(for: Date())
-                
+
                 isInStreak = dayStart >= streakDayStart && dayStart <= today
             }
             

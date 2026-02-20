@@ -160,14 +160,14 @@ describe('Streaks Functionality', () => {
       const fourDaysAgo = new Date(today);
       fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
 
-      await DiaryEntryModel.upsert(testUserId, fourDaysAgo.toISOString().split('T')[0], 'Healthy eating day 1');
+      await DiaryEntryModel.upsert(testUserId, fourDaysAgo.toISOString().split('T')[0], 'Healthy eating day one with oatmeal');
       await markEntryAsAnalyzed(testUserId, fourDaysAgo.toISOString().split('T')[0]);
-      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Healthy eating day 2');
+      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Healthy eating day two with chicken');
       await markEntryAsAnalyzed(testUserId, threeDaysAgo.toISOString().split('T')[0]);
       // Skip dayBeforeYesterday (break)
-      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Back on track day 1');
+      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Back on track with a big salad');
       await markEntryAsAnalyzed(testUserId, yesterday.toISOString().split('T')[0]);
-      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Back on track day 2');
+      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Back on track with grilled salmon');
       await markEntryAsAnalyzed(testUserId, today.toISOString().split('T')[0]);
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
@@ -187,13 +187,13 @@ describe('Streaks Functionality', () => {
       const threeDaysAgo = new Date(today);
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Entry 1');
+      await DiaryEntryModel.upsert(testUserId, threeDaysAgo.toISOString().split('T')[0], 'Had oatmeal and fruit for breakfast');
       await markEntryAsAnalyzed(testUserId, threeDaysAgo.toISOString().split('T')[0]);
-      await DiaryEntryModel.upsert(testUserId, twoDaysAgo.toISOString().split('T')[0], 'Entry 2');
+      await DiaryEntryModel.upsert(testUserId, twoDaysAgo.toISOString().split('T')[0], 'Grilled chicken salad for lunch');
       await markEntryAsAnalyzed(testUserId, twoDaysAgo.toISOString().split('T')[0]);
-      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Entry 3 - not analyzed');
+      await DiaryEntryModel.upsert(testUserId, yesterday.toISOString().split('T')[0], 'Pasta with marinara sauce - not analyzed');
       // Skip marking as analyzed
-      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Entry 4');
+      await DiaryEntryModel.upsert(testUserId, today.toISOString().split('T')[0], 'Salmon with rice and vegetables');
       await markEntryAsAnalyzed(testUserId, today.toISOString().split('T')[0]);
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);
@@ -211,7 +211,7 @@ describe('Streaks Functionality', () => {
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
 
-        await DiaryEntryModel.upsert(testUserId, dateStr, `Day ${3-i}`);
+        await DiaryEntryModel.upsert(testUserId, dateStr, `Healthy eating day ${3-i}. Had salad and grilled chicken.`);
         await markEntryAsAnalyzed(testUserId, dateStr);
       }
 
@@ -249,7 +249,7 @@ describe('Streaks Functionality', () => {
       yesterday.setDate(yesterday.getDate() - 1);
       const dateStr = yesterday.toISOString().split('T')[0];
 
-      await DiaryEntryModel.upsert(testUserId, dateStr, 'Backfilled: had salad.');
+      await DiaryEntryModel.upsert(testUserId, dateStr, 'Backfilled entry: had a big salad for lunch and dinner');
       await markEntryAsAnalyzedOnly(testUserId, dateStr);
 
       const streaks = await StreakCalculator.calculateUserStreaks(testUserId);

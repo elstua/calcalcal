@@ -291,10 +291,10 @@ extension EditorOverlay {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// Variable blur background for the footer, extending over the bottom safe area.
-    /// Inverted from the header: strongest at top (where content scrolls from), clear at bottom.
+    /// Variable blur background for the footer.
+    /// Uses a fixed height so it doesn't expand when the keyboard opens.
     private func footerBlurBackground(safeAreaBottom: CGFloat) -> some View {
-        let blurHeight = safeAreaBottom + 72
+        let blurHeight: CGFloat = 72
 
         return VStack(spacing: 0) {
             Spacer()
@@ -302,18 +302,21 @@ extension EditorOverlay {
                 .frame(height: blurHeight)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .ignoresSafeArea(.container, edges: .bottom)
+        .allowsHitTesting(false)
     }
 
     /// Footer content — gallery thumbnail button and animated calorie number.
     private func stickyFooterContent() -> some View {
-        EditorFooterView(
-            blocks: localEntry.blocks,
-            remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
-            scrollOffset: headerScrollOffsetY,
-            onAddImage: { showImagePicker = true }
-        )
-        .padding(.bottom, DSSpacing.xs)
+        VStack(spacing: 0) {
+            Spacer()
+            EditorFooterView(
+                blocks: localEntry.blocks,
+                remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
+                scrollOffset: headerScrollOffsetY,
+                onAddImage: { showImagePicker = true }
+            )
+            .padding(.bottom, DSSpacing.xs)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 

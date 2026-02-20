@@ -107,9 +107,19 @@ export class StreakCalculator {
     });
     console.log(`[StreakCalculator] After retrospective filter: ${nonRetrospective.length} entries`);
 
+    // Filter out entries without meaningful content (empty, placeholder, too short)
+    const meaningful = nonRetrospective.filter((e) => {
+      const ok = StreakCalculator.hasMeaningfulContent(e.content || '', e.blocks || []);
+      if (!ok) {
+        console.log(`[StreakCalculator] Excluding non-meaningful: date=${entryDateStr(e)} content="${(e.content || '').substring(0, 30)}"`);
+      }
+      return ok;
+    });
+    console.log(`[StreakCalculator] After meaningful content filter: ${meaningful.length} entries`);
+
     // Unique dates from filtered list, deduplicated and sorted
     const uniqueDateStrings = Array.from(
-      new Set(nonRetrospective.map(entryDateStr))
+      new Set(meaningful.map(entryDateStr))
     ).sort();
 
     for (let i = 0; i < uniqueDateStrings.length; i++) {
@@ -142,9 +152,11 @@ export class StreakCalculator {
 
       if (currentStreak > longestStreak) {
         longestStreak = currentStreak;
-        streakStartDate = currentStreakStart;
       }
     }
+
+    // streakStartDate should always reflect the current streak's start, not the longest
+    streakStartDate = currentStreakStart;
 
     // logic to reset current streak if the gap is too large relative to TODAY
     // If the last entry was yesterday or today, the streak is alive.

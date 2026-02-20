@@ -257,21 +257,33 @@ struct DiaryTabView: View {
         let viewId = "\(entry.stableViewId)_\(contentHash)"
 
         return VStack(spacing: 0) {
-            EntryCard(
-                entry: entry,
-                height: cardHeight,
-                cornerRadius: 24,
-                showShadow: true,
-                useExternalDecoration: false,
-                onAddImage: nil,
-                onTap: isActive ? {
-                    presentOverlay(for: entry)
-                } : nil,
-                imageMap: [:],
-                isEditable: false,
-                shouldBecomeFirstResponder: .constant(false),
-                forceExpanded: false
-            )
+            ZStack(alignment: .bottom) {
+                EntryCard(
+                    entry: entry,
+                    height: cardHeight,
+                    cornerRadius: 24,
+                    showShadow: true,
+                    useExternalDecoration: false,
+                    onAddImage: nil,
+                    onTap: isActive ? {
+                        presentOverlay(for: entry)
+                    } : nil,
+                    imageMap: [:],
+                    isEditable: false,
+                    shouldBecomeFirstResponder: .constant(false),
+                    forceExpanded: false
+                )
+
+                // Same footer as editor, always in compact mode
+                EditorFooterView(
+                    blocks: entry.blocks,
+                    remoteTotalCalories: entry.totalCalories,
+                    scrollOffset: 100, // Always compact
+                    onAddImage: {}
+                )
+                .padding(.bottom, DSSpacing.sm)
+                .allowsHitTesting(false)
+            }
             .padding(.horizontal, 8)
             .id(viewId)  // Content-aware ID forces re-render when blocks change
             .zoomTransitionSource(id: entry.id, namespace: editorNamespace)
