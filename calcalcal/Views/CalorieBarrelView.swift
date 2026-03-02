@@ -1,73 +1,69 @@
 import SwiftUI
 
-/// A barrel/slot-machine style animated number display that animates each digit independently.
-/// Digits that change roll up or down individually with staggered timing for a natural look.
+/// Barrel-style animated number display combining vertical slide with blur,
+/// like native iOS picker/clock animations. Each changed digit rolls through
+/// with motion blur while unchanged digits stay static.
 struct CalorieBarrelView: View {
     let value: Int?
     let font: Font
     let color: Color
 
     @State private var displayedDigits: [Int] = []
-    @State private var previousDigits: [Int] = []
-    @State private var digitAnimating: [Bool] = []
-    @State private var digitOffsets: [CGFloat] = []
-    @State private var animationTask: Task<Void, Never>? = nil
+    @State private var previousDigits: [Int?] = []
+    @State private var animationProgress: [CGFloat] = [] // 0 = old visible, 1 = new visible
     @State private var isIncreasing: Bool = true
+    @State private var animationTask: Task<Void, Never>? = nil
 
     private let slideHeight: CGFloat = 52
-    private let baseDuration: Double = 0.3
+    private let baseDuration: Double = 0.35
+    private let maxBlur: CGFloat = 6
 
     var body: some View {
         HStack(spacing: 0) {
             if displayedDigits.isEmpty {
-                singleDigitView(digit: nil, previous: nil, isAnimating: false, offset: 0)
+                Text("—")
+                    .font(font)
+                    .foregroundColor(color)
             } else {
                 ForEach(Array(displayedDigits.enumerated()), id: \.offset) { index, digit in
-                    let prev = index < previousDigits.count ? previousDigits[index] : nil
-                    let animating = index < digitAnimating.count ? digitAnimating[index] : false
-                    let offset = index < digitOffsets.count ? digitOffsets[index] : 0
+                    let prev: Int? = index < previousDigits.count ? previousDigits[index] : nil
+                    let progress: CGFloat = index < animationProgress.count ? animationProgress[index] : 1.0
 
-                    singleDigitView(
-                        digit: digit,
-                        previous: prev,
-                        isAnimating: animating,
-                        offset: offset
-                    )
+                    singleDigitView(digit: digit, previous: prev, progress: progress)
                 }
             }
         }
         .frame(height: slideHeight)
         .clipped()
         .onChange(of: value) { _, newValue in
-            triggerPerDigitAnimation(to: newValue)
+            triggerAnimation(to: newValue)
         }
         .onAppear {
             displayedDigits = digitsFrom(value)
+            animationProgress = Array(repeating: 1.0, count: displayedDigits.count)
         }
     }
 
-    private func singleDigitView(digit: Int?, previous: Int?, isAnimating: Bool, offset: CGFloat) -> some View {
+    /// Single digit cell — slides + blurs old digit out, slides + blurs new digit in.
+    private func singleDigitView(digit: Int, previous: Int?, progress: CGFloat) -> some View {
         let direction: CGFloat = isIncreasing ? -1 : 1
+        // Blur peaks in the middle of the transition (bell curve)
+        let blurAmount = maxBlur * sin(progress * .pi)
 
         return ZStack {
-            if isAnimating, let prev = previous {
-                // Old digit — slides out
+            // Old digit — slides away + blurs
+            if let prev = previous, progress < 1.0 {
                 digitText(prev)
-                    .offset(y: offset * direction)
-                    .opacity(1.0 - abs(offset / slideHeight))
+                    .offset(y: progress * slideHeight * direction)
+                    .blur(radius: blurAmount)
+                    .opacity(Double(1.0 - progress))
             }
 
-            if let digit = digit {
-                // New digit — slides in during animation, static otherwise
-                digitText(digit)
-                    .offset(y: isAnimating ? (offset - slideHeight) * direction : 0)
-                    .opacity(isAnimating ? abs(offset / slideHeight) : 1.0)
-            } else {
-                // Placeholder
-                Text("—")
-                    .font(font)
-                    .foregroundColor(color)
-            }
+            // New digit — slides in from opposite side + blurs
+            digitText(digit)
+                .offset(y: progress < 1.0 ? (progress - 1.0) * slideHeight * direction : 0)
+                .blur(radius: progress < 1.0 ? blurAmount : 0)
+                .opacity(progress < 1.0 ? Double(progress) : 1.0)
         }
         .frame(height: slideHeight)
         .clipped()
@@ -86,72 +82,65 @@ struct CalorieBarrelView: View {
         return String(value).compactMap { $0.wholeNumberValue }
     }
 
-    private func triggerPerDigitAnimation(to newValue: Int?) {
+    private func triggerAnimation(to newValue: Int?) {
         animationTask?.cancel()
-
-        // Snap any in-flight animations
-        for i in digitAnimating.indices {
-            digitAnimating[i] = false
-            digitOffsets[i] = 0
-        }
 
         let oldDigits = displayedDigits
         let newDigits = digitsFrom(newValue)
 
-        let oldVal = value.flatMap { _ in displayedDigits.isEmpty ? nil : Int(displayedDigits.map { "\($0)" }.joined()) } ?? 0
+        // Determine direction
+        let oldVal = oldDigits.isEmpty ? 0 : Int(oldDigits.map { "\($0)" }.joined()) ?? 0
         let newVal = newValue ?? 0
         isIncreasing = newVal >= oldVal
 
-        // Update displayed digits immediately (the animation will handle the visual transition)
+        // Update displayed digits
         displayedDigits = newDigits
-        previousDigits = oldDigits
 
-        // Pad previous digits to match new length for per-digit animation
-        let paddedPrevious = Array(repeating: Optional<Int>.none, count: max(0, newDigits.count - oldDigits.count))
-            + oldDigits.map { Optional($0) }
+        // Pad old digits to align with new (right-aligned)
+        let lengthDiff = newDigits.count - oldDigits.count
+        let paddedOld: [Int?]
+        if lengthDiff > 0 {
+            paddedOld = Array(repeating: nil as Int?, count: lengthDiff) + oldDigits.map { Optional($0) }
+        } else if lengthDiff < 0 {
+            paddedOld = Array(oldDigits.suffix(newDigits.count)).map { Optional($0) }
+        } else {
+            paddedOld = oldDigits.map { Optional($0) }
+        }
+        previousDigits = paddedOld
 
-        // Set up animation arrays
-        digitAnimating = Array(repeating: false, count: newDigits.count)
-        digitOffsets = Array(repeating: CGFloat(0), count: newDigits.count)
-
-        // Pad previousDigits to match displayed count
-        previousDigits = paddedPrevious.map { $0 ?? -1 }.suffix(newDigits.count).map { $0 }
-
-        // Determine which digits changed and animate them with stagger
+        // Find which digits changed
         var changedIndices: [Int] = []
         for i in 0..<newDigits.count {
-            let oldIndex = i - (newDigits.count - oldDigits.count)
-            let oldDigit = oldIndex >= 0 && oldIndex < oldDigits.count ? oldDigits[oldIndex] : -1
-            if oldDigit != newDigits[i] || oldDigits.count != newDigits.count {
+            let old = i < paddedOld.count ? paddedOld[i] : nil
+            if old != newDigits[i] {
                 changedIndices.append(i)
             }
         }
 
-        // Animate changed digits with stagger (rightmost first for a natural barrel feel)
+        // Reset progress for changed digits
+        animationProgress = (0..<newDigits.count).map { i in
+            changedIndices.contains(i) ? 0.0 : 1.0
+        }
+
+        // Staggered animation — rightmost first
         let staggerDelay: Double = 0.04
         for (staggerIndex, digitIndex) in changedIndices.reversed().enumerated() {
             let delay = Double(staggerIndex) * staggerDelay
-            digitAnimating[digitIndex] = true
-
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                withAnimation(.easeOut(duration: baseDuration)) {
-                    if digitIndex < digitOffsets.count {
-                        digitOffsets[digitIndex] = slideHeight
+                withAnimation(.easeInOut(duration: baseDuration)) {
+                    if digitIndex < animationProgress.count {
+                        animationProgress[digitIndex] = 1.0
                     }
                 }
             }
         }
 
-        // Clean up after all animations complete
+        // Clean up
         let totalDuration = baseDuration + Double(changedIndices.count) * staggerDelay + 0.05
         animationTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(totalDuration * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            for i in digitAnimating.indices {
-                digitAnimating[i] = false
-                digitOffsets[i] = 0
-            }
-            previousDigits = []
+            previousDigits = Array(repeating: nil, count: displayedDigits.count)
         }
     }
 }

@@ -9,53 +9,53 @@ import Foundation
 /// 3. We want to show empty fields for new users, pre-filled for returning users
 struct OnboardingData: Codable, Equatable {
     // MARK: - Health Data (from HealthData step)
-    
+
     /// User's current weight in kilograms
     var weightKg: Double?
-    
+
     /// User's height in centimeters
     var heightCm: Double?
-    
+
     /// User's age in years
     var age: Int?
-    
+
     /// User's biological gender for TDEE calculation
     /// Values: "male", "female", "other"
     var gender: String?
-    
+
     // MARK: - Activity Level (from ActivityLevel step)
-    
+
     /// User's activity level for calorie calculation
-    /// Values: "small", "moderate", "active"
+    /// Values: "sedentary", "light", "moderate", "active", "very_active"
     var activityLevel: String?
-    
+
     // MARK: - Goals (from Goals step)
-    
+
     /// User's target weight in kilograms
     var targetWeightKg: Double?
-    
+
     /// Calculated daily calorie goal based on health data
     /// This is auto-calculated but can be manually overridden
     var calorieGoal: Int?
-    
+
     // MARK: - Unit Preferences
-    
+
     /// Preferred weight unit: "kg" or "lbs"
     var weightUnit: String?
-    
+
     /// Preferred height unit: "cm" or "in"
     var heightUnit: String?
-    
+
     // MARK: - HealthKit (for future iterations)
-    
+
     /// Whether user has authorized HealthKit access
     var healthKitAuthorized: Bool?
-    
+
     // MARK: - Initialization
-    
+
     /// Create empty OnboardingData for new users
     init() {}
-    
+
     /// Create OnboardingData with all fields (used for testing/debugging)
     init(
         weightKg: Double? = nil,
@@ -80,41 +80,42 @@ struct OnboardingData: Codable, Equatable {
         self.heightUnit = heightUnit
         self.healthKitAuthorized = healthKitAuthorized
     }
-    
+
     // MARK: - Computed Properties
-    
+
     /// Check if we have enough data to calculate TDEE
     var hasMinimumHealthData: Bool {
         weightKg != nil && heightCm != nil && age != nil && gender != nil
     }
-    
+
     /// Check if all health-related fields are filled
     var hasCompleteHealthData: Bool {
         hasMinimumHealthData && activityLevel != nil
     }
-    
+
     /// Weight converted to pounds (for display when using imperial units)
     var weightLbs: Double? {
         guard let kg = weightKg else { return nil }
         return kg * 2.20462
     }
-    
+
     /// Height converted to inches (for display when using imperial units)
     var heightInches: Double? {
         guard let cm = heightCm else { return nil }
         return cm / 2.54
     }
-    
+
     /// Target weight converted to pounds
     var targetWeightLbs: Double? {
         guard let kg = targetWeightKg else { return nil }
         return kg * 2.20462
     }
-    
+
     // MARK: - Helper Methods
-    
+
     /// Calculate estimated daily calorie goal using Mifflin-St Jeor equation
-    /// This matches the backend calculation for consistency
+    /// with Legion-adjusted activity multipliers and goal-based deficit/surplus.
+    /// This matches the backend calculation for consistency.
     func calculateCalorieGoal() -> Int? {
         guard let weight = weightKg,
               let height = heightCm,
@@ -122,31 +123,56 @@ struct OnboardingData: Codable, Equatable {
               let userGender = gender else {
             return nil
         }
-        
+
         // Mifflin-St Jeor Equation for BMR
-        var bmr: Double
+        let bmr: Double
         if userGender == "male" {
             bmr = 10 * weight + 6.25 * height - 5 * Double(userAge) + 5
-        } else {
+        } else if userGender == "female" {
             bmr = 10 * weight + 6.25 * height - 5 * Double(userAge) - 161
+        } else {
+            // "other" — average of male and female
+            let maleBMR = 10 * weight + 6.25 * height - 5 * Double(userAge) + 5
+            let femaleBMR = 10 * weight + 6.25 * height - 5 * Double(userAge) - 161
+            bmr = (maleBMR + femaleBMR) / 2
         }
-        
-        // Activity multiplier
+
+        // Activity multiplier (Legion-adjusted)
         let multiplier: Double
-        switch activityLevel {
-        case "small":
-            multiplier = 1.2
-        case "moderate":
-            multiplier = 1.55
-        case "active":
-            multiplier = 1.725
-        default:
-            multiplier = 1.375 // Default to lightly active
+        if let level = ActivityLevel(rawValue: activityLevel ?? "") {
+            multiplier = level.multiplier
+        } else {
+            multiplier = 1.35 // Default to light
         }
-        
-        return Int(bmr * multiplier)
+
+        let tdee = bmr * multiplier
+
+        // Goal-based adjustment (deficit/surplus)
+        var goalMultiplier = 1.0
+        if let target = targetWeightKg {
+            if target < weight {
+                goalMultiplier = 0.80 // -20% for weight loss
+            } else if target > weight {
+                goalMultiplier = 1.10 // +10% for weight gain
+            }
+        }
+
+        var goal = Int(tdee * goalMultiplier)
+
+        // Safety floor
+        let minCalories: Int
+        if userGender == "female" {
+            minCalories = 1200
+        } else if userGender == "male" {
+            minCalories = 1500
+        } else {
+            minCalories = 1350
+        }
+        goal = max(goal, minCalories)
+
+        return goal
     }
-    
+
     /// Merge data from another OnboardingData, preferring non-nil values from the other
     /// Used when syncing with backend data
     mutating func merge(with other: OnboardingData) {
@@ -165,42 +191,71 @@ struct OnboardingData: Codable, Equatable {
 
 // MARK: - Activity Level Enum
 
-/// Strongly-typed activity levels for better type safety
+/// Strongly-typed activity levels with Legion-adjusted multipliers.
+/// These multipliers are lower than classic Harris-Benedict values to
+/// better reflect real-world energy expenditure.
 enum ActivityLevel: String, Codable, CaseIterable {
-    case small = "small"
+    case sedentary = "sedentary"
+    case light = "light"
     case moderate = "moderate"
     case active = "active"
-    
+    case veryActive = "very_active"
+
+    /// Handle backward compatibility with old "small" value
+    init?(rawValue: String) {
+        switch rawValue {
+        case "sedentary": self = .sedentary
+        case "light": self = .light
+        case "moderate": self = .moderate
+        case "active": self = .active
+        case "very_active": self = .veryActive
+        case "small": self = .sedentary // Legacy mapping
+        default: return nil
+        }
+    }
+
     var displayName: String {
         switch self {
-        case .small:
-            return "Small"
+        case .sedentary:
+            return "Sedentary"
+        case .light:
+            return "Light"
         case .moderate:
             return "Moderate"
         case .active:
             return "Active"
+        case .veryActive:
+            return "Very Active"
         }
     }
-    
+
     var description: String {
         switch self {
-        case .small:
+        case .sedentary:
             return "Little or no exercise, desk job"
-        case .moderate:
+        case .light:
             return "Light exercise 1-3 days/week"
+        case .moderate:
+            return "Moderate exercise 3-5 days/week"
         case .active:
             return "Hard exercise 6-7 days/week"
+        case .veryActive:
+            return "Intense exercise or physical job"
         }
     }
-    
+
     var multiplier: Double {
         switch self {
-        case .small:
-            return 1.2
+        case .sedentary:
+            return 1.15
+        case .light:
+            return 1.35
         case .moderate:
-            return 1.55
+            return 1.50
         case .active:
-            return 1.725
+            return 1.60
+        case .veryActive:
+            return 1.80
         }
     }
 }
@@ -212,7 +267,7 @@ enum Gender: String, Codable, CaseIterable {
     case male = "male"
     case female = "female"
     case other = "other"
-    
+
     var displayName: String {
         switch self {
         case .male:
@@ -224,4 +279,3 @@ enum Gender: String, Codable, CaseIterable {
         }
     }
 }
-

@@ -1,11 +1,11 @@
 import SwiftUI
 
 /// Activity Level selection screen.
-/// User picks from three activity levels that affect calorie calculations.
+/// User picks from five activity levels that affect calorie calculations.
 struct ActivityLevelStepView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     @State private var selectedLevel: ActivityLevel?
-    
+
     var body: some View {
         VStack(spacing: 32) {
             // Header
@@ -14,7 +14,7 @@ struct ActivityLevelStepView: View {
                     .font(.title)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
-                
+
                 Text("This helps us calculate your daily calorie needs.")
                     .font(.body)
                     .foregroundColor(.secondary)
@@ -22,17 +22,17 @@ struct ActivityLevelStepView: View {
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)
-            
-            // Activity level options
-            VStack(spacing: 16) {
-                ForEach(ActivityLevel.allCases, id: \.self) { level in
-                    activityCard(level)
+
+            // Activity level options (scrollable for 5 cards)
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(ActivityLevel.allCases, id: \.self) { level in
+                        activityCard(level)
+                    }
                 }
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
-            
-            Spacer()
-            
+
             // Navigation
             VStack(spacing: 12) {
                 Button(action: {
@@ -55,7 +55,7 @@ struct ActivityLevelStepView: View {
                         .cornerRadius(12)
                 }
                 .disabled(selectedLevel == nil)
-                
+
                 HStack {
                     Button(action: {
                         withAnimation {
@@ -66,9 +66,9 @@ struct ActivityLevelStepView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button(action: {
                         withAnimation {
                             _ = coordinator.advance(.skip)
@@ -90,12 +90,12 @@ struct ActivityLevelStepView: View {
             }
         }
     }
-    
+
     // MARK: - Activity Card
-    
+
     private func activityCard(_ level: ActivityLevel) -> some View {
         let isSelected = selectedLevel == level
-        
+
         return Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedLevel = level
@@ -106,69 +106,78 @@ struct ActivityLevelStepView: View {
                 ZStack {
                     Circle()
                         .fill(activityColor(level).opacity(isSelected ? 0.2 : 0.1))
-                        .frame(width: 56, height: 56)
-                    
+                        .frame(width: 48, height: 48)
+
                     Image(systemName: activityIcon(level))
-                        .font(.system(size: 24))
+                        .font(.system(size: 20))
                         .foregroundColor(activityColor(level))
                 }
-                
+
                 // Text
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(level.displayName)
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     Text(level.description)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                 }
-                
+
                 Spacer()
-                
+
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
+                        .font(.system(size: 22))
                         .foregroundColor(.accentColor)
                 }
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 14)
                     .fill(Color(.systemBackground))
                     .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.05), radius: isSelected ? 8 : 4, x: 0, y: 2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     // MARK: - Helpers
-    
+
     private func activityIcon(_ level: ActivityLevel) -> String {
         switch level {
-        case .small:
+        case .sedentary:
             return "figure.stand"
-        case .moderate:
+        case .light:
             return "figure.walk"
+        case .moderate:
+            return "figure.walk.motion"
         case .active:
             return "figure.run"
+        case .veryActive:
+            return "figure.highintensity.intervaltraining"
         }
     }
-    
+
     private func activityColor(_ level: ActivityLevel) -> Color {
         switch level {
-        case .small:
+        case .sedentary:
+            return .gray
+        case .light:
             return .blue
         case .moderate:
             return .orange
         case .active:
             return .green
+        case .veryActive:
+            return .red
         }
     }
 }
@@ -182,8 +191,3 @@ struct ActivityLevelStepView_Previews: PreviewProvider {
     }
 }
 #endif
-
-
-
-
-

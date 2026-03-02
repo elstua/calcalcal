@@ -31,10 +31,12 @@ struct EditorOverlay: View {
     @State private var headerScrollOffsetY: CGFloat = 0  // Drives progressive blur (0 = none, ~60+ = full)
     @State private var pendingAnimationSourceRect: CGRect? = nil
     @State private var pendingAnimationImage: UIImage? = nil
+    @State private var showNutritionPopup: Bool = false
 
     // Autosave service handles all save/load operations
     @StateObject private var autosaveService: EditorAutosaveService
     
+    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
     init(entry: Binding<DiaryEntry>,
@@ -68,6 +70,21 @@ struct EditorOverlay: View {
                     .ignoresSafeArea(.all)
             )
             .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+            .overlay {
+                if showNutritionPopup {
+                    NutritionPopupContainer(
+                        nutrition: localEntry.blocks.resolvedNutritionTotal(),
+                        totalCalories: localEntry.blocks.resolvedCalorieTotal() ?? autosaveService.liveTotalCalories ?? localEntry.totalCalories,
+                        calorieGoal: appState.currentUser?.dailyCalorieGoal,
+                        proteinGoal: appState.currentUser?.dailyProteinGoal,
+                        fatGoal: appState.currentUser?.dailyFatGoal,
+                        carbGoal: appState.currentUser?.dailyCarbGoal,
+                        isPresented: showNutritionPopup,
+                        onClose: { showNutritionPopup = false }
+                    )
+                    .transition(.opacity)
+                }
+            }
     }
     
     private var cardContent: some View {
@@ -313,7 +330,9 @@ extension EditorOverlay {
                 blocks: localEntry.blocks,
                 remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
                 scrollOffset: headerScrollOffsetY,
-                onAddImage: { showImagePicker = true }
+                calorieGoal: appState.currentUser?.dailyCalorieGoal,
+                onAddImage: { showImagePicker = true },
+                onCalorieTap: { showNutritionPopup = true }
             )
             .padding(.bottom, DSSpacing.xs)
         }

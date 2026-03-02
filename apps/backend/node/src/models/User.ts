@@ -17,7 +17,7 @@ export interface User {
   weight_kg?: number | null;
   height_cm?: number | null;
   age?: number | null;
-  activity_level?: 'small' | 'moderate' | 'active' | null;
+  activity_level?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | 'small' | null;
   target_weight_kg?: number | null;
   gender?: 'male' | 'female' | 'other' | null;
   weight_unit?: 'kg' | 'lbs';
@@ -159,6 +159,7 @@ export class UserModel {
       'gender',
       'weight_unit',
       'height_unit',
+      'target_weight_kg',
     ];
 
     // Check if any health fields are being updated
@@ -180,6 +181,9 @@ export class UserModel {
         gender: updates.gender !== undefined ? updates.gender : existing.gender ?? undefined,
         weight_unit: updates.weight_unit || existing.weight_unit || 'kg',
         height_unit: updates.height_unit || existing.height_unit || 'cm',
+        target_weight_kg: updates.target_weight_kg !== undefined
+          ? updates.target_weight_kg
+          : existing.target_weight_kg ?? undefined,
       };
 
       const calculatedGoal = calculateCalorieGoal(healthData);

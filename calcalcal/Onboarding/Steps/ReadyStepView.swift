@@ -146,12 +146,16 @@ struct ReadyStepView: View {
     
     private func activityIcon(_ level: ActivityLevel) -> String {
         switch level {
-        case .small:
+        case .sedentary:
             return "figure.stand"
-        case .moderate:
+        case .light:
             return "figure.walk"
+        case .moderate:
+            return "figure.walk.motion"
         case .active:
             return "figure.run"
+        case .veryActive:
+            return "figure.highintensity.intervaltraining"
         }
     }
 }

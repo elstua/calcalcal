@@ -313,7 +313,7 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
 
     // Validate enum values if provided
     if (updates.activity_level !== undefined) {
-      const validActivityLevels = ['small', 'moderate', 'active'];
+      const validActivityLevels = ['sedentary', 'light', 'moderate', 'active', 'very_active', 'small'];
       if (!validActivityLevels.includes(updates.activity_level)) {
         return res.status(400).json({
           error: 'Invalid activity_level',

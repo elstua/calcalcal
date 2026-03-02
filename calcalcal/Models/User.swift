@@ -26,7 +26,7 @@ struct User: Codable, Identifiable {
     /// User's age in years
     let age: Int?
     
-    /// User's activity level: "small", "moderate", "active"
+    /// User's activity level: "sedentary", "light", "moderate", "active", "very_active"
     let activityLevel: String?
     
     /// User's target weight in kilograms

@@ -66,7 +66,10 @@ struct OnboardingContainerView: View {
             
         case .healthKit:
             HealthKitStepView(coordinator: coordinator)
-            
+
+        case .personalInfo:
+            PersonalInfoStepView(coordinator: coordinator)
+
         case .activityLevel:
             ActivityLevelStepView(coordinator: coordinator)
             

@@ -28,6 +28,9 @@ struct DiaryTabView: View {
     @State private var extendedSwipeDragOffset: CGFloat = 0
     @State private var showAllDaysPreviewCard: Bool = false
     
+    // MARK: - Nutrition Popup State (shown inside the card)
+    @State private var showCardNutritionPopup: Bool = false
+
     // MARK: - Streak Sheet State
     @State private var showStreakSheet: Bool = false
     
@@ -274,15 +277,40 @@ struct DiaryTabView: View {
                     forceExpanded: false
                 )
 
-                // Same footer as editor, always in compact mode
+                // Same footer as editor, full size
                 EditorFooterView(
                     blocks: entry.blocks,
                     remoteTotalCalories: entry.totalCalories,
-                    scrollOffset: 100, // Always compact
-                    onAddImage: {}
+                    scrollOffset: 0,
+                    calorieGoal: appState.currentUser?.dailyCalorieGoal,
+                    onAddImage: {},
+                    onCalorieTap: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            showCardNutritionPopup = true
+                        }
+                    }
                 )
                 .padding(.bottom, DSSpacing.sm)
-                .allowsHitTesting(false)
+            }
+            .overlay {
+                if showCardNutritionPopup && isActive {
+                    NutritionPopupContainer(
+                        nutrition: entry.blocks.resolvedNutritionTotal(),
+                        totalCalories: entry.blocks.resolvedCalorieTotal() ?? entry.totalCalories,
+                        calorieGoal: appState.currentUser?.dailyCalorieGoal,
+                        proteinGoal: appState.currentUser?.dailyProteinGoal,
+                        fatGoal: appState.currentUser?.dailyFatGoal,
+                        carbGoal: appState.currentUser?.dailyCarbGoal,
+                        isPresented: showCardNutritionPopup,
+                        onClose: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                showCardNutritionPopup = false
+                            }
+                        }
+                    )
+                    .transition(.opacity)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                }
             }
             .padding(.horizontal, 8)
             .id(viewId)  // Content-aware ID forces re-render when blocks change
