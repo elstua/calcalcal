@@ -19,9 +19,9 @@ struct AllDaysOverlay: View {
             .overlay(
                 // The actual content - this is what zooms
                 cardContent
-                    .padding(.horizontal, 12)
-                    .padding(.top, 2)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, DSSpacing.smd)
+                    .padding(.top, DSSpacing.xxs)
+                    .padding(.bottom, DSSpacing.sm)
             )
             .ignoresSafeArea(.keyboard)
     }
@@ -31,8 +31,8 @@ struct AllDaysOverlay: View {
             VStack(spacing: 0) {
                 // Drag handle at the top
                 dragHandle
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    .padding(.top, DSSpacing.sm)
+                    .padding(.bottom, DSSpacing.xs)
                 
                 DiaryListView(
                     sharedNamespace: sharedNamespace,
@@ -46,16 +46,16 @@ struct AllDaysOverlay: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(UIColor.systemGroupedBackground))
+            RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous)
+                .fill(DSColors.background)
         )
         .overlay(alignment: .topTrailing) {
             Button(action: { onClose() }) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.secondary)
+                    .font(.dsTitle1)
+                    .foregroundColor(DSColors.textSecondary)
             }
-            .padding(12)
+            .padding(DSSpacing.smd)
         }
         .offset(y: max(0, dragOffset.height))
         .gesture(
@@ -79,7 +79,7 @@ struct AllDaysOverlay: View {
     /// Drag handle view - a small pill that indicates the overlay can be dismissed
     private var dragHandle: some View {
         RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-            .fill(Color.secondary.opacity(0.3))
+            .fill(DSColors.textSecondary.opacity(0.3))
             .frame(width: 36, height: 5)
     }
 }

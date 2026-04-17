@@ -65,7 +65,7 @@ struct EditorOverlay: View {
                 cardContent
             )
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous)
                     .fill(DSColors.backgroundSecondary)
                     .ignoresSafeArea(.all)
             )
@@ -299,24 +299,28 @@ extension EditorOverlay {
             Spacer(minLength: 0)
             Button(action: { dismissEditor() }) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
+                    .font(.dsTitle1)
                     .foregroundColor(DSColors.textSecondary)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 4)  // Position below safe area with small offset
+        .padding(.horizontal, DSSpacing.lg)
+        .padding(.top, DSSpacing.xs)
+
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
     /// Variable blur background for the footer.
-    /// Uses a fixed height so it doesn't expand when the keyboard opens.
+    /// The extra overflow extends behind the keyboard's rounded top corners
+    /// so there is no visible gap between the blur and the keyboard.
     private func footerBlurBackground(safeAreaBottom: CGFloat) -> some View {
-        let blurHeight: CGFloat = 72
+        let blurHeight: CGFloat = 64
+        let overflowBehindKeyboard: CGFloat = 20
 
         return VStack(spacing: 0) {
             Spacer()
-            VariableBlurView(maxBlurRadius: 32, direction: .blurredBottomClearTop, startOffset: 0)
-                .frame(height: blurHeight)
+            VariableBlurView(maxBlurRadius: 24, direction: .blurredBottomClearTop, startOffset: 0)
+                .frame(height: blurHeight + overflowBehindKeyboard)
+                .padding(.bottom, -overflowBehindKeyboard)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .allowsHitTesting(false)

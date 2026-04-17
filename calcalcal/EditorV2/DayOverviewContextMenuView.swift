@@ -6,29 +6,29 @@ struct DayOverviewContextMenuView: View {
     let width: CGFloat
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: DSSpacing.md) {
             // Header: Calories Title (left) - Consumed/Goal (right)
             HStack(alignment: .top) {
                 Text("Calories")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 4) // Align with the number top
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.textSecondary)
+                    .padding(.top, DSSpacing.xs) // Align with the number top
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: DSSpacing.xxs) {
                     Text("\(Int(consumed.calories ?? 0))")
-                        .font(.system(size: 34, weight: .bold, design: .rounded)) // H2-ish size
-                        .foregroundColor(.primary)
+                        .font(.dsDisplay) // H2-ish size
+                        .foregroundColor(DSColors.textPrimary)
                     
                     if let goal = user?.dailyCalorieGoal {
                         Text("/ \(goal) goal")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     } else {
                         Text("No goal set")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.dsCaption)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
@@ -56,11 +56,11 @@ struct DayOverviewContextMenuView: View {
                 )
             }
         }
-        .padding(20)
+        .padding(DSSpacing.mlg)
         .frame(width: width)
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .background(DSColors.surface)
+        .cornerRadius(DSCornerRadius.lg)
+        .shadow(color: DSColors.shadowMedium, radius: 10, x: 0, y: 5)
     }
 }
 
@@ -70,24 +70,24 @@ struct MacroColumn: View {
     let goal: Double?
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: DSSpacing.xs) {
             Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
                 .textCase(.uppercase)
             
             Text("\(Int(value))g")
-                .font(.headline)
+                .font(.dsHeadline)
                 .fontWeight(.semibold)
             
             if let goal = goal {
                 Text("/ \(Int(goal))g")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.textSecondary)
             } else {
                 Text("-")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.textSecondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -114,6 +114,6 @@ struct DayOverviewContextMenuView_Previews: PreviewProvider {
         )
         .previewLayout(.sizeThatFits)
         .padding()
-        .background(Color(.systemGroupedBackground))
+        .background(DSColors.background)
     }
 }

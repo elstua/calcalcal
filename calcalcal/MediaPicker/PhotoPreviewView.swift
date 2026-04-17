@@ -18,20 +18,20 @@ struct PhotoPreviewView: View {
     private let frameHeight: CGFloat = 400
     private let imageWidth: CGFloat = 290
     private let imageHeight: CGFloat = 290
-    private let cornerRadius: CGFloat = 16
-    private let imageCornerRadius: CGFloat = 12
-    private let buttonHeight: CGFloat = 44
-    private let buttonSpacing: CGFloat = 12
+    private let cornerRadius: CGFloat = DSCornerRadius.lg
+    private let imageCornerRadius: CGFloat = DSCornerRadius.md
+    private let buttonHeight: CGFloat = DSSpacing.minTouchTarget
+    private let buttonSpacing: CGFloat = DSSpacing.smd
     
     var body: some View {
         ZStack {
             // Polaroid frame background
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+                .fill(DSColors.surface)
+                .shadow(color: DSColors.shadowHeavy, radius: 8, x: 0, y: 4)
                 .frame(width: frameWidth, height: frameHeight)
             
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Captured image
                 Image(uiImage: image)
                     .resizable()
@@ -43,36 +43,36 @@ struct PhotoPreviewView: View {
                 HStack(spacing: buttonSpacing) {
                     // Retake button
                     Button(action: onRetake) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: DSSpacing.xs) {
                             Image(systemName: "arrow.counterclockwise")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(Font.dsCustom(weight: .semiBold, size: 14))
                             Text("Retake")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(Font.dsCustom(weight: .medium, size: 16))
                         }
-                        .foregroundColor(.primary)
+                        .foregroundColor(DSColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .frame(height: buttonHeight)
-                        .background(Color.gray.opacity(0.12))
-                        .cornerRadius(10)
+                        .background(DSColors.surfaceSecondary)
+                        .cornerRadius(DSCornerRadius.sm)
                     }
                     
                     // Use Photo button
                     Button(action: onUsePhoto) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: DSSpacing.xs) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(Font.dsCustom(weight: .semiBold, size: 14))
                             Text("Use Photo")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(Font.dsCustom(weight: .medium, size: 16))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .frame(height: buttonHeight)
-                        .background(Color.blue)
-                        .cornerRadius(10)
+                        .background(DSColors.primary)
+                        .cornerRadius(DSCornerRadius.sm)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, DSSpacing.md)
+                .padding(.bottom, DSSpacing.sm)
             }
         }
         .frame(width: frameWidth, height: frameHeight)
@@ -85,7 +85,7 @@ struct PhotoPreviewView: View {
 struct PhotoPreviewView_Previews: PreviewProvider {
     static var previews: some View {
         ZStack {
-            Color.gray.opacity(0.3)
+            DSColors.disabled
                 .ignoresSafeArea()
             
             // Create a sample image for preview

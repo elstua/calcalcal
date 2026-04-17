@@ -20,7 +20,7 @@ struct HealthKitStepView: View {
     }
     
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             Spacer()
             
             // HealthKit icon
@@ -30,22 +30,22 @@ struct HealthKitStepView: View {
                     .frame(width: 140, height: 140)
                 
                 Image(systemName: iconName)
-                    .font(.system(size: 60))
+                    .font(Font.dsCustom(weight: .regular, size: 60))
                     .foregroundColor(iconColor)
             }
             
             // Title and description
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Text("Connect Health Data")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text(descriptionText)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, DSSpacing.xl)
             }
             
             // Status indicator
@@ -54,16 +54,16 @@ struct HealthKitStepView: View {
             // Error message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.red)
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.error)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, DSSpacing.xl)
             }
             
             Spacer()
             
             // Buttons
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 // Request permission button
                 Button(action: requestHealthKitPermission) {
                     HStack {
@@ -75,12 +75,12 @@ struct HealthKitStepView: View {
                             Text(buttonText)
                         }
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.textInverted)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(buttonBackgroundColor)
-                    .cornerRadius(12)
+                    .cornerRadius(DSCornerRadius.md)
                 }
                 .disabled(isButtonDisabled)
                 
@@ -91,12 +91,12 @@ struct HealthKitStepView: View {
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
+                        .background(DSColors.primary)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 
                 // Skip and back buttons
@@ -107,8 +107,8 @@ struct HealthKitStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                     
                     Spacer()
@@ -119,13 +119,13 @@ struct HealthKitStepView: View {
                         }
                     }) {
                         Text("Skip for now")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .onAppear {
             checkHealthKitAvailability()
@@ -148,22 +148,22 @@ struct HealthKitStepView: View {
     private var iconColor: Color {
         switch authorizationState {
         case .authorized:
-            return .green
+            return DSColors.success
         case .denied, .unavailable:
-            return .gray
+            return DSColors.disabled
         default:
-            return .red
+            return DSColors.error
         }
     }
     
     private var iconBackgroundColor: Color {
         switch authorizationState {
         case .authorized:
-            return .green
+            return DSColors.success
         case .denied, .unavailable:
-            return .gray
+            return DSColors.disabled
         default:
-            return .red
+            return DSColors.error
         }
     }
     
@@ -209,11 +209,11 @@ struct HealthKitStepView: View {
     private var buttonBackgroundColor: Color {
         switch authorizationState {
         case .authorized:
-            return .green
+            return DSColors.success
         case .denied, .unavailable:
-            return .gray
+            return DSColors.disabled
         default:
-            return .red
+            return DSColors.error
         }
     }
     
@@ -230,40 +230,40 @@ struct HealthKitStepView: View {
     private var statusIndicator: some View {
         switch authorizationState {
         case .authorized:
-            HStack(spacing: 8) {
+            HStack(spacing: DSSpacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(DSColors.success)
                 Text("HealthKit connected")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
             .padding()
-            .background(Color.green.opacity(0.1))
-            .cornerRadius(12)
+            .background(DSColors.success.opacity(0.1))
+            .cornerRadius(DSCornerRadius.md)
             
         case .denied:
-            HStack(spacing: 8) {
+            HStack(spacing: DSSpacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(DSColors.warning)
                 Text("Permission denied")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
             .padding()
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(12)
+            .background(DSColors.warning.opacity(0.1))
+            .cornerRadius(DSCornerRadius.md)
             
         case .unavailable:
-            HStack(spacing: 8) {
+            HStack(spacing: DSSpacing.sm) {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(.gray)
+                    .foregroundColor(DSColors.disabled)
                 Text("HealthKit unavailable")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
             .padding()
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(12)
+            .background(DSColors.surfaceSecondary)
+            .cornerRadius(DSCornerRadius.md)
             
         default:
             EmptyView()

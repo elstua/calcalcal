@@ -56,32 +56,32 @@ struct ProfileView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: DSSpacing.mlg) {
                     // User Info
-                    VStack(spacing: 10) {
+                    VStack(spacing: DSSpacing.sm) {
                         Image(systemName: "person.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(.blue)
+                            .font(Font.dsCustom(weight: .regular, size: 80))
+                            .foregroundColor(DSColors.primary)
                         
                         Text(appState.currentUser?.name ?? "User")
-                            .font(.title2)
+                            .font(.dsTitle2)
                             .fontWeight(.semibold)
                         
                         Text(appState.currentUser?.email ?? "")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                     
                     // Health Data Section
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: DSSpacing.smd) {
                         Text("Health Information")
-                            .font(.headline)
-                            .padding(.bottom, 4)
+                            .font(.dsHeadline)
+                            .padding(.bottom, DSSpacing.xs)
                         
                         // Weight
                         HStack {
                             Text("Weight:")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DSColors.textSecondary)
                             Spacer()
                             if let weightKg = appState.currentUser?.weightKg {
                                 let weightUnit = appState.currentUser?.weightUnit ?? "kg"
@@ -89,14 +89,14 @@ struct ProfileView: View {
                                     .fontWeight(.medium)
                             } else {
                                 Text("Not set")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(DSColors.textSecondary)
                             }
                         }
                         
                         // Height
                         HStack {
                             Text("Height:")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DSColors.textSecondary)
                             Spacer()
                             if let heightCm = appState.currentUser?.heightCm {
                                 let heightUnit = appState.currentUser?.heightUnit ?? "cm"
@@ -104,14 +104,14 @@ struct ProfileView: View {
                                     .fontWeight(.medium)
                             } else {
                                 Text("Not set")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(DSColors.textSecondary)
                             }
                         }
                         
                         // Target Weight (Estimated Weight)
                         HStack {
                             Text("Target Weight:")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DSColors.textSecondary)
                             Spacer()
                             if let targetWeightKg = appState.currentUser?.targetWeightKg {
                                 let weightUnit = appState.currentUser?.weightUnit ?? "kg"
@@ -119,27 +119,27 @@ struct ProfileView: View {
                                     .fontWeight(.medium)
                             } else {
                                 Text("Not set")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(DSColors.textSecondary)
                             }
                         }
                         
                         // Gender
                         HStack {
                             Text("Gender:")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DSColors.textSecondary)
                             Spacer()
                             if let gender = appState.currentUser?.gender {
                                 Text(formatGender(gender))
                                     .fontWeight(.medium)
                             } else {
                                 Text("Not set")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(DSColors.textSecondary)
                             }
                         }
                     }
                     .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
+                    .background(DSColors.surfaceSecondary)
+                    .cornerRadius(DSCornerRadius.md)
                     
                     // Apple Health Section
                     healthKitSection
@@ -155,13 +155,13 @@ struct ProfileView: View {
                     }
                     .buttonStyle(.bordered)
                     
-                    Spacer(minLength: 20)
+                    Spacer(minLength: DSSpacing.mlg)
                     
                     // Sign Out Button
                     Button("Sign Out") {
                         appState.authManager.signOut()
                     }
-                    .foregroundColor(.red)
+                    .foregroundColor(DSColors.error)
                 }
                 .padding()
             }
@@ -177,37 +177,37 @@ struct ProfileView: View {
     
     @ViewBuilder
     private var healthKitSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DSSpacing.smd) {
             HStack {
                 Image(systemName: "heart.fill")
-                    .foregroundColor(.red)
+                    .foregroundColor(DSColors.error)
                 Text("Apple Health")
-                    .font(.headline)
+                    .font(.dsHeadline)
             }
-            .padding(.bottom, 4)
+            .padding(.bottom, DSSpacing.xs)
             
             if !healthKitManager.isAvailable {
                 // HealthKit not available on this device
-                HStack(spacing: 8) {
+                HStack(spacing: DSSpacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(DSColors.warning)
                     Text("HealthKit is not available on this device")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.dsSubheadline)
+                        .foregroundColor(DSColors.textSecondary)
                 }
             } else {
                 // Connection status
                 HStack {
                     Text("Status:")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DSColors.textSecondary)
                     Spacer()
-                    HStack(spacing: 4) {
+                    HStack(spacing: DSSpacing.xs) {
                         Circle()
-                            .fill(healthKitManager.isSyncEnabled ? Color.green : Color.gray)
+                            .fill(healthKitManager.isSyncEnabled ? DSColors.success : DSColors.disabled)
                             .frame(width: 8, height: 8)
                         Text(healthKitManager.isSyncEnabled ? "Connected" : "Not connected")
-                            .font(.subheadline)
-                            .foregroundColor(healthKitManager.isSyncEnabled ? .green : .secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(healthKitManager.isSyncEnabled ? DSColors.success : DSColors.textSecondary)
                     }
                 }
                 
@@ -215,11 +215,11 @@ struct ProfileView: View {
                 if let lastSync = healthKitManager.lastSyncDate {
                     HStack {
                         Text("Last synced:")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DSColors.textSecondary)
                         Spacer()
                         Text(formatDate(lastSync))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
                 
@@ -228,19 +228,19 @@ struct ProfileView: View {
                     get: { healthKitManager.isSyncEnabled },
                     set: { healthKitManager.isSyncEnabled = $0 }
                 )) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DSSpacing.xxs) {
                         Text("Auto sync")
                         Text("Automatically import weight & height, export nutrition")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.dsCaption)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
                 
                 // Sync status message
                 if let message = syncStatusMessage {
                     Text(message)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.dsCaption)
+                        .foregroundColor(DSColors.textSecondary)
                         .multilineTextAlignment(.leading)
                 }
                 
@@ -257,7 +257,7 @@ struct ProfileView: View {
                         Text(isSyncing ? "Syncing..." : "Sync Now")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, DSSpacing.sm)
                 }
                 .buttonStyle(.bordered)
                 .disabled(isSyncing)
@@ -270,38 +270,38 @@ struct ProfileView: View {
                             Text("Connect Apple Health")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, DSSpacing.sm)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .tint(DSColors.error)
                 }
             }
         }
         .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .background(DSColors.surfaceSecondary)
+        .cornerRadius(DSCornerRadius.md)
     }
     
     // MARK: - Temporary Account Banner
     
     @ViewBuilder
     private var temporaryAccountBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DSSpacing.sm) {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(DSColors.warning)
                 Text("Temporary Account")
-                    .font(.headline)
+                    .font(.dsHeadline)
                 Spacer()
             }
             
             Text("Your data is stored locally. Create an account in Settings to sync across devices.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.dsSubheadline)
+                .foregroundColor(DSColors.textSecondary)
         }
         .padding()
-        .background(Color.orange.opacity(0.1))
-        .cornerRadius(12)
+        .background(DSColors.warning.opacity(0.1))
+        .cornerRadius(DSCornerRadius.md)
     }
     
     // MARK: - Actions

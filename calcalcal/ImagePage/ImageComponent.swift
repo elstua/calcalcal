@@ -27,7 +27,7 @@ struct ImageComponent: View {
     private var frameWidth: CGFloat { isLargePreview ? 350 : 100 }
     private var frameHeight: CGFloat { isLargePreview ? 420 : 120 }
     private var cornerRadius: CGFloat {
-        isLargePreview ? 16 : config.thumbnailCornerRadius
+        isLargePreview ? DSCornerRadius.lg : config.thumbnailCornerRadius
     }
 
     var body: some View {
@@ -55,7 +55,7 @@ struct ImageComponent: View {
                     .cornerRadius(cornerRadius)
             } else {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(DSColors.surfaceSecondary)
                     .frame(minWidth: 0, maxWidth: .infinity, minHeight: config.thumbnailHeight, maxHeight: config.thumbnailHeight)
                     .cornerRadius(cornerRadius)
             }
@@ -69,8 +69,8 @@ struct ImageComponent: View {
 
     private var framedView: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: isLargePreview ? 16 : 8)
-                .fill(Color.white)
+            RoundedRectangle(cornerRadius: isLargePreview ? DSCornerRadius.lg : DSCornerRadius.sm)
+                .fill(DSColors.surface)
                 .shadow(radius: 1)
                 .frame(width: cardWidth, height: cardHeight)
 
@@ -80,10 +80,10 @@ struct ImageComponent: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: imageSize, height: imageSize)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.sm))
                 } else {
-                    RoundedRectangle(cornerRadius: isLargePreview ? 10 : 8)
-                        .fill(Color.gray.opacity(0.3))
+                    RoundedRectangle(cornerRadius: isLargePreview ? DSCornerRadius.sm : DSCornerRadius.sm)
+                        .fill(DSColors.disabled)
                         .frame(width: imageSize, height: imageSize)
                 }
 
@@ -92,13 +92,13 @@ struct ImageComponent: View {
                     if let onDelete = onDelete {
                         Button(action: onDelete) {
                             Text("Delete")
-                                .foregroundColor(.red)
+                                .foregroundColor(DSColors.error)
                         }
-                        .padding(.bottom, 16)
+                        .padding(.bottom, DSSpacing.md)
                     }
                 }
             }
-            .padding(isLargePreview ? 16 : 8)
+            .padding(isLargePreview ? DSSpacing.md : DSSpacing.sm)
             .onLongPressGesture {
                 if let image = displayImage { onLongPress?(image) }
             }
@@ -146,7 +146,7 @@ extension ImageComponent {
 
 struct ImageComponent_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: DSSpacing.mlg) {
             ImageComponent(asset: nil, uiImage: nil, config: .editor, onDelete: nil, onLongPress: nil)
                 .previewDisplayName("Editor")
             ImageComponent(asset: nil, uiImage: nil, config: .picker, onDelete: nil, onLongPress: nil)

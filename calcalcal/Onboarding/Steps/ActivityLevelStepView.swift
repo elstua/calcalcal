@@ -7,34 +7,34 @@ struct ActivityLevelStepView: View {
     @State private var selectedLevel: ActivityLevel?
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             // Header
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Text("What's your activity level?")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
 
                 Text("This helps us calculate your daily calorie needs.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.top, DSSpacing.md)
 
             // Activity level options (scrollable for 5 cards)
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: DSSpacing.smd) {
                     ForEach(ActivityLevel.allCases, id: \.self) { level in
                         activityCard(level)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, DSSpacing.lg)
             }
 
             // Navigation
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     // Save selection
                     if let level = selectedLevel {
@@ -47,12 +47,12 @@ struct ActivityLevelStepView: View {
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(selectedLevel != nil ? Color.accentColor : Color.gray)
-                        .cornerRadius(12)
+                        .background(selectedLevel != nil ? DSColors.primary : DSColors.disabled)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 .disabled(selectedLevel == nil)
 
@@ -63,8 +63,8 @@ struct ActivityLevelStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
 
                     Spacer()
@@ -75,13 +75,13 @@ struct ActivityLevelStepView: View {
                         }
                     }) {
                         Text("Skip")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .onAppear {
             // Pre-fill if already selected
@@ -101,7 +101,7 @@ struct ActivityLevelStepView: View {
                 selectedLevel = level
             }
         }) {
-            HStack(spacing: 16) {
+            HStack(spacing: DSSpacing.md) {
                 // Icon
                 ZStack {
                     Circle()
@@ -109,19 +109,19 @@ struct ActivityLevelStepView: View {
                         .frame(width: 48, height: 48)
 
                     Image(systemName: activityIcon(level))
-                        .font(.system(size: 20))
+                        .font(.dsTitle3)
                         .foregroundColor(activityColor(level))
                 }
 
                 // Text
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DSSpacing.xxs) {
                     Text(level.displayName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textPrimary)
 
                     Text(level.description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.dsCaption)
+                        .foregroundColor(DSColors.textSecondary)
                         .lineLimit(2)
                 }
 
@@ -130,20 +130,20 @@ struct ActivityLevelStepView: View {
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.accentColor)
+                        .font(.dsTitle2)
+                        .foregroundColor(DSColors.primary)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, DSSpacing.md)
+            .padding(.vertical, DSSpacing.smd)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.05), radius: isSelected ? 8 : 4, x: 0, y: 2)
+                RoundedRectangle(cornerRadius: DSCornerRadius.md)
+                    .fill(DSColors.surface)
+                    .shadow(color: isSelected ? DSColors.primary.opacity(0.3) : DSColors.shadowLight, radius: isSelected ? 8 : 4, x: 0, y: 2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                RoundedRectangle(cornerRadius: DSCornerRadius.md)
+                    .stroke(isSelected ? DSColors.primary : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -169,15 +169,15 @@ struct ActivityLevelStepView: View {
     private func activityColor(_ level: ActivityLevel) -> Color {
         switch level {
         case .sedentary:
-            return .gray
+            return DSColors.disabled
         case .light:
-            return .blue
+            return DSColors.info
         case .moderate:
-            return .orange
+            return DSColors.warning
         case .active:
-            return .green
+            return DSColors.success
         case .veryActive:
-            return .red
+            return DSColors.error
         }
     }
 }

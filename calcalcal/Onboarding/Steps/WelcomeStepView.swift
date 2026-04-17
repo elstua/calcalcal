@@ -6,32 +6,32 @@ struct WelcomeStepView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     
     var body: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: DSSpacing.xxl) {
             Spacer()
             
             // App icon/illustration placeholder
             ZStack {
                 Circle()
-                    .fill(Color.green.opacity(0.15))
+                    .fill(DSColors.success.opacity(0.15))
                     .frame(width: 160, height: 160)
                 
                 Image(systemName: "leaf.fill")
-                    .font(.system(size: 70))
-                    .foregroundColor(.green)
+                    .font(Font.dsCustom(weight: .regular, size: 70))
+                    .foregroundColor(DSColors.success)
             }
             
             // Welcome text
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Text("Welcome to Calcalcal!")
-                    .font(.largeTitle)
+                    .font(.dsDisplay)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text("Let's set up your profile to personalize your calorie tracking experience.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, DSSpacing.xl)
             }
             
             Spacer()
@@ -43,15 +43,15 @@ struct WelcomeStepView: View {
                 }
             }) {
                 Text("Get Started")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.textInverted)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.green)
-                    .cornerRadius(12)
+                    .background(DSColors.success)
+                    .cornerRadius(DSCornerRadius.md)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
     }
 }

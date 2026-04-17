@@ -383,8 +383,8 @@ struct StreakButton: View {
                     .zIndex(1)
             }
             .frame(height: 24)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.horizontal, DSSpacing.smd)
+            .padding(.vertical, DSSpacing.xs)
             .background(
                 Capsule()
                     .fill(streak == 0 ? Color.clear : DSColors.secondary)
@@ -434,14 +434,14 @@ struct StreakButton: View {
             // Previous number (always present as a separate view)
             Text("\(previousStreak)")
                 .dsTypography(.body)
-                .foregroundColor(streak == 0 ? DSColors.secondary : .white)
+                .foregroundColor(streak == 0 ? DSColors.secondary : DSColors.textInverted)
                 .offset(y: isAnimatingNumber ? numberOffset : 0)
                 .opacity(isAnimatingNumber ? 1.0 - (numberOffset / 30.0) : 0)
             
             // New number (always present as a separate view)
             Text("\(streak)")
                 .dsTypography(.body)
-                .foregroundColor(streak == 0 ? DSColors.secondary : .white)
+                .foregroundColor(streak == 0 ? DSColors.secondary : DSColors.textInverted)
                 .offset(y: isAnimatingNumber ? numberOffset - 30 : 0)
                 .opacity(isAnimatingNumber ? numberOffset / 30.0 : 1.0)
         }
@@ -665,7 +665,7 @@ struct ScaleButtonStyle: ButtonStyle {
 // MARK: - Preview
 struct StreakButton_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: DSSpacing.mlg) {
             StreakButton(streak: 0) {}
                 .previewDisplayName("Streak 0 - Border Style")
             
@@ -713,7 +713,7 @@ struct StreakButtonInteractivePreview: View {
     @State private var previousStreak: Int = 3
     
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             Text("Current Streak: \(currentStreak)")
                 .dsTypography(.headline)
                 .foregroundColor(DSColors.textPrimary)
@@ -742,6 +742,6 @@ struct StreakButtonInteractivePreview: View {
         }
         .padding()
         .background(DSColors.surface)
-        .cornerRadius(12)
+        .cornerRadius(DSCornerRadius.md)
     }
 }

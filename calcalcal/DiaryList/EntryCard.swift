@@ -112,9 +112,9 @@ struct EntryCard: View {
             .frame(maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(useExternalDecoration ? Color.clear : Color.white)
+        .background(useExternalDecoration ? Color.clear : DSColors.surface)
         .cornerRadius(useExternalDecoration ? 0 : cornerRadius)
-        .shadow(color: (useExternalDecoration || !showShadow) ? .clear : Color.black.opacity(0.08), radius: 2, x: 0, y: 0)
+        .shadow(color: (useExternalDecoration || !showShadow) ? .clear : DSColors.shadowMedium, radius: 2, x: 0, y: 0)
         // Only add tap gesture when onTap is provided AND editing is disabled.
         // When isEditable is true, we must NOT add a tap gesture because it would
         // intercept taps meant for the UITextView and prevent text editing.
@@ -211,6 +211,6 @@ struct EntryCard_Previews: PreviewProvider {
             EntryCard(entry: entry, isEditable: true)
                 .padding()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(DSColors.background)
     }
 }

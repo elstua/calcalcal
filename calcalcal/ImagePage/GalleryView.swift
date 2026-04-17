@@ -38,7 +38,7 @@ struct GalleryView: View {
                         }
                 }
             }
-            .padding(config.showFrame ? 16 : config.spacing)
+            .padding(config.showFrame ? DSSpacing.md : config.spacing)
         }
         .onAppear(perform: loadPhotos)
         .sheet(isPresented: $showLargeImage) {
@@ -54,7 +54,7 @@ struct GalleryView: View {
                     )
                     Spacer()
                 }
-                .background(Color.black.opacity(0.7).ignoresSafeArea())
+                .background(DSColors.overlayHeavy.ignoresSafeArea())
             }
         }
         .alert(isPresented: $photoAccessDenied) {

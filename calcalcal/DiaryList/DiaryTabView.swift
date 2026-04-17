@@ -142,7 +142,7 @@ struct DiaryTabView: View {
                 .ignoresSafeArea()
             
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DSSpacing.sm) {
                     // Header with Diary title and Streak button
                     HStack {
                         Text("Diary")
@@ -173,8 +173,8 @@ struct DiaryTabView: View {
 //                        .padding(.leading, 8)
 //                        #endif
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                    .padding(.horizontal, DSSpacing.lg)
+                    .padding(.top, DSSpacing.sm)
 
                     DayStripView(
                         items: viewModel.dayStripItems(streaksData: appState.streaksData),
@@ -187,13 +187,13 @@ struct DiaryTabView: View {
                             }
                         }
                     )
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, DSSpacing.sm)
                 }
                 
 
                 dayPager
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
+                    .padding(.top, DSSpacing.sm)
+                    .padding(.bottom, DSSpacing.sm)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -206,7 +206,7 @@ struct DiaryTabView: View {
             GeometryReader { proxy in
                 placeholderCard(height: proxy.size.height) {
                     Text("loading...")
-                        .font(.headline)
+                        .font(.dsHeadline)
                         .foregroundColor(DSColors.textSecondary)
                 }
             }
@@ -264,7 +264,7 @@ struct DiaryTabView: View {
                 EntryCard(
                     entry: entry,
                     height: cardHeight,
-                    cornerRadius: 24,
+                    cornerRadius: DSCornerRadius.xxl,
                     showShadow: true,
                     useExternalDecoration: false,
                     onAddImage: nil,
@@ -309,10 +309,10 @@ struct DiaryTabView: View {
                         }
                     )
                     .transition(.opacity)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous))
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, DSSpacing.sm)
             .id(viewId)  // Content-aware ID forces re-render when blocks change
             .zoomTransitionSource(id: entry.id, namespace: editorNamespace)
             .allowsHitTesting(isActive)
@@ -324,12 +324,12 @@ struct DiaryTabView: View {
     }
     
     private func placeholderCard<Content: View>(height: CGFloat, @ViewBuilder content: () -> Content) -> some View {
-        RoundedRectangle(cornerRadius: 32, style: .continuous)
+        RoundedRectangle(cornerRadius: DSCornerRadius.full, style: .continuous)
             .fill(DSColors.surface)
             .frame(height: max(0, height))
             .overlay(content())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.horizontal, DSSpacing.sm)
+            .padding(.vertical, DSSpacing.sm)
     }
     
     // MARK: - All Days Preview Card
@@ -337,13 +337,13 @@ struct DiaryTabView: View {
         let cardHeight = max(0, availableHeight)
         
         return VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous)
                 .fill(DSColors.surface)
                 .frame(height: cardHeight)
                 .overlay {
-                    VStack(spacing: 16) {
+                    VStack(spacing: DSSpacing.md) {
                         Image(systemName: "calendar")
-                            .font(.system(size: 48))
+                            .font(.dsLargeNumber)
                             .foregroundColor(DSColors.primary)
                         
                         Text("All Days")
@@ -352,7 +352,7 @@ struct DiaryTabView: View {
 
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, DSSpacing.sm)
                 .id("all-days-view")
                 .zoomTransitionSource(id: allDaysViewId, namespace: allDaysNamespace)
             

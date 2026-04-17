@@ -6,37 +6,37 @@ struct DeleteAccountConfirmationView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
+            VStack(spacing: DSSpacing.mlg) {
                 Text("⚠️ Delete Account?")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
-                    .foregroundColor(.red)
+                    .foregroundColor(DSColors.error)
                 
                 Text("This will permanently delete:")
-                    .font(.headline)
+                    .font(.dsHeadline)
                 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: DSSpacing.sm) {
                     Text("• All diary entries")
                     Text("• Food preferences")
                     Text("• Health data")
                     Text("• Account settings")
                 }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.dsSubheadline)
+                .foregroundColor(DSColors.textSecondary)
                 
                 Text("This action cannot be undone.")
-                    .font(.caption)
-                    .foregroundColor(.red)
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.error)
                 
                 Spacer()
                 
-                VStack(spacing: 12) {
+                VStack(spacing: DSSpacing.smd) {
                     Button("Delete My Account", role: .destructive) {
                         onDelete()
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .tint(DSColors.error)
                     
                     Button("Cancel") {
                         dismiss()

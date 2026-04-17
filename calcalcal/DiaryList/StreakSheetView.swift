@@ -9,12 +9,12 @@ struct StreakSheetView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 32) {
+            VStack(spacing: DSSpacing.xl) {
                 Spacer()
                 
                 
                 // Current Streak Section
-                VStack(spacing: 8) {
+                VStack(spacing: DSSpacing.sm) {
                     
                     Text("\(streaksData?.currentStreak ?? 0)")
                         .dsTypography(.display)
@@ -26,28 +26,28 @@ struct StreakSheetView: View {
                         .foregroundColor(DSColors.textSecondary)
                     
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, DSSpacing.lg)
                 
                 
                  Divider()
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, DSSpacing.lg)
                 
                 // Longest Streak Section
-                HStack(spacing: 12) {
+                HStack(spacing: DSSpacing.smd) {
                     Text("Best Streak")
                         .dsTypography(.body)
                         .foregroundColor(DSColors.textSecondary)
                     Spacer()
-                    HStack(spacing: 8) {
+                    HStack(spacing: DSSpacing.sm) {
                         Text("\(streaksData?.longestStreak ?? 0)")
                             .dsTypography(.title2)
                             .foregroundColor(DSColors.textSecondary)
 
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, DSSpacing.lg)
             }
-            .padding(.vertical, 40)
+            .padding(.vertical, DSSpacing.xxl)
             .navigationTitle("Streaks")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -54,7 +54,7 @@ private struct DayStripItemView: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 8) {
+            VStack(spacing: DSSpacing.sm) {
                 VStack(spacing: 0){
                     Text(Self.dayFormatter.string(from: model.date))
                         .dsTypography(.body)
@@ -69,11 +69,11 @@ private struct DayStripItemView: View {
                     .dsTypography(.compactNumber)
                     .foregroundColor(model.hasEntry ? (isSelected ? DSColors.primary : DSColors.textSecondary) : DSColors.textSecondary.opacity(0.6))
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, DSSpacing.md)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .background(isSelected ? DSColors.primary.opacity(0.12) : DSColors.backgroundTertiary.opacity(0))
-            .cornerRadius(32)
+            .cornerRadius(DSCornerRadius.full)
 
         }
         .buttonStyle(.plain)
@@ -92,15 +92,15 @@ private struct DayStripStreakButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: DSSpacing.xs) {
                 
                 Image(systemName: "calendar")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(Font.dsCustom(weight: .medium, size: 14))
                     .foregroundColor(DSColors.textPrimary)
                     .frame(width: 32, height: 32)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white)
+                        RoundedRectangle(cornerRadius: DSCornerRadius.lg, style: .continuous)
+                            .fill(DSColors.surface)
                     )
                 
                 Text("all days")
@@ -109,7 +109,7 @@ private struct DayStripStreakButton: View {
                     .multilineTextAlignment(.center)
                     
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, DSSpacing.sm)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             

@@ -8,28 +8,28 @@ struct CollapsedEmptyRunView: View {
 
 	var body: some View {
 		Button(action: { onExpand?() }) {
-			HStack(alignment: .center, spacing: 12) {
-				Image(systemName: "chevron.down.circle.fill")
-					.font(.title3)
-					.foregroundColor(.secondary)
-				VStack(alignment: .leading, spacing: 2) {
-					Text(primaryText)
-						.font(.body.weight(.semibold))
-						.foregroundColor(.primary)
-					Text(secondaryText)
-						.font(.caption)
-						.foregroundColor(.secondary)
+			HStack(alignment: .center, spacing: DSSpacing.smd) {
+		Image(systemName: "chevron.down.circle.fill")
+			.font(.dsTitle3)
+				.foregroundColor(DSColors.textSecondary)
+				VStack(alignment: .leading, spacing: DSSpacing.xxs) {
+			Text(primaryText)
+				.font(.dsBodyEmphasized)
+					.foregroundColor(DSColors.textPrimary)
+			Text(secondaryText)
+				.font(.dsCaption)
+					.foregroundColor(DSColors.textSecondary)
 				}
 				Spacer()
-				Image(systemName: "chevron.right")
-					.font(.subheadline)
-					.foregroundColor(.secondary)
+		Image(systemName: "chevron.right")
+			.font(.dsSubheadline)
+				.foregroundColor(DSColors.textSecondary)
 			}
-			.padding(.vertical, 14)
-			.padding(.horizontal, 16)
-			.background(Color.white)
-			.cornerRadius(16)
-			.shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+		.padding(.vertical, DSSpacing.smd)
+		.padding(.horizontal, DSSpacing.md)
+		.background(DSColors.surface)
+		.cornerRadius(DSCornerRadius.lg)
+			.shadow(color: DSColors.shadowLight, radius: 4, x: 0, y: 2)
 		}
 		.buttonStyle(PlainButtonStyle())
 	}
@@ -37,11 +37,11 @@ struct CollapsedEmptyRunView: View {
 
 struct CollapsedEmptyRunView_Previews: PreviewProvider {
 	static var previews: some View {
-		VStack(spacing: 16) {
+		VStack(spacing: DSSpacing.md) {
 			CollapsedEmptyRunView(primaryText: "17 days, Sep 1–17", secondaryText: "Tap to show 14 more days", onExpand: {})
 				.padding(.horizontal)
 		}
-		.background(Color(.systemGroupedBackground))
+		.background(DSColors.background)
 	}
 }
 

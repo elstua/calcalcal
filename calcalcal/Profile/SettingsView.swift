@@ -13,7 +13,7 @@ struct SettingsView: View {
             List {
                 Section {
                     Text("Settings functionality coming soon...")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DSColors.textSecondary)
                 }
                 
                 // Delete Account Section (only for permanent accounts)
@@ -22,7 +22,7 @@ struct SettingsView: View {
                         Button("Delete Account") {
                             showingDeleteAccountConfirmation = true
                         }
-                        .foregroundColor(.red)
+                        .foregroundColor(DSColors.error)
                     }
                 }
                 
@@ -44,8 +44,8 @@ struct SettingsView: View {
                     
                     if let message = resetMessage {
                         Text(message)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.dsCaption)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
                 #endif

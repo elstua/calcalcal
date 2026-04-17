@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Sticky footer overlay for the editor, containing a gallery thumbnail button (left)
-/// and an animated calorie number (right) that shrinks on scroll.
+/// and an animated calorie number (right).
 struct EditorFooterView: View {
     let blocks: [Block]
     let remoteTotalCalories: Int?
@@ -10,17 +10,10 @@ struct EditorFooterView: View {
     let onAddImage: () -> Void
     let onCalorieTap: () -> Void
 
-    /// Scroll distance over which the number transitions from large to compact
     private let scrollThreshold: CGFloat = 60
-    /// Minimum scale factor (dsCompactNumber 17pt / dsLargeNumber 48pt)
-    private let minScale: CGFloat = 24.0 / 48.0
 
     private var shrinkProgress: CGFloat {
         min(1, max(0, scrollOffset / scrollThreshold))
-    }
-
-    private var numberScale: CGFloat {
-        1.0 - (1.0 - minScale) * shrinkProgress
     }
 
     private var calorieValue: Int? {
@@ -38,7 +31,6 @@ struct EditorFooterView: View {
                 font: .dsLargeNumber,
                 color: DSColors.primary
             )
-            .scaleEffect(numberScale, anchor: .trailing)
             .overlay(alignment: .bottomTrailing) {
                 if calorieGoal != nil {
                     AngledCalorieBar(
@@ -46,9 +38,9 @@ struct EditorFooterView: View {
                         goal: calorieGoal,
                         shrinkProgress: shrinkProgress
                     )
-                    .frame(width: 120)   // ← bar width
-                    .offset(y: 8)        // ← vertical position (positive = down)
-                    .offset(x: 14)       // ← horizontal position (positive = right)
+                    .frame(width: 120)
+                    .offset(y: 8)
+                    .offset(x: 14)
                 }
             }
             .onTapGesture { onCalorieTap() }
@@ -68,12 +60,11 @@ private struct AngledCalorieBar: View {
     let goal: Int?
     let shrinkProgress: CGFloat
 
-    /// Full vertical rise (when shrinkProgress == 0)
+    @State private var animatedProgress: CGFloat = 0
+
     private let maxVerticalRise: CGFloat = 56
-    /// Full corner radius (when shrinkProgress == 0)
     private let maxCornerRadius: CGFloat = 22
 
-    /// Animated values driven by scroll
     private var verticalRise: CGFloat {
         maxVerticalRise * (1 - shrinkProgress)
     }
@@ -81,23 +72,34 @@ private struct AngledCalorieBar: View {
         maxCornerRadius * (1 - shrinkProgress)
     }
 
-    private var progress: CGFloat {
+    private var targetProgress: CGFloat {
         guard let g = goal, g > 0 else { return 0 }
         return min(CGFloat(current) / CGFloat(g), 1.0)
     }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Track
             AngledBarShape(cornerRadius: cornerRadius, verticalRise: verticalRise)
                 .stroke(DSColors.primary.opacity(0.12), style: StrokeStyle(lineWidth: 5, lineCap: .round))
 
-            // Fill
             AngledBarShape(cornerRadius: cornerRadius, verticalRise: verticalRise)
-                .trim(from: 0, to: progress)
+                .trim(from: 0, to: animatedProgress)
                 .stroke(DSColors.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
         }
         .frame(height: max(verticalRise + 6, 8))
+        .onAppear {
+            animatedProgress = targetProgress
+        }
+        .onChange(of: current) { _, _ in
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                animatedProgress = targetProgress
+            }
+        }
+        .onChange(of: goal) { _, _ in
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                animatedProgress = targetProgress
+            }
+        }
     }
 }
 
@@ -165,7 +167,7 @@ struct EditorFooterView_Previews: PreviewProvider {
                 onAddImage: {},
                 onCalorieTap: {}
             )
-            .background(Color.gray.opacity(0.1))
+            .background(DSColors.surfaceSecondary)
         }
     }
 }

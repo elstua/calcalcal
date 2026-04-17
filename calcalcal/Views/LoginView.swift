@@ -9,21 +9,20 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 30) {
             // App Logo and Title
-            VStack(spacing: 20) {
+            VStack(spacing: DSSpacing.mlg) {
                 
                 Text("Calcalcal")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.dsDisplay)
                 
                 Text("Track your nutrition with AI")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
             
             Spacer()
             
             // Sign-In Buttons
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Sign In with Apple Button
                 SignInWithAppleButton(
                     onRequest: { request in
@@ -56,13 +55,13 @@ struct LoginView: View {
                 }
                 .frame(height: 50)
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, DSSpacing.xxl)
 
             Button("Clear All Auth Data") {
                 appState.authManager.clearAllAuthenticationData()
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
+            .font(.dsCaption)
+            .foregroundColor(DSColors.textSecondary)
             
             if appState.isLoading {
                 ProgressView()
@@ -71,8 +70,8 @@ struct LoginView: View {
             
             if let error = appState.error {
                 Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
+                    .foregroundColor(DSColors.error)
+                    .font(.dsCaption)
                     .multilineTextAlignment(.center)
                     .padding()
             }

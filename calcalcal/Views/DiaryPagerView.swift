@@ -11,7 +11,7 @@ struct DiaryPagerView<Content: View>: View {
     let items: [DiaryPagerItem]
     @Binding var selectedDate: Date
     let calendar: Calendar
-    var spacing: CGFloat = 16
+    var spacing: CGFloat = DSSpacing.md
     var trailingSpace: CGFloat = 0
     let content: (DiaryPagerItem, Bool) -> Content
     var onExtendedSwipe: (() -> Void)? = nil
@@ -27,8 +27,8 @@ struct DiaryPagerView<Content: View>: View {
         items: [DiaryPagerItem],
         selectedDate: Binding<Date>,
         calendar: Calendar,
-        spacing: CGFloat = 16,
-        trailingSpace: CGFloat = 48,
+        spacing: CGFloat = DSSpacing.md,
+        trailingSpace: CGFloat = DSSpacing.xxxl,
         onExtendedSwipe: (() -> Void)? = nil,
         extendedSwipeDragOffset: Binding<CGFloat> = .constant(0),
         @ViewBuilder content: @escaping (DiaryPagerItem, Bool) -> Content

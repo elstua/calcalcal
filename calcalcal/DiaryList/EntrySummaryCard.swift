@@ -7,25 +7,25 @@ struct EntrySummaryCard: View {
     var onTap: (() -> Void)?
     
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: DSSpacing.smd) {
             Text(dayNumberString(entry.date))
-                .font(.title3.bold())
-                .foregroundColor(.primary)
+                .font(.dsTitle3)
+                .foregroundColor(DSColors.textPrimary)
                 .frame(width: 44, height: 44)
-                .background(Color.gray.opacity(0.15))
+                .background(DSColors.surfaceSecondary)
                 .clipShape(Circle())
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: DSSpacing.xs) {
                 SummaryTextView(entry: entry)
                 Text("\(resolvedCaloriesText()) kcal")
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-                    .padding(.top, 2)
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.primary)
+                    .padding(.top, DSSpacing.xxs)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
+        .padding(.vertical, DSSpacing.smd)
+        .padding(.horizontal, DSSpacing.md)
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
         .padding(.horizontal)
@@ -61,11 +61,11 @@ private struct SummaryTextView: View {
                 .italic()
         } else if hasPlaceholderAtEnd && contentBlocks.count > 1 {
             // Show content + placeholder with different styling
-            HStack(spacing: 4) {
+            HStack(spacing: DSSpacing.xs) {
                 // Regular content (all blocks except last placeholder)
                 Text(contentBlocks.dropLast().joined(separator: " "))
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .lineLimit(2)
                 
                 // Placeholder at the end

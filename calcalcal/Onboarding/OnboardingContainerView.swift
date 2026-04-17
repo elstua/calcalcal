@@ -112,23 +112,23 @@ struct OnboardingProgressView: View {
     let progress: Double
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DSSpacing.sm) {
             // Step indicator
             Text("Step \(currentStep) of \(totalSteps)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
             
             // Progress bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     // Background track
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.2))
+                    RoundedRectangle(cornerRadius: DSCornerRadius.xs)
+                        .fill(DSColors.textSecondary.opacity(0.2))
                         .frame(height: 4)
                     
                     // Progress fill
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.accentColor)
+                    RoundedRectangle(cornerRadius: DSCornerRadius.xs)
+                        .fill(DSColors.primary)
                         .frame(width: geometry.size.width * progress, height: 4)
                         .animation(.easeInOut(duration: 0.3), value: progress)
                 }
@@ -149,22 +149,22 @@ struct PlaceholderStepView: View {
     let subtitle: String
     
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             Spacer()
             
             // Step content
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Text(title)
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text(subtitle)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, DSSpacing.xl)
             
             // Debug info
             #if DEBUG
@@ -175,8 +175,8 @@ struct PlaceholderStepView: View {
             
             // Navigation buttons
             navigationButtons
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
+                .padding(.horizontal, DSSpacing.lg)
+                .padding(.bottom, DSSpacing.xl)
         }
     }
     
@@ -184,43 +184,43 @@ struct PlaceholderStepView: View {
     
     #if DEBUG
     private var debugInfoView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DSSpacing.sm) {
             Text("🔧 Debug Info")
-                .font(.caption)
+                .font(.dsCaption)
                 .fontWeight(.semibold)
             
             Text("Step: \(step.title) (\(step.rawValue))")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
             
             Text("Can skip: \(step.canSkip ? "Yes" : "No")")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
             
             Text("Is last: \(step.isLast ? "Yes" : "No")")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
             
             // Quick jump buttons
-            HStack(spacing: 8) {
+            HStack(spacing: DSSpacing.sm) {
                 ForEach(OnboardingStepType.allCases) { jumpStep in
                     Button(action: {
                         coordinator.goToStep(jumpStep)
                     }) {
                         Text("\(jumpStep.rawValue)")
-                            .font(.caption2)
+                            .font(.dsCaption)
                             .frame(width: 24, height: 24)
-                            .background(jumpStep == step ? Color.accentColor : Color.secondary.opacity(0.2))
-                            .foregroundColor(jumpStep == step ? .white : .primary)
-                            .cornerRadius(4)
+                            .background(jumpStep == step ? DSColors.primary : DSColors.textSecondary.opacity(0.2))
+                            .foregroundColor(jumpStep == step ? DSColors.textInverted : DSColors.textPrimary)
+                            .cornerRadius(DSCornerRadius.xs)
                     }
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, DSSpacing.sm)
         }
         .padding()
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
+        .background(DSColors.textSecondary.opacity(0.1))
+        .cornerRadius(DSCornerRadius.md)
         .padding(.horizontal)
     }
     #endif
@@ -228,7 +228,7 @@ struct PlaceholderStepView: View {
     // MARK: - Navigation
     
     private var navigationButtons: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DSSpacing.smd) {
             // Primary action button
             Button(action: {
                 withAnimation {
@@ -240,12 +240,12 @@ struct PlaceholderStepView: View {
                 }
             }) {
                 Text(step.isLast ? "Complete" : "Continue")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.textInverted)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.accentColor)
-                    .cornerRadius(12)
+                    .background(DSColors.primary)
+                    .cornerRadius(DSCornerRadius.md)
             }
             
             // Secondary actions (skip / back)
@@ -257,8 +257,8 @@ struct PlaceholderStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
                 
@@ -271,8 +271,8 @@ struct PlaceholderStepView: View {
                         }
                     }) {
                         Text("Skip")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }

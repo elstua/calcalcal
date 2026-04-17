@@ -8,10 +8,10 @@ final class PlainAttachmentTextView: UITextView {
         super.init(frame: .zero, textContainer: nil)
         
         // Use default TextKit 2 stack configured by UITextView itself.
-        font = UIFont.preferredFont(forTextStyle: .body)
+        font = UIFont.dsBody
         isScrollEnabled = true
         alwaysBounceVertical = true
-        backgroundColor = .systemBackground
+        backgroundColor = .dsBackground
         smartInsertDeleteType = .yes
         spellCheckingType = .yes
         autocorrectionType = .yes
@@ -46,7 +46,7 @@ final class PlainAttachmentTextView: UITextView {
         attachment.bounds = CGRect(x: 0, y: 0, width: maxWidth, height: height)
         
         let attachmentString = NSAttributedString(attachment: attachment)
-        let spacer = NSAttributedString(string: "  ", attributes: [.font: font ?? UIFont.preferredFont(forTextStyle: .body)])
+        let spacer = NSAttributedString(string: "  ", attributes: [.font: font ?? UIFont.dsBody])
         
         // Insert into the existing attributed text at the caret position.
         let mutable = NSMutableAttributedString(attributedString: attributedText ?? NSAttributedString())
@@ -82,20 +82,20 @@ struct PlainAttachmentEditorTestView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 PlainAttachmentTextViewRepresentable { tv in
                     self.textView = tv
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(DSColors.surfaceSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.lg, style: .continuous))
                 
                 Button("Insert sample image (plain TK2)") {
                     textView?.insertSampleImageAttachment()
                 }
                 .buttonStyle(.borderedProminent)
             }
-            .padding(20)
+            .padding(DSSpacing.mlg)
             .navigationTitle("Plain Attachment Test")
         }
     }

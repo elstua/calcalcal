@@ -34,7 +34,18 @@ struct CalorieBarrelView: View {
             }
         }
         .frame(height: slideHeight)
-        .clipped()
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .black, location: 0.2),
+                    .init(color: .black, location: 0.8),
+                    .init(color: .clear, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .onChange(of: value) { _, newValue in
             triggerAnimation(to: newValue)
         }
@@ -127,7 +138,7 @@ struct CalorieBarrelView: View {
         for (staggerIndex, digitIndex) in changedIndices.reversed().enumerated() {
             let delay = Double(staggerIndex) * staggerDelay
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                withAnimation(.easeInOut(duration: baseDuration)) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                     if digitIndex < animationProgress.count {
                         animationProgress[digitIndex] = 1.0
                     }
@@ -157,14 +168,14 @@ private struct CalorieBarrelPreviewContainer: View {
     @State private var calories: Int = 1250
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: DSSpacing.lg) {
             CalorieBarrelView(
                 value: calories,
                 font: .dsLargeNumber,
                 color: DSColors.primary
             )
 
-            HStack(spacing: 16) {
+            HStack(spacing: DSSpacing.md) {
                 Button("-100") { calories -= 100 }
                 Button("+100") { calories += 100 }
                 Button("+1") { calories += 1 }

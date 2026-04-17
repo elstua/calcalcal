@@ -14,14 +14,14 @@ struct AuthChoiceView: View {
             Spacer()
             
             // Header
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Text("Calycal")
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .font(.dsDisplay)
+                    .foregroundColor(DSColors.textPrimary)
                 
                 Text("intelligent calorie tracker\nfor those who love good food")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
             }
@@ -30,32 +30,32 @@ struct AuthChoiceView: View {
             Spacer()
             
             // Main action buttons
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Primary CTA - Continue without account (temporary)
                 Button(action: {
                     appState.authManager.createTemporaryAccount()
                 }) {
                     Text("Learn more")
-                        .font(.headline)
+                        .font(.dsHeadline)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Color.primary)
-                        .foregroundColor(Color(UIColor.systemBackground))
-                        .cornerRadius(12)
+                        .background(DSColors.primary)
+                        .foregroundColor(DSColors.textInverted)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 .disabled(appState.isLoading)
                 
                 // Sign in link
                 
                     Text("Already have an account? Sign in")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.dsSubheadline)
+                        .foregroundColor(DSColors.textSecondary)
                 
-                .padding(.top, 8)
-                .padding(.bottom, 16)
+                .padding(.top, DSSpacing.sm)
+                .padding(.bottom, DSSpacing.md)
                 
                 // OAuth buttons - side by side
-                HStack(spacing: 12) {
+                HStack(spacing: DSSpacing.smd) {
                     // Apple Sign-In
                     SignInWithAppleButton(
                         onRequest: { request in
@@ -88,7 +88,7 @@ struct AuthChoiceView: View {
                     .frame(width: 50, height: 64)
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, DSSpacing.lg)
             
             
             // Loading indicator
@@ -100,11 +100,11 @@ struct AuthChoiceView: View {
             // Error message
             if let error = appState.error {
                 Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
+                    .foregroundColor(DSColors.error)
+                    .font(.dsCaption)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, DSSpacing.sm)
             }
             
             Spacer()
@@ -137,15 +137,15 @@ struct AuthChoiceView: View {
                         Image(systemName: "trash")
                         Text("Reset All")
                     }
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.red.opacity(0.8))
-                    .foregroundColor(.white)
+                    .font(.dsCaption)
+                    .padding(.horizontal, DSSpacing.sm)
+                    .padding(.vertical, DSSpacing.xs)
+                    .background(DSColors.error.opacity(0.8))
+                    .foregroundColor(DSColors.textInverted)
                     .cornerRadius(6)
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
+                .padding(.trailing, DSSpacing.md)
+                .padding(.bottom, DSSpacing.md)
             }
         }
     }

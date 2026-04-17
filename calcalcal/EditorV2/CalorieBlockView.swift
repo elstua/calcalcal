@@ -27,8 +27,8 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
 
     private func setupView() {
         isUserInteractionEnabled = true
-        label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
-        label.textColor = .systemGray
+        label.font = UIFont.dsBody
+        label.textColor = .dsTextSecondary
         label.textAlignment = .right
         label.numberOfLines = 1
         label.lineBreakMode = .byClipping

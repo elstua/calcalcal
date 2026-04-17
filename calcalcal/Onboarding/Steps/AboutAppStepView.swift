@@ -12,24 +12,24 @@ struct AboutAppStepView: View {
             icon: "text.bubble.fill",
             title: "Natural Language Input",
             description: "Just describe what you ate in your own words. No need to search databases or scan barcodes.",
-            color: .blue
+            color: DSColors.info
         ),
         FeatureItem(
             icon: "brain.head.profile",
             title: "AI-Powered Counting",
             description: "Our AI understands portions, ingredients, and cooking methods to give you accurate calorie estimates.",
-            color: .purple
+            color: DSColors.secondary
         ),
         FeatureItem(
             icon: "chart.line.uptrend.xyaxis",
             title: "Track Your Progress",
             description: "See your daily intake, track trends over time, and reach your health goals.",
-            color: .orange
+            color: DSColors.warning
         )
     ]
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: DSSpacing.lg) {
             // Carousel
             TabView(selection: $currentPage) {
                 ForEach(0..<features.count, id: \.self) { index in
@@ -41,10 +41,10 @@ struct AboutAppStepView: View {
             .frame(height: 400)
             
             // Page indicators
-            HStack(spacing: 8) {
+            HStack(spacing: DSSpacing.sm) {
                 ForEach(0..<features.count, id: \.self) { index in
                     Circle()
-                        .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .fill(index == currentPage ? DSColors.primary : DSColors.textSecondary.opacity(0.3))
                         .frame(width: 8, height: 8)
                         .animation(.easeInOut(duration: 0.2), value: currentPage)
                 }
@@ -53,19 +53,19 @@ struct AboutAppStepView: View {
             Spacer()
             
             // Navigation
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     withAnimation {
                         _ = coordinator.advance(.next)
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
+                        .background(DSColors.primary)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 
                 Button(action: {
@@ -74,19 +74,19 @@ struct AboutAppStepView: View {
                     }
                 }) {
                     Text("Back")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.dsSubheadline)
+                        .foregroundColor(DSColors.textSecondary)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
     }
     
     // MARK: - Feature Card
     
     private func featureCard(_ feature: FeatureItem) -> some View {
-        VStack(spacing: 24) {
+        VStack(spacing: DSSpacing.lg) {
             Spacer()
             
             // Icon
@@ -96,22 +96,22 @@ struct AboutAppStepView: View {
                     .frame(width: 120, height: 120)
                 
                 Image(systemName: feature.icon)
-                    .font(.system(size: 50))
+                    .font(Font.dsCustom(weight: .regular, size: 50))
                     .foregroundColor(feature.color)
             }
             
             // Text
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Text(feature.title)
-                    .font(.title2)
+                    .font(.dsTitle2)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text(feature.description)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, DSSpacing.xl)
             }
             
             Spacer()

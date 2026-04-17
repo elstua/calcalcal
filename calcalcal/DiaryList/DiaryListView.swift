@@ -50,10 +50,10 @@ struct DiaryListView: View {
         ZStack {
             ScrollView {
                 let enumeratedItems = Array(items.enumerated())
-                VStack(spacing: 10) {
+                VStack(spacing: DSSpacing.sm) {
                     // Streak statistics at the top
                     StreakStatsView(streaksData: streaksData)
-                        .padding(.top, 8)
+                        .padding(.top, DSSpacing.sm)
                     
                     ForEach(enumeratedItems, id: \.element.id) { (index, item) in
                         timelineRowView(index: index, item: item)
@@ -79,9 +79,9 @@ struct DiaryListView: View {
                     }
                 }
                 .padding(.vertical)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, DSSpacing.md)
             }
-            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .background(DSColors.background.ignoresSafeArea())
             
             // If no external opener is supplied, show local popup regardless of namespace
             if showPopup, let entry = selectedEntry, onRequestOpen == nil {
@@ -178,9 +178,9 @@ struct DiaryListView: View {
     @ViewBuilder
     private func compactCardShell(entry: DiaryEntry) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: DSCornerRadius.lg, style: .continuous)
+                .fill(DSColors.surface)
+                .shadow(color: DSColors.shadowLight, radius: 4, x: 0, y: 2)
                 .allowsHitTesting(false)
             EntrySummaryCard(entry: entry)
         }
@@ -352,8 +352,8 @@ struct DiaryEntryPopupView: View {
                 Spacer()
                 Button(action: { isPresented = false }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .foregroundColor(.secondary)
+                        .font(.dsTitle1)
+                        .foregroundColor(DSColors.textSecondary)
                         .padding()
                 }
             }
@@ -368,7 +368,7 @@ struct DiaryEntryPopupView: View {
                 }
             )
                 .padding()
-                .cornerRadius(24)
+                .cornerRadius(DSCornerRadius.xxl)
                 .shadow(radius: 10)
                 .onChange(of: entry.blocks) { newBlocks in
                     scheduleAutosaveIfTextChanged(blocks: newBlocks)
@@ -376,7 +376,7 @@ struct DiaryEntryPopupView: View {
                 }
             Spacer()
         }
-        .background(Color.black.opacity(0.2).ignoresSafeArea())
+        .background(DSColors.overlayLight.ignoresSafeArea())
         .offset(y: dragOffset.height > 0 ? dragOffset.height : 0)
         .gesture(
             DragGesture()

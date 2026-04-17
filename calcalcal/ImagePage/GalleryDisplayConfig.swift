@@ -14,9 +14,9 @@ struct GalleryDisplayConfig {
     /// Compact polaroid cards used inside the text editor
     static let editor = GalleryDisplayConfig(
         columns: 3,
-        spacing: 24,
+        spacing: DSSpacing.lg,
         thumbnailHeight: 130,
-        thumbnailCornerRadius: 8,
+        thumbnailCornerRadius: DSCornerRadius.sm,
         showFrame: true,
         requestSize: CGSize(width: 300, height: 300)
     )
@@ -24,9 +24,9 @@ struct GalleryDisplayConfig {
     /// Larger edge-to-edge thumbnails for the media picker gallery
     static let picker = GalleryDisplayConfig(
         columns: 3,
-        spacing: 2,
+        spacing: DSSpacing.xxs,
         thumbnailHeight: 130, // will be overridden by aspect ratio
-        thumbnailCornerRadius: 4,
+        thumbnailCornerRadius: DSCornerRadius.xs,
         showFrame: false,
         requestSize: CGSize(width: 400, height: 400)
     )

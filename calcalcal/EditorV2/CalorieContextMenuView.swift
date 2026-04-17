@@ -32,10 +32,10 @@ struct CalorieContextMenuView: View {
         var body: some View {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: DSSpacing.smd) {
                         // Header
                         Text("Nutrition Details")
-                            .font(.headline)
+                            .font(.dsHeadline)
                             .fontWeight(.regular)
 
                         // Calories Section
@@ -47,9 +47,9 @@ struct CalorieContextMenuView: View {
 
 
                             Text("Calories")
-                                .font(.subheadline)
+                                .font(.dsSubheadline)
                                 .fontWeight(.medium)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(DSColors.textSecondary)
 
 
 
@@ -62,15 +62,15 @@ struct CalorieContextMenuView: View {
                                 .disabled(isUpdating)
 
                             Text(getWeightUnit())
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .font(.dsSubheadline)
+                                .foregroundColor(DSColors.textSecondary)
                         }
 
                         // Display metric description if available
                         if let metricDescription = nutrition?.metric_description, !metricDescription.isEmpty {
                             Text("Serving size: \(metricDescription)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(.dsCaption)
+                                .foregroundColor(DSColors.textSecondary)
                                 .padding(.top, -4)
                         }
 
@@ -78,7 +78,7 @@ struct CalorieContextMenuView: View {
 
                         // Nutrition Details
                         if let nutrition = nutrition {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: DSSpacing.xs) {
                                 nutritionRow(label: "Protein", value: nutrition.protein, unit: "g")
                                 nutritionRow(label: "Fat", value: nutrition.fat, unit: "g")
                                 nutritionRow(label: "Carbs", value: nutrition.carbs, unit: "g")
@@ -102,40 +102,40 @@ struct CalorieContextMenuView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else if showUpdateSuccess {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 17, weight: .bold))
+                                .font(.dsHeadline)
                         } else {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 17, weight: .bold))
+                                .font(.dsHeadline)
                         }
                     }
-                    .frame(width: 48, height: 48)
-                    .background(Color.accentColor)
-                    .foregroundColor(.white)
+                    .frame(width: DSSpacing.xxxl, height: DSSpacing.xxxl)
+                    .background(DSColors.primary)
+                    .foregroundColor(DSColors.textInverted)
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.2), radius: 5, y: 5)
+                    .shadow(color: DSColors.shadowHeavy, radius: 5, y: 5)
                 }
-                .padding(.trailing, 6)
-                .padding(.bottom, 8)
+                .padding(.trailing, DSSpacing.xs)
+                .padding(.bottom, DSSpacing.sm)
                 .disabled(isUpdating || !hasValidChanges())
             }
         }
     private func nutritionRow(label: String, value: Double?, unit: String) -> some View {
         HStack {
             Text(label)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.dsSubheadline)
+                .foregroundColor(DSColors.textSecondary)
 
             Spacer()
 
             if let value = value, value > 0 {
                 Text(String(format: "%.1f %@", value, unit))
-                    .font(.subheadline)
+                    .font(.dsSubheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(DSColors.textPrimary)
             } else {
                 Text("--")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
         }
     }

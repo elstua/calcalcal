@@ -92,7 +92,7 @@ private struct MacroRing: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: DSSpacing.sm) {
             // Label above ring
             Text(title)
                 .dsTypography(.subheadline)
@@ -119,9 +119,9 @@ private struct MacroRing: View {
                         
 
                 case .roundedRect:
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: DSCornerRadius.xxl)
                         .stroke(color.opacity(0.15), lineWidth: 6)
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: DSCornerRadius.xxl)
                         .trim(from: 0, to: progress)
                         .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         
@@ -130,12 +130,12 @@ private struct MacroRing: View {
                 // Values inside
                 VStack(spacing: 1) {
                     Text("\(Int(current))")
-                        .font(.custom("InstrumentSans-SemiBold", size: 20))
+                        .font(.dsTitle3)
                         .foregroundColor(color)
 
                     if let g = goal {
                         Text("\(Int(g))")
-                            .font(.custom("InstrumentSans-Regular", size: 14))
+                            .font(Font.dsCustom(weight: .regular, size: 14))
                             .foregroundColor(color.opacity(0.5))
                     }
                 }
@@ -161,7 +161,7 @@ struct CalorieProgressBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 // Track
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: DSCornerRadius.xs)
                     .fill(DSColors.primary.opacity(0.12))
                     .frame(height: 6)
 
@@ -205,14 +205,14 @@ struct NutritionPopupView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Drag handle
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: DSCornerRadius.full)
                 .fill(DSColors.textSecondary.opacity(0.2))
                 .frame(width: 48, height: 3)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
+                .padding(.top, DSSpacing.smd)
+                .padding(.bottom, DSSpacing.mlg)
 
             // Content
-            VStack(spacing: 20) {
+            VStack(spacing: DSSpacing.mlg) {
                 // --- Calories section ---
                 caloriesSection
 
@@ -222,13 +222,13 @@ struct NutritionPopupView: View {
                 // --- Secondary nutrients ---
                 secondaryNutrients
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .background(
-            RoundedRectangle(cornerRadius: 32)
+            RoundedRectangle(cornerRadius: DSCornerRadius.xxl)
                 .fill(DSColors.surface)
-                .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 0)
+                .shadow(color: DSColors.shadowMedium, radius: 1, x: 0, y: 0)
         )
         .offset(y: max(0, dragOffset))
         .gesture(
@@ -263,7 +263,7 @@ struct NutritionPopupView: View {
     // MARK: - Calories section
 
     private var caloriesSection: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: DSSpacing.xxs) {
             // "Calories" label
             HStack {
                 Text("Calories")
@@ -282,7 +282,7 @@ struct NutritionPopupView: View {
 
                 if let goal = calorieGoal {
                     Text("\(goal)")
-                        .font(.custom("InstrumentSansCondensed-Medium", size: 32))
+                        .font(Font.dsCustom(weight: .condensedMedium, size: 32))
                         .foregroundColor(DSColors.primary.opacity(0.35))
                 }
             }
@@ -326,7 +326,7 @@ struct NutritionPopupView: View {
                         shape: .roundedRect
                     )
                 }
-                .padding(.top, 4)
+                .padding(.top, DSSpacing.xs)
             }
         }
     }
@@ -346,7 +346,7 @@ struct NutritionPopupView: View {
             if !items.isEmpty {
                 Divider()
 
-                VStack(spacing: 8) {
+                VStack(spacing: DSSpacing.sm) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         HStack {
                             Text(item.0)
@@ -393,8 +393,8 @@ struct NutritionPopupContainer: View {
                 // Gradient background
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        Color(hex: 0x3F68E5).opacity(1),
-                        Color(hex: 0x3F68E5).opacity(0)
+                        DSColors.primary.opacity(1),
+                        DSColors.primary.opacity(0)
                     ]),
                     startPoint: .bottom,
                     endPoint: .top
@@ -414,8 +414,8 @@ struct NutritionPopupContainer: View {
                     carbGoal: carbGoal,
                     onClose: onClose
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .padding(.horizontal, DSSpacing.md)
+                .padding(.bottom, DSSpacing.md)
                 .offset(y: popupOffset)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

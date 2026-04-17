@@ -6,32 +6,32 @@ struct ReadyStepView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             Spacer()
             
             // Success icon with animation
             ZStack {
                 Circle()
-                    .fill(Color.green.opacity(0.15))
+                    .fill(DSColors.success.opacity(0.15))
                     .frame(width: 160, height: 160)
                 
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.green)
+                    .font(Font.dsCustom(weight: .regular, size: 80))
+                    .foregroundColor(DSColors.success)
             }
             
             // Success message
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Text("You're All Set!")
-                    .font(.largeTitle)
+                    .font(.dsDisplay)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text("Your profile is ready. Start tracking your calories with natural language.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, DSSpacing.xl)
             }
             
             // Data summary (if available)
@@ -42,7 +42,7 @@ struct ReadyStepView: View {
             Spacer()
             
             // Start button
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     withAnimation {
                         _ = coordinator.advance(.complete)
@@ -52,12 +52,12 @@ struct ReadyStepView: View {
                         Text("Start Tracking")
                         Image(systemName: "arrow.right")
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
+                    .font(.dsHeadline)
+                    .foregroundColor(DSColors.textInverted)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.green)
-                    .cornerRadius(12)
+                    .background(DSColors.success)
+                    .cornerRadius(DSCornerRadius.md)
                 }
                 
                 Button(action: {
@@ -66,12 +66,12 @@ struct ReadyStepView: View {
                     }
                 }) {
                     Text("Go Back")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.dsSubheadline)
+                        .foregroundColor(DSColors.textSecondary)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
     }
     
@@ -83,13 +83,13 @@ struct ReadyStepView: View {
     }
     
     private var dataSummaryView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DSSpacing.smd) {
             Text("Your Profile")
-                .font(.subheadline)
+                .font(.dsSubheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+                .foregroundColor(DSColors.textSecondary)
             
-            HStack(spacing: 24) {
+            HStack(spacing: DSSpacing.lg) {
                 if let weight = coordinator.collectedData.weightKg {
                     summaryItem(icon: "scalemass", value: "\(Int(weight))", unit: "kg")
                 }
@@ -106,39 +106,39 @@ struct ReadyStepView: View {
             
             // Show calculated calorie goal if available
             if let goal = coordinator.collectedData.calculateCalorieGoal() {
-                HStack(spacing: 4) {
+                HStack(spacing: DSSpacing.xs) {
                     Image(systemName: "flame.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(DSColors.warning)
                     Text("Estimated daily goal:")
                     Text("\(goal) kcal")
                         .fontWeight(.semibold)
                 }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.top, 8)
+                .font(.dsSubheadline)
+                .foregroundColor(DSColors.textSecondary)
+                .padding(.top, DSSpacing.sm)
             }
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+                RoundedRectangle(cornerRadius: DSCornerRadius.lg)
+                .fill(DSColors.surfaceSecondary)
         )
-        .padding(.horizontal, 24)
+        .padding(.horizontal, DSSpacing.lg)
     }
     
     private func summaryItem(icon: String, value: String, unit: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: DSSpacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(.accentColor)
+                .font(.dsTitle3)
+                .foregroundColor(DSColors.primary)
             
-            HStack(spacing: 2) {
+            HStack(spacing: DSSpacing.xxs) {
                 Text(value)
-                    .font(.headline)
+                    .font(.dsHeadline)
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.dsCaption)
+                        .foregroundColor(DSColors.textSecondary)
                 }
             }
         }

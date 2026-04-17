@@ -12,30 +12,30 @@ struct WeightStepView: View {
     @State private var targetWeight: Int = 70
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: DSSpacing.lg) {
             // Header
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Text("Your Weight")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text("Set your current and target weight to track your progress.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.top, DSSpacing.md)
             
             // Weight pickers side by side
-            HStack(spacing: 32) {
+            HStack(spacing: DSSpacing.xl) {
                 // Current weight picker
-                VStack(spacing: 8) {
+                VStack(spacing: DSSpacing.sm) {
                     Text("Current")
-                        .font(.subheadline)
+                        .font(.dsSubheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DSColors.textSecondary)
                     
                     Picker("Current Weight", selection: $currentWeight) {
                         ForEach(weightRange, id: \.self) { weight in
@@ -48,17 +48,17 @@ struct WeightStepView: View {
                     .clipped()
                     
                     Text("\(currentWeight) kg")
-                        .font(.title2)
+                        .font(.dsTitle2)
                         .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DSColors.textPrimary)
                 }
                 
                 // Target weight picker
-                VStack(spacing: 8) {
+                VStack(spacing: DSSpacing.sm) {
                     Text("Target")
-                        .font(.subheadline)
+                        .font(.dsSubheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(DSColors.textSecondary)
                     
                     Picker("Target Weight", selection: $targetWeight) {
                         ForEach(weightRange, id: \.self) { weight in
@@ -71,17 +71,17 @@ struct WeightStepView: View {
                     .clipped()
                     
                     Text("\(targetWeight) kg")
-                        .font(.title2)
+                        .font(.dsTitle2)
                         .fontWeight(.bold)
-                        .foregroundColor(.green)
+                        .foregroundColor(DSColors.success)
                 }
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(.systemGray6))
+                RoundedRectangle(cornerRadius: DSCornerRadius.xl)
+                    .fill(DSColors.surfaceSecondary)
             )
-            .padding(.horizontal, 24)
+            .padding(.horizontal, DSSpacing.lg)
             
             // Weight difference indicator
             weightDifferenceView
@@ -89,7 +89,7 @@ struct WeightStepView: View {
             Spacer()
             
             // Navigation
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     // Save weights
                     coordinator.updateData { data in
@@ -101,12 +101,12 @@ struct WeightStepView: View {
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
+                        .background(DSColors.primary)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 
                 HStack {
@@ -116,8 +116,8 @@ struct WeightStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                     
                     Spacer()
@@ -128,13 +128,13 @@ struct WeightStepView: View {
                         }
                     }) {
                         Text("Skip")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .onAppear {
             // Pre-fill if already set
@@ -155,9 +155,9 @@ struct WeightStepView: View {
         let isLoss = difference < 0
         let isMaintain = difference == 0
         
-        return HStack(spacing: 8) {
+        return HStack(spacing: DSSpacing.sm) {
             Image(systemName: isMaintain ? "equal.circle.fill" : (isGain ? "arrow.up.circle.fill" : "arrow.down.circle.fill"))
-                .foregroundColor(isMaintain ? .blue : (isGain ? .orange : .green))
+                .foregroundColor(isMaintain ? DSColors.info : (isGain ? DSColors.warning : DSColors.success))
             
             if isMaintain {
                 Text("Maintain current weight")
@@ -165,11 +165,11 @@ struct WeightStepView: View {
                 Text("\(isGain ? "Gain" : "Lose") \(abs(difference)) kg")
             }
         }
-        .font(.subheadline)
-        .foregroundColor(.secondary)
+        .font(.dsSubheadline)
+        .foregroundColor(DSColors.textSecondary)
         .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .background(DSColors.surfaceSecondary)
+        .cornerRadius(DSCornerRadius.md)
     }
 }
 

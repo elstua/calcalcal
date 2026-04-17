@@ -41,7 +41,7 @@ struct UnifiedMediaPickerView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.88)
+            DSColors.overlayHeavy
                 .ignoresSafeArea()
 
             switch pickerState {
@@ -102,7 +102,7 @@ struct UnifiedMediaPickerView: View {
             .offset(y: dismissDragOffset)
 
             Spacer()
-                .frame(height: Self.peekDetentHeight + 20)
+                .frame(height: Self.peekDetentHeight + DSSpacing.mlg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -215,12 +215,12 @@ private struct GalleryPanelContent: View {
                 .fill(Color.gray.opacity(0.3 + 0.2 * (1 - headerProgress))
                     .blendMode(isExpanded ? .normal : .screen))
                 .frame(width: 36, height: 5)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.top, DSSpacing.sm)
+                .padding(.bottom, DSSpacing.xs)
 
             // Header — always in layout, height + opacity driven by expansion
             galleryHeader
-                .frame(height: 44 * headerProgress, alignment: .top)
+                .frame(height: DSSpacing.minTouchTarget * headerProgress, alignment: .top)
                 .clipped()
                 .opacity(Double(headerProgress))
 
@@ -238,10 +238,10 @@ private struct GalleryPanelContent: View {
         .frame(height: currentHeight, alignment: .top)
         .clipped()
         .background(
-            Color(UIColor.systemBackground)
+            DSColors.surface
                 .opacity(Double(min(1.0, expansion * 2)))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.xl, style: .continuous))
         .frame(maxHeight: .infinity, alignment: .bottom)
         .gesture(panelDragGesture)
     }
@@ -250,27 +250,27 @@ private struct GalleryPanelContent: View {
         HStack {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.gray.opacity(0.15))
+                    .font(Font.dsCustom(weight: .semiBold, size: 16))
+                    .foregroundColor(DSColors.textPrimary)
+                    .frame(width: DSSpacing.xl, height: DSSpacing.xl)
+                    .background(DSColors.surfaceSecondary)
                     .clipShape(Circle())
             }
             Spacer()
             Text("Gallery")
-                .font(.headline)
+                .font(.dsHeadline)
             Spacer()
             Button(action: onBackToCamera) {
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.gray.opacity(0.15))
+                    .font(Font.dsCustom(weight: .semiBold, size: 16))
+                    .foregroundColor(DSColors.textPrimary)
+                    .frame(width: DSSpacing.xl, height: DSSpacing.xl)
+                    .background(DSColors.surfaceSecondary)
                     .clipShape(Circle())
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, DSSpacing.md)
+        .padding(.vertical, DSSpacing.sm)
     }
 
     /// Tracks the expansion value when a drag started (nil = no drag active)

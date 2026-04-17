@@ -23,14 +23,22 @@ struct GalleryThumbnailButton: View {
                         .frame(width: thumbnailSize, height: thumbnailSize)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         .rotationEffect(.degrees(Double(reversedIndex - 1) * 8))
-                        .offset(x: CGFloat(reversedIndex - 1) * 3, y: -4)
-                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                        .offset(x: CGFloat(reversedIndex - 1) * 3, y: -14)
+                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
                 }
 
                 // Plus button on top
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.white, DSColors.primary)
+                if #available(iOS 26, *) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(DSColors.primary)
+                        .frame(width: 36, height: 36)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                } else {
+                    Image(systemName: "plus.circle.fill")
+                        .font(Font.dsCustom(weight: .regular, size: 32))
+                        .foregroundStyle(DSColors.textInverted, DSColors.primary)
+                }
             }
             .frame(width: buttonSize, height: buttonSize)
         }

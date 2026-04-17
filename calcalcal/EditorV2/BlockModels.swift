@@ -164,8 +164,7 @@ public extension BlockStyle {
     static let paragraphDefault = BlockStyle(
         contentInsets: NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12),
         cornerRadius: 12,
-        // Visible teal background for paragraph blocks
-        backgroundColor: UIColor.systemTeal.withAlphaComponent(0.15),
+        backgroundColor: .clear,
         spacingBefore: 10,
         spacingAfter: 10  // Normal spacing between paragraphs
     )
@@ -177,8 +176,7 @@ public extension BlockStyle {
     static let imageDefault = BlockStyle(
         contentInsets: NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 12),
         cornerRadius: 14,
-        // Distinct orange background for image blocks
-        backgroundColor: UIColor.systemOrange.withAlphaComponent(0.2),
+        backgroundColor: .clear,
         spacingBefore: 10,
         spacingAfter: 88  // Initial value - actual spacing calculated dynamically
     )

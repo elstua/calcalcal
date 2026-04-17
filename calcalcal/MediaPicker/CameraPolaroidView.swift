@@ -18,8 +18,8 @@ struct CameraPolaroidView: View {
     private let frameHeight: CGFloat = 400
     private let previewWidth: CGFloat = 290
     private let previewHeight: CGFloat = 290
-    private let cornerRadius: CGFloat = 16
-    private let previewCornerRadius: CGFloat = 12
+    private let cornerRadius: CGFloat = DSCornerRadius.lg
+    private let previewCornerRadius: CGFloat = DSCornerRadius.md
     private let snapButtonSize: CGFloat = 70
     private let snapButtonInnerSize: CGFloat = 58
     
@@ -27,11 +27,11 @@ struct CameraPolaroidView: View {
         ZStack {
             // Polaroid frame background
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+                .fill(DSColors.surface)
+                .shadow(color: DSColors.shadowHeavy, radius: 8, x: 0, y: 4)
                 .frame(width: frameWidth, height: frameHeight)
             
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Camera preview area
                 ZStack {
                     if cameraManager.permissionStatus == .authorized {
@@ -53,7 +53,7 @@ struct CameraPolaroidView: View {
                             HStack {
                                 Spacer()
                                 flashToggleButton
-                                    .padding(8)
+                                    .padding(DSSpacing.sm)
                             }
                             Spacer()
                         }
@@ -64,7 +64,7 @@ struct CameraPolaroidView: View {
                 
                 // Snap button
                 snapButton
-                    .padding(.bottom, 8)
+                    .padding(.bottom, DSSpacing.sm)
             }
         }
         .frame(width: frameWidth, height: frameHeight)
@@ -79,14 +79,14 @@ struct CameraPolaroidView: View {
             ZStack {
                 // Outer ring
                 Circle()
-                    .strokeBorder(Color.gray.opacity(0.3), lineWidth: 4)
+                    .strokeBorder(DSColors.disabled, lineWidth: 4)
                     .frame(width: snapButtonSize, height: snapButtonSize)
                 
                 // Inner filled circle
                 Circle()
-                    .fill(Color.white)
+                    .fill(DSColors.surface)
                     .frame(width: snapButtonInnerSize, height: snapButtonInnerSize)
-                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    .shadow(color: DSColors.shadowMedium, radius: 2, x: 0, y: 1)
             }
         }
         .buttonStyle(SnapButtonStyle())
@@ -100,62 +100,62 @@ struct CameraPolaroidView: View {
         }) {
             ZStack {
                 Circle()
-                    .fill(Color.black.opacity(0.5))
+                    .fill(DSColors.overlayMedium)
                     .frame(width: 36, height: 36)
                 
                 Image(systemName: cameraManager.flashMode == .on ? "bolt.fill" : "bolt.slash.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(cameraManager.flashMode == .on ? .yellow : .white)
+                    .font(Font.dsCustom(weight: .semiBold, size: 16))
+                    .foregroundColor(cameraManager.flashMode == .on ? .yellow : DSColors.textInverted)
             }
         }
     }
     
     private var permissionDeniedView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DSSpacing.smd) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 40))
-                .foregroundColor(.gray)
+                .font(Font.dsCustom(weight: .regular, size: 40))
+                .foregroundColor(DSColors.disabled)
             
             Text("Camera Access Required")
-                .font(.headline)
-                .foregroundColor(.primary)
+                .font(.dsHeadline)
+                .foregroundColor(DSColors.textPrimary)
             
             Text("Enable camera in Settings to take photos")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
                 .multilineTextAlignment(.center)
             
             Button(action: openSettings) {
                 Text("Open Settings")
-                    .font(.subheadline)
+                    .font(.dsSubheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.blue)
-                    .cornerRadius(8)
+                    .foregroundColor(DSColors.textInverted)
+                    .padding(.horizontal, DSSpacing.md)
+                    .padding(.vertical, DSSpacing.sm)
+                    .background(DSColors.primary)
+                    .cornerRadius(DSCornerRadius.sm)
             }
         }
         .frame(width: previewWidth, height: previewHeight)
         .background(
             RoundedRectangle(cornerRadius: previewCornerRadius)
-                .fill(Color.gray.opacity(0.1))
+                .fill(DSColors.surfaceSecondary)
         )
     }
     
     private var loadingView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DSSpacing.smd) {
             ProgressView()
                 .scaleEffect(1.5)
             
             Text("Starting camera...")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
         }
         .frame(width: previewWidth, height: previewHeight)
         .background(
             RoundedRectangle(cornerRadius: previewCornerRadius)
-                .fill(Color.gray.opacity(0.1))
+                .fill(DSColors.surfaceSecondary)
         )
     }
     
@@ -185,7 +185,7 @@ struct SnapButtonStyle: ButtonStyle {
 struct CameraPolaroidView_Previews: PreviewProvider {
     static var previews: some View {
         ZStack {
-            Color.gray.opacity(0.3)
+            DSColors.disabled
                 .ignoresSafeArea()
             
             CameraPolaroidView(

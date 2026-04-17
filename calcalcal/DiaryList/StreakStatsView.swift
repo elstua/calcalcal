@@ -5,7 +5,7 @@ struct StreakStatsView: View {
     let streaksData: StreaksData?
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DSSpacing.smd) {
             statRow(
                 emoji: "🔥",
                 label: "Current Streak",
@@ -21,21 +21,21 @@ struct StreakStatsView: View {
                 value: "\(streaksData?.longestStreak ?? 0) days"
             )
         }
-        .padding(16)
+        .padding(DSSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: DSCornerRadius.lg, style: .continuous)
+                .fill(DSColors.surface)
+                .shadow(color: DSColors.shadowLight, radius: 4, x: 0, y: 2)
         )
     }
     
     @ViewBuilder
     private func statRow(emoji: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DSSpacing.smd) {
             Text(emoji)
-                .font(.system(size: 28))
+                .font(.dsTitle1)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DSSpacing.xxs) {
                 Text(label)
                     .dsTypography(.caption)
                     .foregroundColor(DSColors.textSecondary)
@@ -53,7 +53,7 @@ struct StreakStatsView: View {
 // MARK: - Preview
 struct StreakStatsView_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: DSSpacing.mlg) {
             StreakStatsView(streaksData: StreaksData(
                 currentStreak: 12,
                 longestStreak: 45,
@@ -65,6 +65,6 @@ struct StreakStatsView_Previews: PreviewProvider {
             StreakStatsView(streaksData: nil)
         }
         .padding()
-        .background(Color(UIColor.systemGroupedBackground))
+        .background(DSColors.background)
     }
 }

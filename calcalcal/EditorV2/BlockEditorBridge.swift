@@ -222,14 +222,14 @@ private extension BlockEditorBridge {
         if let font = textView.typingAttributes[.font] as? UIFont {
             return font
         }
-        return UIFont.preferredFont(forTextStyle: .body)
+        return UIFont.dsBody
     }
 
     func currentColor(from textView: BlockEditorTextView) -> UIColor {
         if let color = textView.typingAttributes[.foregroundColor] as? UIColor {
             return color
         }
-        return UIColor.label
+        return UIColor.dsTextPrimary
     }
 
     func calorieLabels(from blocks: [Block]) -> [BlockID: String] {

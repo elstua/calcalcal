@@ -20,35 +20,35 @@ struct PersonalInfoStepView: View {
     }
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             // Header
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Text("About You")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
 
                 Text("This helps us calculate your daily calorie needs accurately.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.top, DSSpacing.md)
 
-            VStack(spacing: 24) {
+            VStack(spacing: DSSpacing.lg) {
                 // Age picker
-                VStack(spacing: 8) {
+                VStack(spacing: DSSpacing.sm) {
                     HStack {
                         Text("Age")
-                            .font(.subheadline)
+                            .font(.dsSubheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DSColors.textSecondary)
 
                         if hasAgeFromHealthKit {
                             Text("(from Health)")
-                                .font(.caption2)
-                                .foregroundColor(.green)
+                                .font(.dsCaption)
+                                .foregroundColor(DSColors.success)
                         }
 
                         Spacer()
@@ -64,34 +64,34 @@ struct PersonalInfoStepView: View {
                     .clipped()
 
                     Text("\(selectedAge) years old")
-                        .font(.title3)
+                        .font(.dsTitle3)
                         .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DSColors.textPrimary)
                 }
                 .padding()
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.systemGray6))
+                    RoundedRectangle(cornerRadius: DSCornerRadius.lg)
+                        .fill(DSColors.surfaceSecondary)
                 )
 
                 // Gender selector
-                VStack(spacing: 12) {
+                VStack(spacing: DSSpacing.smd) {
                     HStack {
                         Text("Biological Sex")
-                            .font(.subheadline)
+                            .font(.dsSubheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DSColors.textSecondary)
 
                         if hasGenderFromHealthKit {
                             Text("(from Health)")
-                                .font(.caption2)
-                                .foregroundColor(.green)
+                                .font(.dsCaption)
+                                .foregroundColor(DSColors.success)
                         }
 
                         Spacer()
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: DSSpacing.smd) {
                         ForEach(Gender.allCases, id: \.self) { gender in
                             genderButton(gender)
                         }
@@ -99,16 +99,16 @@ struct PersonalInfoStepView: View {
                 }
                 .padding()
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.systemGray6))
+                    RoundedRectangle(cornerRadius: DSCornerRadius.lg)
+                        .fill(DSColors.surfaceSecondary)
                 )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, DSSpacing.lg)
 
             Spacer()
 
             // Navigation
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     coordinator.updateData { data in
                         data.age = selectedAge
@@ -119,12 +119,12 @@ struct PersonalInfoStepView: View {
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(selectedGender != nil ? Color.accentColor : Color.gray)
-                        .cornerRadius(12)
+                        .background(selectedGender != nil ? DSColors.primary : DSColors.disabled)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 .disabled(selectedGender == nil)
 
@@ -135,8 +135,8 @@ struct PersonalInfoStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
 
                     Spacer()
@@ -147,13 +147,13 @@ struct PersonalInfoStepView: View {
                         }
                     }) {
                         Text("Skip")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .onAppear {
             // Pre-fill from HealthKit data if available
@@ -177,25 +177,25 @@ struct PersonalInfoStepView: View {
                 selectedGender = gender
             }
         }) {
-            VStack(spacing: 8) {
+            VStack(spacing: DSSpacing.sm) {
                 Image(systemName: genderIcon(gender))
-                    .font(.system(size: 24))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .font(Font.dsCustom(weight: .regular, size: 24))
+                    .foregroundColor(isSelected ? DSColors.textInverted : DSColors.textPrimary)
 
                 Text(gender.displayName)
-                    .font(.subheadline)
+                    .font(.dsSubheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundColor(isSelected ? DSColors.textInverted : DSColors.textPrimary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, DSSpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.accentColor : Color(.systemBackground))
+                RoundedRectangle(cornerRadius: DSCornerRadius.md)
+                    .fill(isSelected ? DSColors.primary : DSColors.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.accentColor : Color(.systemGray4), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DSCornerRadius.md)
+                    .stroke(isSelected ? DSColors.primary : DSColors.disabled, lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())

@@ -15,16 +15,16 @@ struct StreakPopupView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Drag handle
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: DSCornerRadius.full)
                 .fill(DSColors.textSecondary.opacity(0.2))
                 .frame(width: 48, height: 3)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
+                .padding(.top, DSSpacing.smd)
+                .padding(.bottom, DSSpacing.mlg)
             
             // Content
-            VStack(spacing: 24) {
+            VStack(spacing: DSSpacing.lg) {
                 // Current Streak Section
-                VStack(spacing: 4) {
+                VStack(spacing: DSSpacing.xs) {
                     Text("\(streaksData?.currentStreak ?? 0)")
                         .dsTypography(.display)
                         .foregroundColor(DSColors.secondary)
@@ -38,7 +38,7 @@ struct StreakPopupView: View {
                     
                 
                 // Longest Streak Section
-                HStack(spacing: 12) {
+                HStack(spacing: DSSpacing.smd) {
                     Text("Best Streak")
                         .dsTypography(.body)
                         .foregroundColor(DSColors.textSecondary)
@@ -49,13 +49,13 @@ struct StreakPopupView: View {
                 }
                 
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .background(
-            RoundedRectangle(cornerRadius: 32)
+            RoundedRectangle(cornerRadius: DSCornerRadius.xxl)
                 .fill(DSColors.surface)
-                .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 0)
+                .shadow(color: DSColors.shadowMedium, radius: 1, x: 0, y: 0)
         )
         .offset(y: max(0, dragOffset))
         .gesture(
@@ -115,8 +115,8 @@ struct StreakPopupContainer: View {
                 
                 // Popup content
                 StreakPopupView(streaksData: streaksData, onClose: onClose)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 16)
+                    .padding(.horizontal, DSSpacing.lg)
+                    .padding(.bottom, DSSpacing.md)
                     .offset(y: popupOffset)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

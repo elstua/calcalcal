@@ -23,28 +23,28 @@ struct CreateAccountStepView: View {
             Spacer()
             
             // Header
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 60))
-                    .foregroundColor(.accentColor)
-                    .padding(.bottom, 8)
+                    .font(Font.dsCustom(weight: .regular, size: 60))
+                    .foregroundColor(DSColors.primary)
+                    .padding(.bottom, DSSpacing.sm)
                 
                 Text("One last step")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .font(Font.dsCustom(weight: .bold, size: 32))
+                    .foregroundColor(DSColors.textPrimary)
                 
                 Text("Create an account to sync your data\nacross devices and prevent data loss")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
             }
-            .padding(.bottom, 40)
+            .padding(.bottom, DSSpacing.xxl)
             
             Spacer()
             
             // OAuth buttons
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Apple Sign-In
                 SignInWithAppleButton(
                     onRequest: { request in
@@ -71,7 +71,7 @@ struct CreateAccountStepView: View {
                 .frame(height: 50)
                 .disabled(isUpgrading)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, DSSpacing.lg)
             
             // Loading indicator
             if isUpgrading {
@@ -80,8 +80,8 @@ struct CreateAccountStepView: View {
                         .progressViewStyle(CircularProgressViewStyle())
                         .scaleEffect(0.8)
                     Text("Creating account...")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.dsSubheadline)
+                        .foregroundColor(DSColors.textSecondary)
                 }
                 .padding()
             }
@@ -89,11 +89,11 @@ struct CreateAccountStepView: View {
             // Error message
             if let error = upgradeError {
                 Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
+                    .foregroundColor(DSColors.error)
+                    .font(.dsCaption)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, DSSpacing.sm)
             }
             
             Spacer()
@@ -126,15 +126,15 @@ struct CreateAccountStepView: View {
                         Image(systemName: "arrow.counterclockwise")
                         Text("Reset Temp User")
                     }
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.red.opacity(0.8))
-                    .foregroundColor(.white)
-                    .cornerRadius(6)
+                    .font(.dsCaption)
+                    .padding(.horizontal, DSSpacing.sm)
+                    .padding(.vertical, DSSpacing.xs)
+                    .background(DSColors.error.opacity(0.8))
+                    .foregroundColor(DSColors.textInverted)
+                    .cornerRadius(DSCornerRadius.xs)
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
+                .padding(.trailing, DSSpacing.md)
+                .padding(.bottom, DSSpacing.md)
             }
         }
     }

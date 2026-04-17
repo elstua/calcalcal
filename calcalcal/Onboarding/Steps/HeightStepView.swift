@@ -11,26 +11,26 @@ struct HeightStepView: View {
     @State private var height: Int = 170
     
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: DSSpacing.xl) {
             // Header
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Text("Your Height")
-                    .font(.title)
+                    .font(.dsTitle1)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 
                 Text("We need your height to calculate your daily calorie needs.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(.dsBody)
+                    .foregroundColor(DSColors.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.top, DSSpacing.md)
             
             Spacer()
             
             // Height picker
-            VStack(spacing: 16) {
+            VStack(spacing: DSSpacing.md) {
                 // Visual height indicator
                 heightVisualization
                 
@@ -45,30 +45,30 @@ struct HeightStepView: View {
                 .clipped()
                 
                 // Display selected height
-                HStack(spacing: 4) {
+                HStack(spacing: DSSpacing.xs) {
                     Text("\(height)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .font(.dsLargeNumber)
                     Text("cm")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
+                        .font(.dsTitle2)
+                        .foregroundColor(DSColors.textSecondary)
                 }
                 
                 // Feet/inches conversion (for reference)
                 Text(heightInFeetAndInches)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(.systemGray6))
+                RoundedRectangle(cornerRadius: DSCornerRadius.xl)
+                    .fill(DSColors.surfaceSecondary)
             )
-            .padding(.horizontal, 24)
+            .padding(.horizontal, DSSpacing.lg)
             
             Spacer()
             
             // Navigation
-            VStack(spacing: 12) {
+            VStack(spacing: DSSpacing.smd) {
                 Button(action: {
                     // Save height
                     coordinator.updateData { data in
@@ -79,12 +79,12 @@ struct HeightStepView: View {
                     }
                 }) {
                     Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
+                        .font(.dsHeadline)
+                        .foregroundColor(DSColors.textInverted)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(12)
+                        .background(DSColors.primary)
+                        .cornerRadius(DSCornerRadius.md)
                 }
                 
                 HStack {
@@ -94,8 +94,8 @@ struct HeightStepView: View {
                         }
                     }) {
                         Text("Back")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                     
                     Spacer()
@@ -106,13 +106,13 @@ struct HeightStepView: View {
                         }
                     }) {
                         Text("Skip")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.dsSubheadline)
+                            .foregroundColor(DSColors.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
         .onAppear {
             // Pre-fill if already set
@@ -129,16 +129,16 @@ struct HeightStepView: View {
         let normalizedHeight = Double(height - 100) / 120.0 // 100-220 range normalized to 0-1
         let barHeight = 20 + normalizedHeight * 60 // 20-80 points
         
-        return HStack(alignment: .bottom, spacing: 8) {
+        return HStack(alignment: .bottom, spacing: DSSpacing.sm) {
             // Height bar
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.accentColor)
+            RoundedRectangle(cornerRadius: DSCornerRadius.xs)
+                .fill(DSColors.primary)
                 .frame(width: 24, height: CGFloat(barHeight))
             
             // Person icon
             Image(systemName: "figure.stand")
-                .font(.system(size: 40))
-                .foregroundColor(.accentColor)
+                .font(Font.dsCustom(weight: .regular, size: 40))
+                .foregroundColor(DSColors.primary)
         }
         .frame(height: 80)
     }
