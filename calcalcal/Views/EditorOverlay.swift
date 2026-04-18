@@ -9,7 +9,10 @@ struct EditorOverlay: View {
     @Binding var shouldBecomeFirstResponder: Bool
     let namespace: Namespace.ID
     let onClose: (DiaryEntry) -> Void  // Now passes the final entry back
-    
+    /// Optional image pre-selected by a caller (e.g. main-screen picker) to attach
+    /// immediately when the editor appears.
+    let initialImage: UIImage?
+
     // Local mutable copy to prevent binding updates from re-triggering the fullScreenCover
     @State private var localEntry: DiaryEntry
     
@@ -42,10 +45,12 @@ struct EditorOverlay: View {
     init(entry: Binding<DiaryEntry>,
          shouldBecomeFirstResponder: Binding<Bool>,
          namespace: Namespace.ID,
+         initialImage: UIImage? = nil,
          onClose: @escaping (DiaryEntry) -> Void) {
         self._entry = entry
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
         self.namespace = namespace
+        self.initialImage = initialImage
         self.onClose = onClose
         // Initialize local copy with the entry value
         self._localEntry = State(initialValue: entry.wrappedValue)
@@ -85,6 +90,39 @@ struct EditorOverlay: View {
                     .transition(.opacity)
                 }
             }
+            .overlay {
+                if showImagePicker {
+                    UnifiedMediaPickerView(
+                        onImageSelected: { image, sourceRect in
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showImagePicker = false
+                            }
+                            if let sourceRect, sourceRect != .zero {
+                                pendingAnimationSourceRect = sourceRect
+                                pendingAnimationImage = image
+                            }
+                            handleImageSelected(image)
+                        },
+                        onDismiss: {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showImagePicker = false
+                            }
+                        },
+                        geometryNamespace: namespace
+                    )
+                    // Note: we intentionally do NOT apply `.ignoresSafeArea()` here.
+                    // The picker's own internal background already extends behind the
+                    // safe area; letting the gallery panel respect the top safe area
+                    // keeps its header (X button, title) below the status bar / Dynamic Island.
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(10)
+                }
+            }
+            // While the picker is visible, disable the editor's own interactive
+            // swipe-to-dismiss (installed by `.navigationTransition(.zoom)` on iOS 18+).
+            // Otherwise the picker's swipe-down gesture is intercepted by iOS and
+            // the whole editor closes instead of just the picker.
+            .interactiveDismissDisabled(showImagePicker)
     }
     
     private var cardContent: some View {
@@ -100,7 +138,11 @@ struct EditorOverlay: View {
                         cornerRadius: 0,
                         showShadow: false,
                         useExternalDecoration: true,
-                        onAddImage: { showImagePicker = true },
+                        onAddImage: {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showImagePicker = true
+                            }
+                        },
                         imageMap: imageMap,
                         isEditable: true,
                         shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
@@ -151,22 +193,6 @@ struct EditorOverlay: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
 
-        .fullScreenCover(isPresented: $showImagePicker) {
-            UnifiedMediaPickerView(
-                onImageSelected: { image, sourceRect in
-                    showImagePicker = false
-                    if let sourceRect = sourceRect, sourceRect != .zero {
-                        pendingAnimationSourceRect = sourceRect
-                        pendingAnimationImage = image
-                    }
-                    handleImageSelected(image)
-                },
-                onDismiss: {
-                    showImagePicker = false
-                },
-                geometryNamespace: namespace
-            )
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
             if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
                 withAnimation(.easeOut(duration: 0.25)) {
@@ -205,6 +231,12 @@ struct EditorOverlay: View {
             autosaveService.setInitialContent(blocks: localEntry.blocks)
             
             // Note: Image hydration is handled by EntryCard internally
+
+            // If an initial image was handed in by the caller (e.g. main-screen picker),
+            // insert it into the entry as if the user had picked it from the editor's own '+' button.
+            if let image = initialImage {
+                handleImageSelected(image)
+            }
         }
         .onDisappear {
             print("🟣 onDisappear START")
@@ -335,7 +367,11 @@ extension EditorOverlay {
                 remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
                 scrollOffset: headerScrollOffsetY,
                 calorieGoal: appState.currentUser?.dailyCalorieGoal,
-                onAddImage: { showImagePicker = true },
+                onAddImage: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showImagePicker = true
+                    }
+                },
                 onCalorieTap: { showNutritionPopup = true }
             )
             .padding(.bottom, DSSpacing.xs)

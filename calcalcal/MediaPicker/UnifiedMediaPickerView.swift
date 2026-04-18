@@ -91,19 +91,17 @@ struct UnifiedMediaPickerView: View {
     // MARK: - Camera view
 
     private var cameraView: some View {
-        VStack {
-            Spacer()
-
-            CameraPolaroidView(
-                cameraManager: cameraManager,
-                onCapture: capturePhoto,
-                onFlashToggle: { cameraManager.toggleFlash() }
-            )
-            .offset(y: dismissDragOffset)
-
-            Spacer()
-                .frame(height: Self.peekDetentHeight + DSSpacing.mlg)
-        }
+        // The gallery panel sits on top of the camera and always occupies
+        // `peekDetentHeight` at the bottom. We reserve that space here so the
+        // polaroid centers in the *visible* area above the gallery peek
+        // instead of the full screen (where it would sit partially behind it).
+        CameraPolaroidView(
+            cameraManager: cameraManager,
+            onCapture: capturePhoto,
+            onFlashToggle: { cameraManager.toggleFlash() }
+        )
+        .offset(y: dismissDragOffset)
+        .padding(.bottom, Self.peekDetentHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .gesture(cameraDismissGesture)

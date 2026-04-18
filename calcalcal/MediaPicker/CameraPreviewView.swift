@@ -46,7 +46,11 @@ class CameraPreviewUIView: UIView {
     
     private func commonInit() {
         previewLayer.videoGravity = .resizeAspectFill
-        backgroundColor = .black
+        // Keep the view transparent so the placeholder sitting behind this view
+        // in the SwiftUI ZStack shows through while the capture session warms up.
+        // Once the first video frame arrives, AVCaptureVideoPreviewLayer paints
+        // over it as normal.
+        backgroundColor = .clear
     }
     
     override func layoutSubviews() {

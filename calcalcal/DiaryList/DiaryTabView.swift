@@ -31,6 +31,12 @@ struct DiaryTabView: View {
     // MARK: - Nutrition Popup State (shown inside the card)
     @State private var showCardNutritionPopup: Bool = false
 
+    // MARK: - Media Picker State (inline overlay from each day card's '+' button)
+    /// The entry whose day-card '+' button triggered the picker. `nil` = picker hidden.
+    @State private var pickerTargetEntry: DiaryEntry? = nil
+    /// Image selected from the main-screen picker, handed off to the editor on open.
+    @State private var pendingPickedImage: UIImage? = nil
+
     // MARK: - Streak Sheet State
     @State private var showStreakSheet: Bool = false
     
@@ -55,6 +61,7 @@ struct DiaryTabView: View {
                     ),
                     shouldBecomeFirstResponder: $shouldFocusEditor,
                     namespace: editorNamespace,
+                    initialImage: pendingPickedImage,
                     onClose: { finalEntry in
                         handleOverlayClose(with: finalEntry)
                     }
@@ -129,6 +136,30 @@ struct DiaryTabView: View {
                     onClose: { showStreakSheet = false }
                 )
                 .transition(.opacity)
+            }
+        }
+        .overlay {
+            if let target = pickerTargetEntry {
+                UnifiedMediaPickerView(
+                    onImageSelected: { image, _ in
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            pickerTargetEntry = nil
+                        }
+                        pendingPickedImage = image
+                        presentOverlay(for: target)
+                    },
+                    onDismiss: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            pickerTargetEntry = nil
+                        }
+                    },
+                    geometryNamespace: editorNamespace
+                )
+                // Same as in EditorOverlay: the picker's background already extends
+                // behind the safe area internally; letting the gallery panel respect
+                // the top safe area keeps its header under the status bar.
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
             }
         }
     }
@@ -283,7 +314,11 @@ struct DiaryTabView: View {
                     remoteTotalCalories: entry.totalCalories,
                     scrollOffset: 0,
                     calorieGoal: appState.currentUser?.dailyCalorieGoal,
-                    onAddImage: {},
+                    onAddImage: isActive ? {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            pickerTargetEntry = entry
+                        }
+                    } : {},
                     onCalorieTap: {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             showCardNutritionPopup = true
@@ -388,6 +423,8 @@ struct DiaryTabView: View {
         print("🟢 Setting presentedEntry = nil")
         presentedEntry = nil
         shouldFocusEditor = false
+        // Clear any pending image so the next editor open doesn't re-attach it.
+        pendingPickedImage = nil
         
         // Update the source entry in the view model
         let isPlaceholder = viewModel.isPlaceholderContent(updatedEntry.blocks)
