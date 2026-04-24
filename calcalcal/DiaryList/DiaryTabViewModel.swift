@@ -84,11 +84,32 @@ final class DiaryTabViewModel: ObservableObject {
             return DayStripItemModel(
                 id: key,
                 date: date,
-                calories: state?.entry.totalCalories,
+                calories: state?.entry.blocks.resolvedCalorieTotal() ?? state?.entry.totalCalories,
                 hasEntry: !(state?.isPlaceholder ?? true),
                 isInStreak: isInStreak
             )
         }
+    }
+    
+    /// Returns a streak value that never lags behind entries already visible in
+    /// local UI state. Backend streaks remain the source of truth, but this keeps
+    /// the header from snapping back to zero while a just-closed editor is still
+    /// saving or while a stale refresh finishes.
+    func optimisticCurrentStreak(baseline: Int) -> Int {
+        let today = calendar.startOfDay(for: Date())
+        var localStreak = 0
+        
+        for offset in 0..<stripDayCount {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { break }
+            let key = dayKey(for: date)
+            guard let state = dayEntryStates[key],
+                  hasUserVisibleContent(state.entry.blocks, isPlaceholder: state.isPlaceholder) else {
+                break
+            }
+            localStreak += 1
+        }
+        
+        return max(baseline, localStreak)
     }
     
     // MARK: - Day Selection
@@ -133,6 +154,11 @@ final class DiaryTabViewModel: ObservableObject {
             dayEntryStates[key] = state
             break
         }
+    }
+    
+    func replaceEntryForVisibleDay(_ entry: DiaryEntry, isPlaceholder: Bool) {
+        let key = dayKey(for: entry.date)
+        dayEntryStates[key] = DayEntryState(entry: entry, isPlaceholder: isPlaceholder)
     }
     
     func replaceEntryId(localId: UUID, with serverId: UUID) {
@@ -224,16 +250,35 @@ final class DiaryTabViewModel: ObservableObject {
                         )
                     }
                     
-                    // Preserve local calorie updates if they are more recent
-                    // This prevents the DayStripView from flickering to 0 when backend returns stale data
-                    let localCalories = existing.entry.totalCalories
+                    // Preserve local content/calorie updates if the backend response is
+                    // stale or still waiting for analysis totals. This prevents the
+                    // main card, day strip, and streak header from snapping back to
+                    // empty/zero right after the editor closes.
+                    let localCalories = existing.entry.blocks.resolvedCalorieTotal() ?? existing.entry.totalCalories
                     let remoteCalories = entry.totalCalories
-                    let shouldPreserveLocalCalories = localCalories != nil && remoteCalories == nil
+                    let hasLocalContent = hasUserVisibleContent(existing.entry.blocks, isPlaceholder: existing.isPlaceholder)
+                    let hasRemoteContent = hasUserVisibleContent(entry.blocks, isPlaceholder: isPlaceholderContent(entry.blocks))
+                    let remoteHasNoCalories = remoteCalories == nil || remoteCalories == 0
+                    let shouldPreserveLocalCalories = hasLocalContent
+                        && localCalories != nil
+                        && remoteHasNoCalories
+                        && localCalories != remoteCalories
+                    let shouldPreserveLocalBlocks = hasLocalContent
+                        && (!hasRemoteContent || existing.entry.lastModified >= entry.lastModified)
                     
-                    if shouldPreserveLocalCalories {
+                    if shouldPreserveLocalCalories || shouldPreserveLocalBlocks {
                         var entryWithPreservedCalories = entry
-                        entryWithPreservedCalories.totalCalories = localCalories
-                        updated[key] = DayEntryState(entry: entryWithPreservedCalories, isPlaceholder: isPlaceholderContent(entry.blocks))
+                        if shouldPreserveLocalBlocks {
+                            entryWithPreservedCalories.blocks = existing.entry.blocks
+                            entryWithPreservedCalories.lastModified = max(existing.entry.lastModified, entry.lastModified)
+                        }
+                        if shouldPreserveLocalCalories {
+                            entryWithPreservedCalories.totalCalories = localCalories
+                        }
+                        updated[key] = DayEntryState(
+                            entry: entryWithPreservedCalories,
+                            isPlaceholder: isPlaceholderContent(entryWithPreservedCalories.blocks)
+                        )
                         DataFlowLogger.shared.caloriesPreserved(dayKey: key, entryId: entry.id, calories: localCalories)
                         continue
                     }
@@ -278,14 +323,48 @@ final class DiaryTabViewModel: ObservableObject {
     }
 
     func isPlaceholderContent(_ blocks: [Block]) -> Bool {
-        // Check if any block contains the placeholder marker
-        return blocks.contains { block in
+        // Treat the entry as a placeholder only when it has no user-entered
+        // text or images. A block can still carry the placeholder marker while
+        // the user is replacing the prompt, so checking "any marker" is too
+        // aggressive and can make real entries look empty.
+        let contentBlocks = blocks.filter { block in
+            switch block.type {
+            case .text(let text):
+                return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .imageText(_, _, let text):
+                return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || block.imageUrl != nil
+            case .image:
+                return true
+            default:
+                return false
+            }
+        }
+        guard !contentBlocks.isEmpty else { return true }
+        
+        return contentBlocks.allSatisfy { block in
             switch block.type {
             case .text(let text):
                 return text.isPlaceholderText
             case .imageText(_, _, let text):
-                return text.isPlaceholderText
+                return text.isPlaceholderText && block.imageUrl == nil
             default:
+                return false
+            }
+        }
+    }
+    
+    private func hasUserVisibleContent(_ blocks: [Block], isPlaceholder: Bool) -> Bool {
+        guard !isPlaceholder else { return false }
+        return blocks.contains { block in
+            switch block.type {
+            case .text(let text):
+                return !text.strippingPlaceholderMarker.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .imageText(_, _, let text):
+                return !text.strippingPlaceholderMarker.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || block.imageUrl != nil
+            case .image:
+                return true
+            case .spacer:
                 return false
             }
         }

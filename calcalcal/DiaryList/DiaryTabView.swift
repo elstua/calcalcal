@@ -182,9 +182,13 @@ struct DiaryTabView: View {
                         
                         Spacer()
                         
+                        let visibleStreak = viewModel.optimisticCurrentStreak(
+                            baseline: appState.streaksData?.currentStreak ?? 0
+                        )
+                        
                         // Streak button in header
                         StreakButton(
-                            streak: appState.streaksData?.currentStreak ?? 0,
+                            streak: visibleStreak,
                             isAddingToStreak: shouldAnimateStreak,
                             previousStreak: previousStreak,
                             action: {
@@ -210,7 +214,9 @@ struct DiaryTabView: View {
                     DayStripView(
                         items: viewModel.dayStripItems(streaksData: appState.streaksData),
                         selectedDate: viewModel.selectedDay,
-                        currentStreak: appState.streaksData?.currentStreak ?? 0,
+                        currentStreak: viewModel.optimisticCurrentStreak(
+                            baseline: appState.streaksData?.currentStreak ?? 0
+                        ),
                         onSelectDate: { viewModel.selectDay($0) },
                         onShowAllDays: {
                             withAnimation(.easeInOut(duration: 0.3)) {
@@ -412,11 +418,14 @@ struct DiaryTabView: View {
     
     private func handleOverlayClose(with updatedEntry: DiaryEntry) {
         print("🟢 handleOverlayClose START - blocks=\(updatedEntry.blocks.count)")
+        var visibleEntry = updatedEntry
+        visibleEntry.totalCalories = updatedEntry.blocks.resolvedCalorieTotal() ?? updatedEntry.totalCalories
+        visibleEntry.lastModified = Date()
         
         DataFlowLogger.shared.viewModelUpdating(
-            entryId: updatedEntry.id, 
-            blockCount: updatedEntry.blocks.count, 
-            isPlaceholder: viewModel.isPlaceholderContent(updatedEntry.blocks)
+            entryId: visibleEntry.id, 
+            blockCount: visibleEntry.blocks.count, 
+            isPlaceholder: viewModel.isPlaceholderContent(visibleEntry.blocks)
         )
         
         // CRITICAL: Clear presentedEntry FIRST to prevent re-triggering fullScreenCover
@@ -427,12 +436,9 @@ struct DiaryTabView: View {
         pendingPickedImage = nil
         
         // Update the source entry in the view model
-        let isPlaceholder = viewModel.isPlaceholderContent(updatedEntry.blocks)
-        viewModel.updateDayEntry(entryId: updatedEntry.id) { state in
-            state.entry = updatedEntry
-            state.isPlaceholder = isPlaceholder
-        }
-        DataFlowLogger.shared.viewModelUpdated(entryId: updatedEntry.id, isPlaceholder: isPlaceholder)
+        let isPlaceholder = viewModel.isPlaceholderContent(visibleEntry.blocks)
+        viewModel.replaceEntryForVisibleDay(visibleEntry, isPlaceholder: isPlaceholder)
+        DataFlowLogger.shared.viewModelUpdated(entryId: visibleEntry.id, isPlaceholder: isPlaceholder)
         
         print("🟢 handleOverlayClose END")
         
