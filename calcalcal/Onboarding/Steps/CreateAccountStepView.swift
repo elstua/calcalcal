@@ -226,7 +226,7 @@ struct CreateAccountStepView: View {
         case .success(let authorization):
             guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityToken = appleIDCredential.identityToken,
-                  let _ = String(data: identityToken, encoding: .utf8) else {
+                  let identityTokenString = String(data: identityToken, encoding: .utf8) else {
                 upgradeError = "Failed to get Apple credentials"
                 return
             }
@@ -247,8 +247,7 @@ struct CreateAccountStepView: View {
             Task {
                 do {
                     try await appState.authManager.upgradeTemporaryAccount(
-                        appleId: appleIDCredential.user,
-                        googleId: nil,
+                        identityToken: identityTokenString,
                         email: appleIDCredential.email,
                         name: fullNameString
                     )
@@ -308,12 +307,18 @@ struct CreateAccountStepView: View {
             }
             
             let user = result.user
+            guard let idToken = user.idToken?.tokenString else {
+                DispatchQueue.main.async {
+                    self.isUpgrading = false
+                    self.upgradeError = "Failed to get Google ID token"
+                }
+                return
+            }
             
             Task {
                 do {
                     try await appState.authManager.upgradeTemporaryAccount(
-                        appleId: nil,
-                        googleId: user.userID,
+                        idToken: idToken,
                         email: user.profile?.email,
                         name: user.profile?.name
                     )

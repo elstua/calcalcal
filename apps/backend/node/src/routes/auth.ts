@@ -8,6 +8,85 @@ import Database from '../services/database';
 
 const router = Router();
 
+type OAuthProvider = 'apple' | 'google';
+
+const PROFILE_UPDATE_FIELDS = new Set([
+  'email',
+  'name',
+  'daily_calorie_goal',
+  'daily_protein_goal',
+  'daily_fat_goal',
+  'daily_carb_goal',
+  'units',
+  'timezone_offset',
+  'weight_kg',
+  'height_cm',
+  'age',
+  'activity_level',
+  'target_weight_kg',
+  'gender',
+  'weight_unit',
+  'height_unit',
+  'onboarding_completed',
+]);
+
+const serializeUser = (user: any) => ({
+  ...user,
+  created_at: typeof user.created_at === 'string'
+    ? user.created_at
+    : (user.created_at as any)?.toISOString?.() || String(user.created_at),
+  updated_at: typeof user.updated_at === 'string'
+    ? user.updated_at
+    : (user.updated_at as any)?.toISOString?.() || String(user.updated_at),
+});
+
+function buildGoogleName(payload: any): string | null {
+  if (payload?.name) return payload.name;
+  if (payload?.given_name && payload?.family_name) {
+    return `${payload.given_name} ${payload.family_name}`;
+  }
+  return null;
+}
+
+async function verifyUpgradeIdentity(body: any): Promise<{
+  provider: OAuthProvider;
+  providerId: string;
+  email?: string | null;
+  name?: string | null;
+}> {
+  if (body?.identityToken) {
+    const applePayload = await AuthService.verifyAppleToken(body.identityToken);
+    if (!applePayload?.sub) {
+      throw new Error('Invalid Apple token payload');
+    }
+
+    return {
+      provider: 'apple',
+      providerId: String(applePayload.sub),
+      // Apple only includes name/email in limited cases, so keep client-provided
+      // display fields as profile hints, not as identity proof.
+      email: (applePayload.email as string | undefined) || body?.email || body?.user?.email || null,
+      name: (applePayload.name as string | undefined) || body?.name || body?.user?.name || null,
+    };
+  }
+
+  if (body?.idToken) {
+    const googlePayload = await AuthService.verifyGoogleToken(body.idToken);
+    if (!googlePayload?.sub) {
+      throw new Error('Invalid Google token payload');
+    }
+
+    return {
+      provider: 'google',
+      providerId: String(googlePayload.sub),
+      email: (googlePayload.email as string | undefined) || null,
+      name: buildGoogleName(googlePayload),
+    };
+  }
+
+  throw new Error('identityToken or idToken is required for upgrade');
+}
+
 // POST /api/auth/signin-apple
 router.post('/signin-apple', async (req: Request, res: Response) => {
   try {
@@ -25,16 +104,14 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     let applePayload: any;
     try {
       applePayload = await AuthService.verifyAppleToken(identityToken);
-      console.log('📋 Apple JWT payload keys:', Object.keys(applePayload || {}));
-      console.log('📋 Apple JWT payload email:', applePayload?.email || 'not present');
-      console.log('📋 Apple JWT payload name:', applePayload?.name || 'not present');
     } catch (error) {
-      // Best-effort: allow sign-in to proceed for MVP
-      console.warn('⚠️ Apple token verification failed, using userInfo fallback');
-      applePayload = { sub: userInfo?.id };
+      return res.status(401).json({ success: false, error: 'Invalid Apple token' });
     }
+    console.log('📋 Apple JWT payload keys:', Object.keys(applePayload || {}));
+    console.log('📋 Apple JWT payload email:', applePayload?.email || 'not present');
+    console.log('📋 Apple JWT payload name:', applePayload?.name || 'not present');
 
-    const appleId = applePayload?.sub || userInfo?.id;
+    const appleId = applePayload?.sub;
     if (!appleId) {
       return res.status(400).json({ error: 'Unable to get Apple user ID' });
     }
@@ -88,7 +165,6 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
     );
 
     // Persist hashed refresh token with expiry
-    const refreshPayload = (AuthService.verifySessionToken(refreshToken) as { userId: string } | null);
     const refreshExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await RefreshTokenModel.create(dbUser.id, refreshToken, refreshExpiry, {
       userAgent: req.headers['user-agent'] as string | undefined,
@@ -97,15 +173,7 @@ router.post('/signin-apple', async (req: Request, res: Response) => {
 
     // Ensure dates are serialized as strings for JSON
     // PostgreSQL returns dates as strings, but handle Date objects if they occur
-    const userResponse = {
-      ...dbUser,
-      created_at: typeof dbUser.created_at === 'string' 
-        ? dbUser.created_at 
-        : (dbUser.created_at as any)?.toISOString?.() || String(dbUser.created_at),
-      updated_at: typeof dbUser.updated_at === 'string'
-        ? dbUser.updated_at
-        : (dbUser.updated_at as any)?.toISOString?.() || String(dbUser.updated_at),
-    };
+    const userResponse = serializeUser(dbUser);
 
     const response = {
       success: true,
@@ -140,7 +208,7 @@ router.post('/signin-google', async (req: Request, res: Response) => {
     console.log('📥 Received Google sign-in request');
     console.log('Request body keys:', Object.keys(req.body || {}));
     
-    const { idToken, user: userInfo } = req.body || {};
+    const { idToken } = req.body || {};
     if (!idToken) {
       console.error('❌ Missing idToken');
       return res.status(400).json({ success: false, error: 'idToken is required' });
@@ -152,23 +220,18 @@ router.post('/signin-google', async (req: Request, res: Response) => {
     try {
       googlePayload = await AuthService.verifyGoogleToken(idToken);
     } catch (error) {
-      // Best-effort: allow sign-in to proceed for MVP (similar to Apple)
-      console.warn('⚠️ Google token verification failed, using userInfo fallback');
-      googlePayload = { sub: userInfo?.id };
+      return res.status(401).json({ success: false, error: 'Invalid Google token' });
     }
 
-    // Extract Google user ID from token payload (sub claim) or userInfo
-    const googleId = googlePayload?.sub || userInfo?.id;
+    // Extract Google user ID from verified token payload (sub claim)
+    const googleId = googlePayload?.sub;
     if (!googleId) {
       return res.status(400).json({ error: 'Unable to get Google user ID' });
     }
 
-    // Extract user profile data from token payload, fallback to userInfo
-    const email = userInfo?.email || googlePayload?.email;
-    const name = userInfo?.name || googlePayload?.name || 
-                 (googlePayload?.given_name && googlePayload?.family_name 
-                   ? `${googlePayload.given_name} ${googlePayload.family_name}` 
-                   : null);
+    // Extract user profile data from verified token payload.
+    const email = googlePayload?.email;
+    const name = buildGoogleName(googlePayload);
 
     // Find or create user
     console.log('🔍 Looking up user with googleId:', googleId);
@@ -181,7 +244,7 @@ router.post('/signin-google', async (req: Request, res: Response) => {
         userId,
         null,  // appleId is null for Google sign-in
         email,
-        name,
+        name || undefined,
         googleId  // googleId parameter
       );
       console.log('✅ User created:', dbUser.id);
@@ -208,15 +271,7 @@ router.post('/signin-google', async (req: Request, res: Response) => {
     });
 
     // Ensure dates are serialized as strings for JSON
-    const userResponse = {
-      ...dbUser,
-      created_at: typeof dbUser.created_at === 'string' 
-        ? dbUser.created_at 
-        : (dbUser.created_at as any)?.toISOString?.() || String(dbUser.created_at),
-      updated_at: typeof dbUser.updated_at === 'string'
-        ? dbUser.updated_at
-        : (dbUser.updated_at as any)?.toISOString?.() || String(dbUser.updated_at),
-    };
+    const userResponse = serializeUser(dbUser);
 
     const response = {
       success: true,
@@ -253,7 +308,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     // 1) Validate structure/signature to extract user id
-    const decoded = AuthService.verifySessionToken(refresh_token);
+    const decoded = AuthService.verifyRefreshToken(refresh_token);
     if (!decoded) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
@@ -310,8 +365,25 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
   try {
     const userId = req.userId!;
     const updates = req.body || {};
+    const unsupportedFields = Object.keys(updates).filter((field) => !PROFILE_UPDATE_FIELDS.has(field));
+    if (unsupportedFields.length > 0) {
+      return res.status(400).json({
+        error: 'Unsupported profile field',
+        message: `Unsupported field(s): ${unsupportedFields.join(', ')}`,
+      });
+    }
 
     // Validate enum values if provided
+    if (updates.units !== undefined) {
+      const validUnits = ['kcal', 'kJ'];
+      if (!validUnits.includes(updates.units)) {
+        return res.status(400).json({
+          error: 'Invalid units',
+          message: `units must be one of: ${validUnits.join(', ')}`,
+        });
+      }
+    }
+
     if (updates.activity_level !== undefined) {
       const validActivityLevels = ['sedentary', 'light', 'moderate', 'active', 'very_active', 'small'];
       if (!validActivityLevels.includes(updates.activity_level)) {
@@ -353,7 +425,16 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
     }
 
     // Validate numeric fields
-    const numericFields = ['weight_kg', 'height_cm', 'age', 'target_weight_kg', 'daily_calorie_goal'];
+    const numericFields = [
+      'weight_kg',
+      'height_cm',
+      'age',
+      'target_weight_kg',
+      'daily_calorie_goal',
+      'daily_protein_goal',
+      'daily_fat_goal',
+      'daily_carb_goal',
+    ];
     for (const field of numericFields) {
       if (updates[field] !== undefined && updates[field] !== null) {
         const numValue = Number(updates[field]);
@@ -365,6 +446,17 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
         }
         updates[field] = numValue;
       }
+    }
+
+    if (updates.timezone_offset !== undefined && updates.timezone_offset !== null) {
+      const timezoneOffset = Number(updates.timezone_offset);
+      if (!Number.isInteger(timezoneOffset) || timezoneOffset < -1440 || timezoneOffset > 1440) {
+        return res.status(400).json({
+          error: 'Invalid timezone_offset',
+          message: 'timezone_offset must be an integer number of minutes between -1440 and 1440',
+        });
+      }
+      updates.timezone_offset = timezoneOffset;
     }
 
     // Validate boolean fields
@@ -381,15 +473,7 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
     const updatedUser = await UserModel.update(userId, updates);
 
     // Ensure dates are serialized as strings for JSON
-    const userResponse = {
-      ...updatedUser,
-      created_at: typeof updatedUser.created_at === 'string'
-        ? updatedUser.created_at
-        : (updatedUser.created_at as any)?.toISOString?.() || String(updatedUser.created_at),
-      updated_at: typeof updatedUser.updated_at === 'string'
-        ? updatedUser.updated_at
-        : (updatedUser.updated_at as any)?.toISOString?.() || String(updatedUser.updated_at),
-    };
+    const userResponse = serializeUser(updatedUser);
 
     return res.json({ success: true, profile: userResponse });
   } catch (error) {
@@ -435,15 +519,7 @@ router.post('/create-temporary', async (req: Request, res: Response) => {
     });
     
     // Serialize dates for JSON response
-    const userResponse = {
-      ...dbUser,
-      created_at: typeof dbUser.created_at === 'string' 
-        ? dbUser.created_at 
-        : (dbUser.created_at as any)?.toISOString?.() || String(dbUser.created_at),
-      updated_at: typeof dbUser.updated_at === 'string'
-        ? dbUser.updated_at
-        : (dbUser.updated_at as any)?.toISOString?.() || String(dbUser.updated_at),
-    };
+    const userResponse = serializeUser(dbUser);
     
     const response = {
       success: true,
@@ -488,16 +564,22 @@ router.post('/upgrade-temporary', authenticateToken, async (req: AuthRequest, re
       });
     }
     
-    const { appleId, googleId, email, name } = req.body || {};
-    
-    if (!appleId && !googleId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Either appleId or googleId is required for upgrade' 
+    let verifiedIdentity: Awaited<ReturnType<typeof verifyUpgradeIdentity>>;
+    try {
+      verifiedIdentity = await verifyUpgradeIdentity(req.body || {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid OAuth token';
+      return res.status(401).json({
+        success: false,
+        error: 'OAuth verification failed',
+        message,
       });
     }
-    
-    console.log('🔄 Upgrading temporary account with:', { appleId: !!appleId, googleId: !!googleId });
+
+    const appleId = verifiedIdentity.provider === 'apple' ? verifiedIdentity.providerId : null;
+    const googleId = verifiedIdentity.provider === 'google' ? verifiedIdentity.providerId : null;
+
+    console.log('🔄 Upgrading temporary account with verified provider:', verifiedIdentity.provider);
     
     // Check if the OAuth ID is already linked to another account
     if (appleId) {
@@ -525,20 +607,12 @@ router.post('/upgrade-temporary', authenticateToken, async (req: AuthRequest, re
       userId,
       appleId || null,
       googleId || null,
-      email,
-      name
+      verifiedIdentity.email ?? undefined,
+      verifiedIdentity.name ?? undefined
     );
     
     // Serialize dates for JSON response
-    const userResponse = {
-      ...upgradedUser,
-      created_at: typeof upgradedUser.created_at === 'string' 
-        ? upgradedUser.created_at 
-        : (upgradedUser.created_at as any)?.toISOString?.() || String(upgradedUser.created_at),
-      updated_at: typeof upgradedUser.updated_at === 'string'
-        ? upgradedUser.updated_at
-        : (upgradedUser.updated_at as any)?.toISOString?.() || String(upgradedUser.updated_at),
-    };
+    const userResponse = serializeUser(upgradedUser);
     
     console.log('✅ Account upgraded successfully');
     return res.json({ 

@@ -118,7 +118,7 @@ class EditorAutosaveService: ObservableObject {
             logger.debug("Autosave skipped (text unchanged)")
             return
         }
-        // Do not autosave on every keystroke anymore. Wait for paragraph-level notifications.
+        scheduleAutosave(blocks: blocks)
     }
     
     /// Schedule autosave with debouncing (called from paragraph commit events)

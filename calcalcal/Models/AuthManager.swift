@@ -170,13 +170,8 @@ class AuthManager: NSObject, ObservableObject {
         }
     }
     
-    /// Upgrade a temporary account to a permanent account with OAuth
-    /// - Parameters:
-    ///   - appleId: Apple ID (if upgrading with Apple)
-    ///   - googleId: Google ID (if upgrading with Google)
-    ///   - email: User's email
-    ///   - name: User's name
-    func upgradeTemporaryAccount(appleId: String?, googleId: String?, email: String?, name: String?) async throws {
+    /// Upgrade a temporary account to a permanent account with a verified OAuth token.
+    func upgradeTemporaryAccount(identityToken: String? = nil, idToken: String? = nil, email: String?, name: String?) async throws {
         guard let session = try? KeychainManager.shared.loadTokens() else {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
         }
@@ -194,11 +189,11 @@ class AuthManager: NSObject, ObservableObject {
         request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         
         var upgradeRequest: [String: Any] = [:]
-        if let appleId = appleId {
-            upgradeRequest["appleId"] = appleId
+        if let identityToken = identityToken {
+            upgradeRequest["identityToken"] = identityToken
         }
-        if let googleId = googleId {
-            upgradeRequest["googleId"] = googleId
+        if let idToken = idToken {
+            upgradeRequest["idToken"] = idToken
         }
         if let email = email {
             upgradeRequest["email"] = email
@@ -1023,4 +1018,4 @@ extension AuthManager: ASAuthorizationControllerPresentationContextProviding {
         }
         return window
     }
-} 
+}

@@ -4,6 +4,8 @@ import * as jose from 'jose';
 const APPLE_PUBLIC_KEYS_URL = 'https://appleid.apple.com/auth/keys';
 const GOOGLE_PUBLIC_KEYS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 
+type SessionTokenType = 'access' | 'refresh';
+
 export class AuthService {
   static async verifyAppleToken(identityToken: string) {
     try {
@@ -62,16 +64,29 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  static verifySessionToken(token: string): { userId: string } | null {
+  private static verifySessionToken(
+    token: string,
+    expectedType: SessionTokenType
+  ): { userId: string } | null {
     try {
       const secret = process.env.JWT_SECRET;
       if (!secret) return null;
       const decoded = jwt.verify(token, secret) as any;
+      if (decoded.type !== expectedType || typeof decoded.userId !== 'string') {
+        return null;
+      }
       return { userId: decoded.userId };
     } catch (_e) {
       return null;
     }
   }
-}
 
+  static verifyAccessToken(token: string): { userId: string } | null {
+    return this.verifySessionToken(token, 'access');
+  }
+
+  static verifyRefreshToken(token: string): { userId: string } | null {
+    return this.verifySessionToken(token, 'refresh');
+  }
+}
 

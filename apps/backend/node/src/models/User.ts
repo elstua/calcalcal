@@ -32,6 +32,26 @@ export interface User {
 }
 
 export class UserModel {
+  private static readonly updateableFields = new Set([
+    'email',
+    'name',
+    'daily_calorie_goal',
+    'daily_protein_goal',
+    'daily_fat_goal',
+    'daily_carb_goal',
+    'units',
+    'timezone_offset',
+    'weight_kg',
+    'height_cm',
+    'age',
+    'activity_level',
+    'target_weight_kg',
+    'gender',
+    'weight_unit',
+    'height_unit',
+    'onboarding_completed',
+  ]);
+
   static async findByAppleId(appleId: string): Promise<User | null> {
     const result = await Database.query<User>(
       'SELECT * FROM user_profiles WHERE apple_id = $1',
@@ -191,6 +211,11 @@ export class UserModel {
     }
 
     const keys = Object.keys(updates).filter((k) => k !== 'id');
+    const unsupportedKeys = keys.filter((key) => !this.updateableFields.has(key));
+    if (unsupportedKeys.length > 0) {
+      throw new Error(`Unsupported user update field(s): ${unsupportedKeys.join(', ')}`);
+    }
+
     if (keys.length === 0) {
       return existing;
     }
@@ -266,5 +291,4 @@ export class UserModel {
     }
   }
 }
-
 

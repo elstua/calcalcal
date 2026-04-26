@@ -21,13 +21,19 @@ export interface DiaryEntry {
 }
 
 export class DiaryEntryModel {
+  private static readonly selectColumns = `
+    id, user_id, to_char(date, 'YYYY-MM-DD') AS date, content, blocks, images,
+    total_calories, total_protein, total_fat, total_carbs, total_fiber, total_sugar, total_sodium,
+    ai_analysis_status, ai_analysis_error, created_at, updated_at
+  `;
+
   static async listByDateRange(
     userId: string,
     dateFrom: string,
     dateTo: string
   ) {
     const result = await Database.query(
-      `SELECT id, user_id, date, content, images, total_calories, updated_at, ai_analysis_status
+      `SELECT ${this.selectColumns}
        FROM diary_entries
        WHERE user_id = $1 AND date >= $2 AND date <= $3
        ORDER BY date DESC`,
@@ -42,7 +48,7 @@ export class DiaryEntryModel {
     dateTo: string
   ) {
     const result = await Database.query(
-      `SELECT id, user_id, date, content, images, total_calories, updated_at, created_at
+      `SELECT ${this.selectColumns}
        FROM diary_entries
        WHERE user_id = $1 
          AND date >= $2 
@@ -56,7 +62,8 @@ export class DiaryEntryModel {
 
   static async getByDate(userId: string, date: string) {
     const result = await Database.query(
-      `SELECT * FROM diary_entries
+      `SELECT ${this.selectColumns}
+       FROM diary_entries
        WHERE user_id = $1 AND date = $2`,
       [userId, date]
     );
@@ -65,7 +72,8 @@ export class DiaryEntryModel {
 
   static async getById(entryId: string) {
     const result = await Database.query(
-      `SELECT * FROM diary_entries WHERE id = $1`,
+      `SELECT ${this.selectColumns}
+       FROM diary_entries WHERE id = $1`,
       [entryId]
     );
     return result.rows[0] || null;
@@ -77,7 +85,9 @@ export class DiaryEntryModel {
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, date) 
        DO UPDATE SET content = $3, updated_at = NOW()
-       RETURNING *`,
+       RETURNING id, user_id, to_char(date, 'YYYY-MM-DD') AS date, content, blocks, images,
+                 total_calories, total_protein, total_fat, total_carbs, total_fiber, total_sugar, total_sodium,
+                 ai_analysis_status, ai_analysis_error, created_at, updated_at`,
       [userId, date, content]
     );
     return result.rows[0];
@@ -88,7 +98,9 @@ export class DiaryEntryModel {
       `UPDATE diary_entries
        SET content = $1, updated_at = NOW()
        WHERE id = $2 AND user_id = $3
-       RETURNING *`,
+       RETURNING id, user_id, to_char(date, 'YYYY-MM-DD') AS date, content, blocks, images,
+                 total_calories, total_protein, total_fat, total_carbs, total_fiber, total_sugar, total_sodium,
+                 ai_analysis_status, ai_analysis_error, created_at, updated_at`,
       [content, entryId, userId]
     );
     return result.rows[0] || null;
@@ -153,7 +165,9 @@ export class DiaryEntryModel {
       `UPDATE diary_entries
        SET content = $1, blocks = $2, updated_at = NOW()
        WHERE id = $3 AND user_id = $4
-       RETURNING *`,
+       RETURNING id, user_id, to_char(date, 'YYYY-MM-DD') AS date, content, blocks, images,
+                 total_calories, total_protein, total_fat, total_carbs, total_fiber, total_sugar, total_sodium,
+                 ai_analysis_status, ai_analysis_error, created_at, updated_at`,
       [content, JSON.stringify(mergedBlocks), entryId, userId]
     );
     
@@ -172,5 +186,3 @@ export class DiaryEntryModel {
     return (result.rowCount ?? 0) > 0;
   }
 }
-
-

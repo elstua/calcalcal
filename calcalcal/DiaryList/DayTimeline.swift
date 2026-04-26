@@ -10,6 +10,19 @@ import Foundation
 /// We avoid relying on device `TimeZone` to keep server/user-profile sourced offsets authoritative
 /// and to keep day keys stable across DST transitions.
 enum LocalDayMath {
+	static func startUTC(forDayKey dayKey: String, offsetMinutes: Int) -> Date? {
+		let parts = dayKey.split(separator: "-").compactMap { Int($0) }
+		guard parts.count == 3 else { return nil }
+		var components = DateComponents()
+		components.calendar = Calendar(identifier: .gregorian)
+		components.timeZone = TimeZone(secondsFromGMT: 0)
+		components.year = parts[0]
+		components.month = parts[1]
+		components.day = parts[2]
+		guard let localMidnightInShiftedUTC = components.calendar?.date(from: components) else { return nil }
+		return localMidnightInShiftedUTC.addingTimeInterval(-TimeInterval(offsetMinutes * 60))
+	}
+
 	/// Returns the UTC `Date` corresponding to the start of the local day for the given `date`
 	/// using `offsetMinutes` (positive east of UTC). For example, if offset is +180 (UTC+3),
 	/// local midnight corresponds to UTC 21:00 of the previous day.
@@ -337,5 +350,4 @@ struct DayTimelineGenerator {
 		return LocalDay(yyyymmdd: key, startUTC: nextStartUTC)
 	}
 }
-
 

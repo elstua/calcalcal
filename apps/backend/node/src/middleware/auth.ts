@@ -20,7 +20,7 @@ export function authenticateToken(
     return res.status(401).json({ error: 'Missing authorization header' });
   }
 
-  const decoded = AuthService.verifySessionToken(token);
+  const decoded = AuthService.verifyAccessToken(token);
   if (!decoded) {
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -28,5 +28,4 @@ export function authenticateToken(
   req.userId = decoded.userId;
   next();
 }
-
 

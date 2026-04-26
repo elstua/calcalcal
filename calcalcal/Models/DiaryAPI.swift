@@ -48,6 +48,7 @@ struct DiaryAPI {
         let user_id: String
         let date: String
         let content: String?
+        let blocks: [DBBlock]?
         let images: [String]?
         let total_calories: Int?
         let total_protein: Double?
@@ -56,7 +57,7 @@ struct DiaryAPI {
         let updated_at: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, user_id, date, content, images, total_calories, total_protein, total_fat, total_carbs, updated_at
+            case id, user_id, date, content, blocks, images, total_calories, total_protein, total_fat, total_carbs, updated_at
         }
 
         init(from decoder: Decoder) throws {
@@ -65,6 +66,7 @@ struct DiaryAPI {
             self.user_id = try c.decode(String.self, forKey: .user_id)
             self.date = try c.decode(String.self, forKey: .date)
             self.content = try? c.decode(String.self, forKey: .content)
+            self.blocks = try? c.decode([DBBlock].self, forKey: .blocks)
             self.images = try? c.decode([String].self, forKey: .images)
             self.total_calories = c.decodeIntForgiving(forKey: .total_calories)
             // Handle PostgreSQL numeric types that may come as strings
@@ -163,6 +165,30 @@ struct DiaryAPI {
                 confidence: confidence,
                 aiAnalysis: nil // We'll fetch this separately if needed
             )
+        }
+
+        func toBlock() -> Block? {
+            guard let content = content else { return nil }
+            var block = Block(
+                id: id.flatMap(UUID.init(uuidString:)) ?? UUID(),
+                type: .text(content),
+                calorieData: calories.map(String.init),
+                nutrition: NutritionData(
+                    calories: calories,
+                    protein: protein,
+                    fat: fat,
+                    carbs: carbs,
+                    fiber: fiber,
+                    sugar: sugar,
+                    sodium: sodium,
+                    weight: weight,
+                    metric_description: metric_description,
+                    confidence: confidence,
+                    userModified: nil
+                )
+            )
+            block.stableId = id.flatMap(UUID.init(uuidString:))
+            return block
         }
     }
     private struct BlocksRow: Codable { let blocks: [DBBlock]? }
@@ -479,7 +505,12 @@ extension DiaryAPI.Row {
     func toDiaryEntry() -> DiaryEntry {
         let uuid = UUID(uuidString: id) ?? UUID()
         print("🐛 DEBUG: toDiaryEntry - db_id=\(id), db_date=\(date), local_id=\(uuid.uuidString)")
-        // Robustly parse server `date` which may arrive as "YYYY-MM-DD" or ISO8601
+        let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
+
+        // Robustly parse server `date` which may arrive as "YYYY-MM-DD" or ISO8601.
+        // A diary date is a user-local calendar day, not a UTC instant; anchoring a
+        // plain day string at UTC midnight shifts it into the previous day in
+        // negative timezones when the timeline re-buckets entries.
         let dateFormatter = DateFormatter()
         dateFormatter.calendar = Calendar(identifier: .gregorian)
         dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -490,18 +521,22 @@ extension DiaryAPI.Row {
 
         let parsedDate: Date? = {
             // Preferred: strict yyyy-MM-dd
-            if let d = dateFormatter.date(from: date) { return d }
+            if date.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+                return LocalDayMath.startUTC(forDayKey: date, offsetMinutes: offsetMinutes)
+            }
             // Fallback: ISO8601 full timestamp
             if let d = isoFormatter.date(from: date) {
                 // Normalize to UTC midnight of that local calendar day representation
                 // by formatting back to yyyy-MM-dd and re-parsing with the strict formatter.
                 let dayString = dateFormatter.string(from: d)
-                return dateFormatter.date(from: dayString)
+                return LocalDayMath.startUTC(forDayKey: dayString, offsetMinutes: offsetMinutes)
             }
             // Fallback: take first 10 chars if present and try again (e.g., "YYYY-MM-DDTHH:mm:ssZ")
             if date.count >= 10 {
                 let prefix = String(date.prefix(10))
-                if let d = dateFormatter.date(from: prefix) { return d }
+                if prefix.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+                    return LocalDayMath.startUTC(forDayKey: prefix, offsetMinutes: offsetMinutes)
+                }
             }
             return nil
         }()
@@ -518,7 +553,10 @@ extension DiaryAPI.Row {
             )
         }
         
-        let blocks = (cachedBlocks ?? (content ?? "").toTextBlocks()).withStableIdsAndChangeTracking()
+        let backendBlocks = blocks?.compactMap { $0.toBlock() }
+        let nonEmptyBackendBlocks = (backendBlocks?.isEmpty == false) ? backendBlocks : nil
+        let hydratedBlocks = cachedBlocks ?? nonEmptyBackendBlocks ?? (content ?? "").toTextBlocks()
+        let blocks = hydratedBlocks.withStableIdsAndChangeTracking()
         let updated: Date
         if let updated_at, let parsedUpdated = ISO8601DateFormatter().date(from: updated_at) { updated = parsedUpdated } else { updated = Date() }
         return DiaryEntry(
