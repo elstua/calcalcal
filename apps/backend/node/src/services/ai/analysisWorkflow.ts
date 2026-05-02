@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { AIAnalysisJobModel } from "../../models/AIAnalysisJob";
 import { DiaryEntryModel } from "../../models/DiaryEntry";
 import { StreaksModel } from "../../models/Streaks";
 import { StreakCalculator } from "../streakCalculator";
@@ -106,12 +107,15 @@ export class AIAnalysisWorkflow {
       throw new Error("Entry not found");
     }
 
-    setImmediate(() => {
-      void AIAnalysisWorkflow.runFullEntryAnalysisJob({
-        ...params,
-        blocks: safeBlocks,
-        jobId,
-      });
+    await AIAnalysisJobModel.enqueueFullEntry({
+      jobId,
+      entryId: params.entryId,
+      userId: params.userId,
+      entryDate: params.entryDate,
+      blocks: safeBlocks,
+    });
+    void import("./analysisWorker").then(({ AIAnalysisWorker }) => {
+      AIAnalysisWorker.kick();
     });
 
     return { jobId };
@@ -316,7 +320,7 @@ export class AIAnalysisWorkflow {
     };
   }
 
-  private static async runFullEntryAnalysisJob(
+  static async executeFullEntryAnalysisJob(
     params: StartFullEntryAnalysisParams & { jobId: string },
   ) {
     const { entryId, userId, entryDate, blocks, jobId } = params;
@@ -347,7 +351,7 @@ export class AIAnalysisWorkflow {
 
       if (!completed) {
         console.warn(`[ai:analyze] stale job skipped entry=${entryId} job=${jobId}`);
-        return;
+        return "stale" as const;
       }
 
       console.log(`[ai:analyze] job completed entry=${entryId} job=${jobId}`);
@@ -358,6 +362,7 @@ export class AIAnalysisWorkflow {
       } catch (streakError) {
         console.error("[ai:analyze] Error updating streaks:", streakError);
       }
+      return "completed" as const;
     } catch (error: any) {
       const markedFailed = await DiaryEntryModel.failAnalysisJob(
         entryId,
@@ -369,7 +374,7 @@ export class AIAnalysisWorkflow {
         console.warn(
           `[ai:analyze] stale job failed but ignored entry=${entryId} job=${jobId}`,
         );
-        return;
+        return "stale" as const;
       }
 
       console.error("[ai:analyze] job failed", {
@@ -377,6 +382,7 @@ export class AIAnalysisWorkflow {
         jobId,
         message: error?.message,
       });
+      throw error;
     }
   }
 }

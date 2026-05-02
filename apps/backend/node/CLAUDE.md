@@ -41,6 +41,7 @@ src/
     DiaryEntry.ts              # Diary entries + blocks — CRUD, findByDate, bulk operations
     RefreshToken.ts            # Refresh token storage and rotation
     AIAnalysisCache.ts         # Cache AI nutrition analysis results
+    AIAnalysisJob.ts           # Durable AI analysis job queue and status tracking
     Streaks.ts                 # Streak data — get, update, recalculate
   services/
     auth.ts                    # JWT token generation (access + refresh), verification
@@ -49,6 +50,8 @@ src/
     streakCalculator.ts        # Streak calculation logic
     ai/
       service.ts               # AI service coordinator — routes to provider, handles caching
+      analysisWorkflow.ts      # Owns AI analysis flows, DB writes, totals, stale-job guards, streak updates
+      analysisWorker.ts        # Polls/claims durable full-entry analysis jobs from Postgres
       prompts/
         index.ts               # Prompt builder
         templates.ts           # Prompt templates for nutrition analysis
@@ -67,6 +70,10 @@ src/
     cleanup-images.ts          # Delete orphaned images from R2
   test/
     auth-delete-account.test.ts
+    auth-tokens.test.ts
+    ai-analysis-job-tracking.test.ts
+    ai-analysis-queue.test.ts
+    diary-date-serialization.test.ts
     streaks.test.ts
     streak_rewrite.test.ts
     debug_streak.test.ts
@@ -84,6 +91,8 @@ migrations/
   009_remove_streak_trigger.sql
   010_rewrite_streaks_logic.sql
   011_update_activity_levels.sql
+  012_add_ai_analysis_job_tracking.sql
+  013_add_ai_analysis_jobs.sql
 ```
 
 ## Key Dependencies
@@ -98,8 +107,12 @@ migrations/
 
 ## Architecture Notes
 
-- **Auth flow**: Apple/Google Sign-In → backend verifies identity token → issues JWT access + refresh tokens. Temporary accounts get auto-generated credentials.
-- **AI analysis**: Text (and optional images) sent to `/api/ai/analyze-block`. Service checks cache first, then routes to configured provider (OpenAI or Gemini). Results are cached by content hash.
+- **Auth flow**: Apple/Google Sign-In → backend verifies identity token → issues JWT access + refresh tokens. Temporary-account upgrade must verify Apple/Google identity tokens before linking provider IDs. Never trust client-provided `appleId`/`googleId` as identity.
+- **Session tokens**: Access and refresh tokens share signing infrastructure but must be verified by purpose. Middleware must accept only access tokens; `/api/auth/refresh` must accept only refresh tokens.
+- **Profile updates**: Route/model update paths must allowlist fields before constructing SQL. Never pass arbitrary request-body keys into SQL column names.
+- **AI analysis**: Routes are thin HTTP adapters. Per-block flows (`text-only`, `image-only`, `multimodal`, `manual-update`) go through `AIAnalysisWorkflow.analyzeBlock`. Full-entry `/api/ai/analyze` enqueues an `ai_analysis_jobs` row and is processed by `AIAnalysisWorker`.
+- **AI job durability**: `diary_entries.ai_analysis_job_id` is the latest-job guard. Completion/failure must include this job id in the `WHERE` clause so stale AI results cannot overwrite newer edits. Full-entry jobs are claimed with `FOR UPDATE SKIP LOCKED` and stale `processing` jobs can be recovered by the worker.
+- **AI cache/provider**: `AIService` handles block-level caching and provider calls for full-entry analysis. Provider selection remains OpenAI/Gemini via env vars.
 - **Image storage**: Images uploaded via `/api/storage/upload` → stored in Cloudflare R2 → served via presigned URLs.
 - **Streaks**: Calculated server-side from diary entry dates. `streakCalculator.ts` handles the logic, `Streaks` model persists state.
 - **Migrations**: Sequential SQL files in `migrations/`. Run with `npm run migrate:dev`. Always add new migrations with the next number prefix.
@@ -138,6 +151,10 @@ AI_TEMPERATURE=0.2
 AI_PROMPT_VERSION=v1
 AI_MAX_CONCURRENCY=3
 AI_PROVIDER_TIMEOUT_MS=45000
+AI_WORKER_ENABLED=true
+AI_WORKER_INTERVAL_MS=2000
+AI_WORKER_BATCH_SIZE=1
+AI_WORKER_STALE_AFTER_SECONDS=300
 PUBLIC_BASE_URL=https://api.calcalcal.app
 DB_POOL_MAX=5
 ```
@@ -145,7 +162,11 @@ DB_POOL_MAX=5
 ## Code Patterns
 
 - All routes use `authenticateToken` middleware — access `req.userId` via `AuthRequest` type
+- Keep routes thin: validate/authenticate HTTP input, then call models/services. Do not put AI provider orchestration, background job state, or cross-model workflow writes directly in routes.
+- Do not reintroduce process-local AI job coordination such as route-level Maps. Use `AIAnalysisJobModel`, `AIAnalysisWorker`, and `diary_entries.ai_analysis_job_id`.
+- When changing AI writes, preserve the stale-job guard: only the currently stored `ai_analysis_job_id` may complete/fail and update diary blocks/totals.
 - Parameterized SQL queries everywhere (never interpolate user input)
+- Parameterized values are not enough for dynamic column names: validate column names through explicit allowlists/schemas.
 - `try/catch` on all async route handlers, structured JSON error responses
 - Group imports: express, services, models, types
 - Strict TypeScript (`strict: true`), interfaces for all request/response shapes

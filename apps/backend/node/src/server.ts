@@ -1,5 +1,6 @@
 import app from './app';
 import { runMigrations } from './scripts/runMigrationsProgrammatic';
+import { AIAnalysisWorker } from './services/ai/analysisWorker';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
@@ -22,6 +23,7 @@ async function startServer() {
 
   app.listen(PORT, () => {
     console.log(`✅ Server running on http://localhost:${PORT}`);
+    AIAnalysisWorker.start();
   });
 }
 
