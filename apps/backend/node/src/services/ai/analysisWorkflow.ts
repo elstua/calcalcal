@@ -196,12 +196,11 @@ export class AIAnalysisWorkflow {
     }
 
     const provider = getNutritionProvider();
+    const providerName = (process.env.AI_PROVIDER || "openai").toLowerCase();
     const model =
-      process.env.AI_MODEL ||
-      (process.env.AI_PROVIDER === "gemini"
-        ? process.env.AI_GEMINI_MODEL
-        : process.env.AI_OPENAI_MODEL) ||
-      "gpt-4o-mini";
+      providerName === "gemini"
+        ? process.env.AI_GEMINI_MODEL || "gemini-2.5-flash"
+        : process.env.AI_OPENAI_MODEL || "gpt-4o-mini";
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
 
     console.time("[analyze-block] ai_call");

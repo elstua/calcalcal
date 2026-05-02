@@ -25,7 +25,6 @@ export class OpenAINutritionProvider implements NutritionProvider {
   ): Promise<NutritionAnalysisResult> {
     const model =
       options?.model ||
-      process.env.AI_MODEL ||
       process.env.AI_OPENAI_MODEL ||
       "gpt-4o-mini";
     const temperature =

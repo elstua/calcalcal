@@ -148,5 +148,3 @@ export function extractObjectKeyFromUrl(imageUrl: string): string {
     return imageUrl;
   }
 }
-
-
