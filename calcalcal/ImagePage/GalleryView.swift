@@ -28,7 +28,7 @@ struct GalleryView: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: config.gridItems, spacing: config.spacing) {
+            LazyVGrid(columns: config.gridItems, spacing: config.rowSpacing) {
                 ForEach(photoAssets, id: \.localIdentifier) { asset in
                     thumbnailCell(for: asset)
                         .onAppear {
@@ -38,7 +38,7 @@ struct GalleryView: View {
                         }
                 }
             }
-            .padding(config.showFrame ? DSSpacing.md : config.spacing)
+            .padding(config.contentPadding)
         }
         .onAppear(perform: loadPhotos)
         .sheet(isPresented: $showLargeImage) {
@@ -82,7 +82,7 @@ struct GalleryView: View {
                 showLargeImage = true
             }
         )
-        .aspectRatio(1, contentMode: .fill)
+        .aspectRatio(config.cardAspectRatio ?? 1, contentMode: .fit)
         .modifier(OptionalMatchedGeometry(id: assetId, namespace: geometryNamespace))
         .background(
             GeometryReader { geo in

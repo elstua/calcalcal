@@ -64,7 +64,6 @@ struct UnifiedMediaPickerView: View {
                         screenHeight: screenHeight,
                         snapPoints: snapPoints,
                         onImageSelected: { image, assetId, sourceFrame in selectImage(image, assetId: assetId, sourceFrame: sourceFrame) },
-                        onDismiss: onDismiss,
                         onBackToCamera: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                                 galleryExpansion = 0
@@ -190,7 +189,6 @@ private struct GalleryPanelContent: View {
     let screenHeight: CGFloat
     let snapPoints: [CGFloat]
     var onImageSelected: (UIImage, String, CGRect) -> Void
-    var onDismiss: () -> Void
     var onBackToCamera: () -> Void
     var geometryNamespace: Namespace.ID?
 
@@ -239,36 +237,28 @@ private struct GalleryPanelContent: View {
             DSColors.surface
                 .opacity(Double(min(1.0, expansion * 2)))
         )
-        .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.xl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous))
         .frame(maxHeight: .infinity, alignment: .bottom)
         .gesture(panelDragGesture)
     }
 
     private var galleryHeader: some View {
-        HStack {
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(Font.dsCustom(weight: .semiBold, size: 16))
-                    .foregroundColor(DSColors.textPrimary)
-                    .frame(width: DSSpacing.xl, height: DSSpacing.xl)
-                    .background(DSColors.surfaceSecondary)
-                    .clipShape(Circle())
-            }
-            Spacer()
+        ZStack {
             Text("Gallery")
                 .font(.dsHeadline)
-            Spacer()
-            Button(action: onBackToCamera) {
-                Image(systemName: "camera.fill")
-                    .font(Font.dsCustom(weight: .semiBold, size: 16))
-                    .foregroundColor(DSColors.textPrimary)
-                    .frame(width: DSSpacing.xl, height: DSSpacing.xl)
-                    .background(DSColors.surfaceSecondary)
-                    .clipShape(Circle())
+
+            HStack {
+                Spacer()
+
+                Button(action: onBackToCamera) {
+                    Image(systemName: "camera.fill")
+                        .font(Font.dsCustom(weight: .semiBold, size: 16))
+                        .foregroundColor(DSColors.textPrimary)
+                        .frame(width: DSSpacing.minTouchTarget, height: DSSpacing.minTouchTarget)
+                }
             }
         }
         .padding(.horizontal, DSSpacing.md)
-        .padding(.vertical, DSSpacing.sm)
     }
 
     /// Tracks the expansion value when a drag started (nil = no drag active)

@@ -3,6 +3,8 @@ import UIKit
 import Photos
 
 struct ImageComponent: View {
+    static let editorCardSize = CGSize(width: 72, height: 86)
+
     let asset: PHAsset?
     let uiImage: UIImage?
     let config: GalleryDisplayConfig
@@ -16,24 +18,17 @@ struct ImageComponent: View {
 
     private var displayImage: UIImage? { loadedImage ?? uiImage }
 
-    // Sizes derived from config or large-preview mode
-    private var imageSize: CGFloat {
-        isLargePreview ? 320 : (config.showFrame ? 40 : config.thumbnailHeight)
-    }
-    /// The white polaroid card dimensions (smaller than outer frame)
-    private var cardWidth: CGFloat { isLargePreview ? 350 : 60 }
-    private var cardHeight: CGFloat { isLargePreview ? 420 : 80 }
-    /// Outer frame including padding around the card
-    private var frameWidth: CGFloat { isLargePreview ? 350 : 100 }
-    private var frameHeight: CGFloat { isLargePreview ? 420 : 120 }
     private var cornerRadius: CGFloat {
         isLargePreview ? DSCornerRadius.lg : config.thumbnailCornerRadius
+    }
+    private var usesPolaroidCard: Bool {
+        config.showFrame || config.cardAspectRatio != nil || isLargePreview
     }
 
     var body: some View {
         Group {
-            if config.showFrame || isLargePreview {
-                framedView
+            if usesPolaroidCard {
+                polaroidView
             } else {
                 edgeToEdgeView
             }
@@ -41,7 +36,7 @@ struct ImageComponent: View {
         .onAppear { loadImageFromAsset() }
     }
 
-    // MARK: - Edge-to-edge thumbnail (picker style)
+    // MARK: - Edge-to-edge thumbnail fallback
 
     private var edgeToEdgeView: some View {
         Group {
@@ -65,45 +60,140 @@ struct ImageComponent: View {
         }
     }
 
-    // MARK: - Polaroid-framed thumbnail (editor style)
+    // MARK: - Polaroid thumbnail
 
-    private var framedView: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: isLargePreview ? DSCornerRadius.lg : DSCornerRadius.sm)
+    @ViewBuilder
+    private var polaroidView: some View {
+        if isLargePreview {
+            largePolaroidView
+        } else if let cardAspectRatio = config.cardAspectRatio {
+            responsivePolaroidView
+                .aspectRatio(cardAspectRatio, contentMode: .fit)
+        } else {
+            editorPolaroidView
+        }
+    }
+
+    private var editorPolaroidView: some View {
+        let cardPadding = DSSpacing.sm
+        let imageSize = ImageComponent.editorCardSize.width - cardPadding * 2
+
+        return polaroidCard(
+            cardWidth: ImageComponent.editorCardSize.width,
+            cardHeight: ImageComponent.editorCardSize.height,
+            imageSize: imageSize,
+            imageTopPadding: cardPadding,
+            cardCornerRadius: DSCornerRadius.sm,
+            imageCornerRadius: 2,
+            shadowColor: DSColors.shadowMedium,
+            shadowRadius: 1,
+            shadowX: 0,
+            shadowY: 0,
+            showsDeleteButton: false
+        )
+        .frame(
+            width: ImageComponent.editorCardSize.width,
+            height: ImageComponent.editorCardSize.height,
+            alignment: .top
+        )
+    }
+
+    private var largePolaroidView: some View {
+        polaroidCard(
+            cardWidth: 350,
+            cardHeight: 420,
+            imageSize: 320,
+            imageTopPadding: DSSpacing.md,
+            cardCornerRadius: DSCornerRadius.lg,
+            imageCornerRadius: DSCornerRadius.sm,
+            shadowColor: DSColors.shadowMedium,
+            shadowRadius: 1,
+            shadowX: 0,
+            shadowY: 0,
+            showsDeleteButton: true
+        )
+        .frame(width: 350, height: 420)
+    }
+
+    private var responsivePolaroidView: some View {
+        GeometryReader { geo in
+            let cardWidth = geo.size.width
+            let cardHeight = geo.size.height
+            let cardPadding = min(max(cardWidth * 0.1, DSSpacing.xs), DSSpacing.sm)
+            let imageSize = max(0, cardWidth - cardPadding * 2)
+            let cardCornerRadius = cornerRadius + cardPadding
+
+            polaroidCard(
+                cardWidth: cardWidth,
+                cardHeight: cardHeight,
+                imageSize: imageSize,
+                imageTopPadding: cardPadding,
+                cardCornerRadius: cardCornerRadius,
+                imageCornerRadius: cornerRadius,
+                shadowColor: DSColors.shadowMedium,
+                shadowRadius: 4,
+                shadowX: 0,
+                shadowY: 2,
+                showsDeleteButton: false
+            )
+            .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        }
+    }
+
+    private func polaroidCard(
+        cardWidth: CGFloat,
+        cardHeight: CGFloat,
+        imageSize: CGFloat,
+        imageTopPadding: CGFloat,
+        cardCornerRadius: CGFloat,
+        imageCornerRadius: CGFloat,
+        shadowColor: Color,
+        shadowRadius: CGFloat,
+        shadowX: CGFloat,
+        shadowY: CGFloat,
+        showsDeleteButton: Bool
+    ) -> some View {
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .fill(DSColors.surface)
-                .shadow(radius: 1)
+                .shadow(color: shadowColor, radius: shadowRadius, x: shadowX, y: shadowY)
                 .frame(width: cardWidth, height: cardHeight)
 
             VStack(spacing: 0) {
-                if let img = displayImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: imageSize, height: imageSize)
-                        .clipShape(RoundedRectangle(cornerRadius: DSCornerRadius.sm))
-                } else {
-                    RoundedRectangle(cornerRadius: isLargePreview ? DSCornerRadius.sm : DSCornerRadius.sm)
-                        .fill(DSColors.disabled)
-                        .frame(width: imageSize, height: imageSize)
-                }
+                polaroidImageContent(size: imageSize, cornerRadius: imageCornerRadius)
+                    .padding(.top, imageTopPadding)
 
-                if isLargePreview {
-                    Spacer()
-                    if let onDelete = onDelete {
-                        Button(action: onDelete) {
-                            Text("Delete")
-                                .foregroundColor(DSColors.error)
-                        }
-                        .padding(.bottom, DSSpacing.md)
+                Spacer(minLength: 0)
+
+                if showsDeleteButton, let onDelete = onDelete {
+                    Button(action: onDelete) {
+                        Text("Delete")
+                            .foregroundColor(DSColors.error)
                     }
+                    .padding(.bottom, DSSpacing.md)
                 }
             }
-            .padding(isLargePreview ? DSSpacing.md : DSSpacing.sm)
-            .onLongPressGesture {
-                if let image = displayImage { onLongPress?(image) }
-            }
+            .frame(width: cardWidth, height: cardHeight)
         }
-        .frame(width: frameWidth, height: frameHeight)
+        .frame(width: cardWidth, height: cardHeight, alignment: .top)
+        .onLongPressGesture {
+            if let image = displayImage { onLongPress?(image) }
+        }
+    }
+
+    @ViewBuilder
+    private func polaroidImageContent(size: CGFloat, cornerRadius: CGFloat) -> some View {
+        if let img = displayImage {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(DSColors.disabled)
+                .frame(width: size, height: size)
+        }
     }
 
     // MARK: - Loading
@@ -150,7 +240,7 @@ struct ImageComponent_Previews: PreviewProvider {
             ImageComponent(asset: nil, uiImage: nil, config: .editor, onDelete: nil, onLongPress: nil)
                 .previewDisplayName("Editor")
             ImageComponent(asset: nil, uiImage: nil, config: .picker, onDelete: nil, onLongPress: nil)
-                .frame(width: 120, height: 130)
+                .frame(width: 120, height: 160)
                 .previewDisplayName("Picker")
             ImageComponent(asset: nil, uiImage: nil, config: .editor, onDelete: {}, onLongPress: nil, isLargePreview: true)
                 .previewDisplayName("Large")

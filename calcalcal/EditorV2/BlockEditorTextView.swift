@@ -337,7 +337,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     }
 
     /// Size of the image component in "small" mode
-    private let imageComponentSize = CGSize(width: 72, height: 80)
+    private let imageComponentSize = ImageComponent.editorCardSize
 
     /// Positions `ImageComponent` overlays and sets up exclusion paths so text flows around images.
     private func updateImageOverlays() {
