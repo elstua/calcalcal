@@ -4,9 +4,9 @@
 <dict>
 	<!-- API Configuration - Values are injected from xcconfig files -->
 	<key>API_URL</key>
-	<string>${API_URL}</string>
+	<string>$(API_URL)</string>
 	<key>MEDIA_URL</key>
-	<string>${MEDIA_URL}</string>
+	<string>$(MEDIA_URL)</string>
 	
 	<!-- Bundle Info -->
 	<key>CFBundleDisplayName</key>
