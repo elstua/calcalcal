@@ -139,9 +139,7 @@ struct EditorOverlay: View {
                         showShadow: false,
                         useExternalDecoration: true,
                         onAddImage: {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showImagePicker = true
-                            }
+                            openImagePicker()
                         },
                         imageMap: imageMap,
                         isEditable: true,
@@ -218,6 +216,7 @@ struct EditorOverlay: View {
 
             // Auto-focus the editor after a short delay to let the transition complete
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                guard !showImagePicker else { return }
                 shouldBecomeFirstResponder = true
             }
             
@@ -368,9 +367,7 @@ extension EditorOverlay {
                 scrollOffset: headerScrollOffsetY,
                 calorieGoal: appState.currentUser?.dailyCalorieGoal,
                 onAddImage: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showImagePicker = true
-                    }
+                    openImagePicker()
                 },
                 onCalorieTap: { showNutritionPopup = true }
             )
@@ -410,6 +407,15 @@ extension EditorOverlay {
         // The parent's handleOverlayClose sets presentedEntry = nil, which dismisses the fullScreenCover
         // But we also call dismiss() here to ensure proper dismissal in all cases
         dismiss()
+    }
+
+    private func openImagePicker() {
+        shouldBecomeFirstResponder = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showImagePicker = true
+        }
     }
 }
 

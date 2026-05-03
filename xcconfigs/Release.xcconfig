@@ -1,1 +1,2 @@
-#include "xcconfigs/Release.xcconfig"
+API_URL = https:/api.calcalcal.app
+MEDIA_URL = https:/media.calcalcal.app
