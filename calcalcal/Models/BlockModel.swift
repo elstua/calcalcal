@@ -131,7 +131,7 @@ extension Array where Element == Block {
                 ]
             case .imageText(_, _, let text):
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { continue }
+                if trimmed.isEmpty && (block.imageUrl?.isEmpty ?? true) { continue }
                 position += 1
                 dict = [
                     "id": block.id.uuidString,

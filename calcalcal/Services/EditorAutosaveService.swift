@@ -152,6 +152,12 @@ class EditorAutosaveService: ObservableObject {
         // Do immediate save without AI analysis to prevent contamination
         Task { await saveWithoutAIAnalysis(blocks: blocks) }
     }
+
+    /// Persist the current editor blocks without starting AI analysis.
+    /// Used by the image pipeline so `/analyze-block` has a durable block to update.
+    func saveBlocksWithoutAIAnalysis(blocks: [Block]) async {
+        await saveWithoutAIAnalysis(blocks: blocks, refreshStreaks: false)
+    }
     
     /// Cancel all pending async tasks
     func cancelAll() {
@@ -177,6 +183,111 @@ class EditorAutosaveService: ObservableObject {
         EntryIdentityCoordinator.shared.canonicalize(localId: entryId, serverId: serverUUID, blocks: blocks)
         entryId = serverUUID
         onEntryIdUpdated?(serverUUID)
+    }
+
+    private func postAnalysisState(for blocksPayload: [[String: Any]], isAnalyzing: Bool) {
+        guard !blocksPayload.isEmpty else { return }
+        let payload = blocksPayload.map { block -> [String: Any] in
+            [
+                "id": block["id"] as? String ?? "",
+                "position": block["position"] as? Int ?? 0,
+                "content": block["content"] as? String ?? "",
+                "isAnalyzing": isAnalyzing
+            ]
+        }
+        NotificationCenter.default.post(
+            name: .editorApplyPerBlockMetadata,
+            object: nil,
+            userInfo: [
+                "entryId": entryId.uuidString,
+                "analyzedBlocks": payload
+            ]
+        )
+    }
+
+    private func postAnalysisError(_ message: String) {
+        NotificationCenter.default.post(
+            name: .editorAnalysisError,
+            object: nil,
+            userInfo: [
+                "entryId": entryId.uuidString,
+                "message": message
+            ]
+        )
+    }
+
+    private func blocksNeedingAnalysis(currentBlocks: [[String: Any]], analyzedBlocks: [AnalyzedBlock]) -> [[String: Any]] {
+        let existingByID = Dictionary(uniqueKeysWithValues: analyzedBlocks.map { ($0.id, $0) })
+
+        return currentBlocks.filter { currentBlock in
+            let currentID = currentBlock["id"] as? String ?? ""
+            let currentContent = normalizedContent(currentBlock["content"] as? String)
+            guard !currentContent.isEmpty else { return false }
+
+            if (currentBlock["userModified"] as? Bool) == true {
+                return false
+            }
+
+            if let existing = existingByID[currentID] {
+                let existingContent = normalizedContent(existing.content)
+                return existingContent != currentContent || !hasMeaningfulNutrition(existing)
+            }
+
+            return !analyzedBlocks.contains { existing in
+                normalizedContent(existing.content) == currentContent && hasMeaningfulNutrition(existing)
+            }
+        }
+    }
+
+    private func fallbackBlocksNeedingAnalysis(from blocks: [Block]) -> [[String: Any]] {
+        let payload = blocks.toAnalyzeBlocks()
+        return payload.filter { currentBlock in
+            let currentID = currentBlock["id"] as? String
+            guard let uuidString = currentID,
+                  let uuid = UUID(uuidString: uuidString),
+                  let block = blocks.first(where: { $0.id == uuid }) else {
+                return true
+            }
+            if block.nutrition?.userModified == true {
+                return false
+            }
+            return !blockHasMeaningfulNutrition(block)
+        }
+    }
+
+    private func normalizedContent(_ content: String?) -> String {
+        (content ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: String(placeholderMarker), with: "")
+    }
+
+    private func hasMeaningfulNutrition(_ block: AnalyzedBlock) -> Bool {
+        (block.calories ?? 0) > 0 ||
+        (block.protein ?? 0) > 0 ||
+        (block.fat ?? 0) > 0 ||
+        (block.carbs ?? 0) > 0
+    }
+
+    private func blockHasMeaningfulNutrition(_ block: Block) -> Bool {
+        if let nutrition = block.nutrition {
+            return (nutrition.calories ?? 0) > 0 ||
+            (nutrition.protein ?? 0) > 0 ||
+            (nutrition.fat ?? 0) > 0 ||
+            (nutrition.carbs ?? 0) > 0
+        }
+        return block.calorieData?.firstIntegerValueForAnalysis != nil
+    }
+
+    private func existingAnalyzedBlocks(forDay day: String) async -> [AnalyzedBlock]? {
+        do {
+            guard let existing = try await DiaryAPI.getByDate(day) else {
+                return nil
+            }
+            return existing.blocks?.compactMap { $0.toAnalyzedBlock() } ?? []
+        } catch {
+            logger.debug("Failed to load pre-save analyzed blocks: \(error.localizedDescription)")
+            return nil
+        }
     }
     
     /// Full save with AI analysis and polling
@@ -215,6 +326,7 @@ class EditorAutosaveService: ObservableObject {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 logger.debug("Upserting content for day \(day)…")
                 let blocksPayload = blocks.toAnalyzeBlocks()
+                let existingAnalyzedBlocks = await existingAnalyzedBlocks(forDay: day)
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content, blocks: blocksPayload)
                 logger.debug("Autosave result - local_id=\(self.entryId.uuidString), db_id=\(row.id)")
                 await MainActor.run {
@@ -230,7 +342,6 @@ class EditorAutosaveService: ObservableObject {
                 }
                 
                 // Run AI analysis + polling in same Task so cancelling autosaveTask cancels everything
-                let payload = blocks.toAnalyzeBlocks()
                 let isContentEmpty = content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 
                 if isContentEmpty {
@@ -240,57 +351,62 @@ class EditorAutosaveService: ObservableObject {
                         onTotalCaloriesUpdated?(0)
                     }
                 } else {
+                    var pendingAnalysisPayload: [[String: Any]] = []
                     do {
-                        let analyzedBlocks = try await DiaryAPI.getAnalyzedBlocksById(row.id)
-                        
-                        // Check if any blocks have actual nutrition data (not just empty analysis)
-                        let hasActualNutritionData = analyzedBlocks.contains { block in
-                            (block.calories ?? 0) > 0 ||
-                            (block.protein ?? 0) > 0 ||
-                            (block.fat ?? 0) > 0 ||
-                            (block.carbs ?? 0) > 0
+                        let analyzedBlocks: [AnalyzedBlock]
+                        if let existingAnalyzedBlocks {
+                            analyzedBlocks = existingAnalyzedBlocks
+                        } else {
+                            analyzedBlocks = try await DiaryAPI.getAnalyzedBlocksById(row.id)
                         }
                         
-                        if !analyzedBlocks.isEmpty && hasActualNutritionData {
-                            // Use incremental analysis by comparing content
-                            let currentContentBlocks = blocks.toAnalyzeBlocks()
-                            let existingContentBlocks = analyzedBlocks.map { analyzedBlock in
-                                return [
-                                    "id": analyzedBlock.id,
-                                    "position": analyzedBlock.position,
-                                    "type": "text",
-                                    "content": analyzedBlock.content
-                                ] as [String: Any]
-                            }
-                            
-                            // Find blocks that need analysis (new or changed content)
-                            let blocksNeedingAnalysis = currentContentBlocks.filter { currentBlock in
-                                let currentContent = (currentBlock["content"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                                return !existingContentBlocks.contains { existingBlock in
-                                    let existingContent = (existingBlock["content"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                                    return currentContent == existingContent
-                                }
-                            }
-                            
-                            if !blocksNeedingAnalysis.isEmpty {
-                                // Use incremental analysis
+                        let currentContentBlocks = blocks.toAnalyzeBlocks()
+                        let blocksNeedingAnalysis = self.blocksNeedingAnalysis(
+                            currentBlocks: currentContentBlocks,
+                            analyzedBlocks: analyzedBlocks
+                        )
+
+                        if !blocksNeedingAnalysis.isEmpty {
+                            pendingAnalysisPayload = blocksNeedingAnalysis
+                            if analyzedBlocks.isEmpty {
+                                _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: blocksNeedingAnalysis)
+                                logger.debug("Analyze triggered for entry \(row.id) with \(blocksNeedingAnalysis.count) pending blocks")
+                            } else {
                                 _ = try await DiaryAPI.analyzeIncremental(
                                     entryId: row.id,
                                     blocksPayload: blocksNeedingAnalysis,
                                     existingBlocks: analyzedBlocks
                                 )
-                                logger.debug("Incremental analyze triggered for entry \(row.id) with \(blocksNeedingAnalysis.count) blocks")
-                            } else {
-                                logger.debug("No blocks need analysis for entry \(row.id)")
+                                logger.debug("Incremental analyze triggered for entry \(row.id) with \(blocksNeedingAnalysis.count) pending blocks")
+                            }
+                            await MainActor.run {
+                                self.postAnalysisState(for: blocksNeedingAnalysis, isAnalyzing: true)
                             }
                         } else {
-                            // No existing analysis or no actual nutrition data, use full analysis
-                            _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
-                            logger.debug("Full analyze triggered for entry \(row.id) with \(payload.count) blocks")
+                            logger.debug("No blocks need analysis for entry \(row.id)")
                         }
                     } catch {
-                        _ = try? await DiaryAPI.analyze(entryId: row.id, blocksPayload: payload)
-                        logger.debug("Fallback full analyze for entry \(row.id)")
+                        pendingAnalysisPayload = fallbackBlocksNeedingAnalysis(from: blocks)
+                        if pendingAnalysisPayload.isEmpty {
+                            logger.debug("Analysis fallback skipped; no local blocks need analysis for entry \(row.id)")
+                            await MainActor.run {
+                                self.postAnalysisError("We couldn't check for calorie updates. Existing calories were left unchanged.")
+                            }
+                        } else {
+                            do {
+                                _ = try await DiaryAPI.analyze(entryId: row.id, blocksPayload: pendingAnalysisPayload)
+                                await MainActor.run {
+                                    self.postAnalysisState(for: pendingAnalysisPayload, isAnalyzing: true)
+                                }
+                                logger.debug("Fallback analyze for entry \(row.id) with \(pendingAnalysisPayload.count) pending blocks")
+                            } catch {
+                                await MainActor.run {
+                                    self.postAnalysisState(for: pendingAnalysisPayload, isAnalyzing: false)
+                                    self.postAnalysisError("We couldn't analyze those calories. Please try again.")
+                                }
+                                return
+                            }
+                        }
                     }
                     
                     // Poll for updated totals and per-block calories (fewer rounds to reduce requests)
@@ -354,6 +470,13 @@ class EditorAutosaveService: ObservableObject {
                             }
                         }
                     }
+
+                    if !pendingAnalysisPayload.isEmpty && !hasReceivedNutritionData {
+                        await MainActor.run {
+                            self.postAnalysisState(for: pendingAnalysisPayload, isAnalyzing: false)
+                            self.postAnalysisError("Calorie analysis is taking longer than expected. Please try again in a moment.")
+                        }
+                    }
                 }
                 await MainActor.run {
                     onTotalCaloriesUpdated?(row.total_calories)
@@ -367,11 +490,14 @@ class EditorAutosaveService: ObservableObject {
             logger.info("Autosave success")
         } catch {
             logger.error("Autosave error: \(error.localizedDescription)")
+            if !Task.isCancelled {
+                postAnalysisError("We couldn't save your entry. Please check your connection and try again.")
+            }
         }
     }
     
     /// Save content to database without triggering AI analysis (used during overlay dismissal)
-    private func saveWithoutAIAnalysis(blocks: [Block]) async {
+    private func saveWithoutAIAnalysis(blocks: [Block], refreshStreaks: Bool = true) async {
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasOnlyPlaceholder = blocks.allSatisfy { block in
@@ -387,7 +513,9 @@ class EditorAutosaveService: ObservableObject {
         if trimmed.isEmpty || hasOnlyPlaceholder {
             logger.debug("Flush save skipped (empty/placeholder content)")
             // Still refresh streaks even if content is empty (user might have deleted content)
-            await refreshStreaksAfterSave()
+            if refreshStreaks {
+                await refreshStreaksAfterSave()
+            }
             return
         }
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
@@ -415,14 +543,18 @@ class EditorAutosaveService: ObservableObject {
                 
                 // CRITICAL: Refresh streaks AFTER save completes successfully
                 // This ensures the backend has the latest entry data when calculating streaks
-                await refreshStreaksAfterSave()
+                if refreshStreaks {
+                    await refreshStreaksAfterSave()
+                }
             } else {
                 logger.warning("Missing user id; deferring flush save")
             }
         } catch {
             logger.error("Flush save error: \(error.localizedDescription)")
             // Still try to refresh streaks even on error
-            await refreshStreaksAfterSave()
+            if refreshStreaks {
+                await refreshStreaksAfterSave()
+            }
         }
     }
     
@@ -444,5 +576,18 @@ class EditorAutosaveService: ObservableObject {
         } catch {
             logger.debug("Streaks refresh after save failed: \(error.localizedDescription)")
         }
+    }
+}
+
+private extension String {
+    var firstIntegerValueForAnalysis: Int? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        if let exact = Int(trimmed) {
+            return exact
+        }
+        if let range = range(of: #"-?\d+"#, options: .regularExpression) {
+            return Int(self[range])
+        }
+        return nil
     }
 }

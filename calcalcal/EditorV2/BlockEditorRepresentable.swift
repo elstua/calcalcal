@@ -212,7 +212,35 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             }
             
             guard notifiedEntryID == entryId else { return }
+            if isAnalysisStateOnlyNotification(userInfo) {
+                return
+            }
             scheduleSnapshot()
+        }
+
+        private func isAnalysisStateOnlyNotification(_ userInfo: [AnyHashable: Any]) -> Bool {
+            guard let blocks = userInfo["analyzedBlocks"] as? [[String: Any]], !blocks.isEmpty else {
+                return false
+            }
+
+            return blocks.allSatisfy { block in
+                guard block["isAnalyzing"] != nil else { return false }
+                let nutritionKeys = [
+                    "calories",
+                    "protein",
+                    "fat",
+                    "carbs",
+                    "fiber",
+                    "sugar",
+                    "sodium",
+                    "weight"
+                ]
+                return nutritionKeys.allSatisfy { key in
+                    guard let value = block[key] else { return true }
+                    if value is NSNull { return true }
+                    return false
+                }
+            }
         }
     }
 }

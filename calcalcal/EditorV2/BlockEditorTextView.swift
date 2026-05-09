@@ -1004,6 +1004,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let weight: Double?
         let confidence: Double?
         let aiAnalysis: String?
+        let isAnalyzing: Bool
     }
 
     private func parseAnalyzedBlocks(from payload: Any?) -> [AnalyzedBlock] {
@@ -1024,6 +1025,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 if let string = value as? String { return Double(string) }
                 return nil
             }
+            func parseBool(_ value: Any?) -> Bool {
+                if let boolValue = value as? Bool { return boolValue }
+                if let number = value as? NSNumber { return number.boolValue }
+                if let string = value as? String { return string == "true" || string == "1" }
+                return false
+            }
             let id = dict["id"] as? String ?? UUID().uuidString
             let position = parseInt(dict["position"]) ?? 0
             let content = (dict["content"] as? String) ?? ""
@@ -1041,7 +1048,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 sodium: parseDouble(dict["sodium"]),
                 weight: parseDouble(dict["weight"]),
                 confidence: parseDouble(dict["confidence"]),
-                aiAnalysis: nil
+                aiAnalysis: nil,
+                isAnalyzing: parseBool(dict["isAnalyzing"])
             )
         }
     }
@@ -1076,7 +1084,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         var matchedParagraphIndices = Set<Int>()
         var unmatchedAnalyzed: [AnalyzedBlock] = []
 
+        let paragraphsByID = Dictionary(uniqueKeysWithValues: paragraphs.map { ($0.metadata.id.rawValue.uuidString, $0) })
+
         for analyzed in analyzedBlocks {
+            if let paragraph = paragraphsByID[analyzed.id] {
+                apply(analyzed, to: paragraph.metadata.id, calorieMap: &calorieMap, nutritionMap: &nutritionMap)
+                if let idx = paragraphs.firstIndex(where: { $0.metadata.id == paragraph.metadata.id }) {
+                    matchedParagraphIndices.insert(idx)
+                }
+                continue
+            }
+
             let trimmedServer = analyzed.content.trimmingCharacters(in: .whitespacesAndNewlines)
             var matched = false
             for (idx, paragraph) in paragraphs.enumerated() where !matchedParagraphIndices.contains(idx) {
@@ -1110,8 +1128,15 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                        to blockID: BlockID,
                        calorieMap: inout [BlockID: String],
                        nutritionMap: inout [BlockID: NutritionData]) {
+        if analyzed.isAnalyzing {
+            calorieMap[blockID] = CalorieBlockView.loadingToken
+            return
+        }
+
         if let calories = derivedCalories(from: analyzed) {
             calorieMap[blockID] = String(calories)
+        } else if calorieMap[blockID] == CalorieBlockView.loadingToken {
+            calorieMap.removeValue(forKey: blockID)
         }
         if let nutrition = nutritionData(from: analyzed) {
             nutritionMap[blockID] = nutrition

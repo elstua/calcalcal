@@ -35,6 +35,8 @@ struct EditorOverlay: View {
     @State private var pendingAnimationSourceRect: CGRect? = nil
     @State private var pendingAnimationImage: UIImage? = nil
     @State private var showNutritionPopup: Bool = false
+    @State private var analysisErrorMessage: String?
+    @State private var cacheSaveWorkItem: DispatchWorkItem?
 
     // Autosave service handles all save/load operations
     @StateObject private var autosaveService: EditorAutosaveService
@@ -88,6 +90,14 @@ struct EditorOverlay: View {
                         onClose: { showNutritionPopup = false }
                     )
                     .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .top) {
+                if let analysisErrorMessage {
+                    analysisToast(message: analysisErrorMessage)
+                        .padding(.top, 64)
+                        .padding(.horizontal, DSSpacing.lg)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .overlay {
@@ -146,6 +156,8 @@ struct EditorOverlay: View {
                         shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
                         forceExpanded: true, // Expand to fill
                         onBlocksChange: { updated in
+                            let previousBlocks = localEntry.blocks
+                            let previousContent = previousBlocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
                             // Add stable IDs if needed, then update localEntry in one go
                             // This prevents the circular update that causes cursor jumping
                             let blocksWithStableIds = updated.map { block in
@@ -154,9 +166,16 @@ struct EditorOverlay: View {
                                 }
                                 return block
                             }
+                            guard blocksWithStableIds != previousBlocks else { return }
+
                             localEntry.blocks = blocksWithStableIds
-                            BlocksCache.shared.save(entryId: localEntry.id, blocks: blocksWithStableIds)
-                            autosaveService.scheduleAutosaveIfTextChanged(blocks: blocksWithStableIds)
+                            scheduleCacheSave(blocks: blocksWithStableIds)
+
+                            let updatedContent = blocksWithStableIds.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard updatedContent != previousContent else { return }
+
+                            // Text snapshots update local state/cache only. Server save + analysis are
+                            // triggered by paragraph commit/edit notifications below.
                         },
                         overrideTotalCalories: autosaveService.liveTotalCalories,
                         onScrollOffsetChange: { offsetY in
@@ -255,6 +274,9 @@ struct EditorOverlay: View {
             autosaveService.cancelAll()
             logger.debug("EditorOverlay dismissed, cancelled autosave tasks for localEntry.id=\(self.localEntry.id.uuidString)")
 
+            cacheSaveWorkItem?.cancel()
+            cacheSaveWorkItem = nil
+
             // CRITICAL: Save to cache SYNCHRONOUSLY before view disappears
             BlocksCache.shared.saveSync(entryId: finalEntryId, blocks: finalBlocks)
             DataFlowLogger.shared.editorCacheSyncComplete(entryId: finalEntryId)
@@ -300,6 +322,13 @@ struct EditorOverlay: View {
             guard notifiedId == localEntry.id else { return }
             headerScrollOffsetY = max(0, offsetY)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .editorAnalysisError)) { notification in
+            guard let userInfo = notification.userInfo else { return }
+            let notifiedId: UUID? = (userInfo["entryId"] as? UUID) ?? (userInfo["entryId"] as? String).flatMap(UUID.init(uuidString:))
+            guard notifiedId == localEntry.id else { return }
+            let message = userInfo["message"] as? String ?? "Something went wrong. Please try again."
+            showAnalysisToast(message)
+        }
     }
 }
 
@@ -338,6 +367,49 @@ extension EditorOverlay {
         .padding(.top, DSSpacing.xs)
 
         .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private func analysisToast(message: String) -> some View {
+        HStack(spacing: DSSpacing.sm) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.dsCallout)
+                .foregroundColor(DSColors.error)
+            Text(message)
+                .font(.dsCallout)
+                .foregroundColor(DSColors.textPrimary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, DSSpacing.md)
+        .padding(.vertical, DSSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DSCornerRadius.md, style: .continuous)
+                .fill(DSColors.surface)
+                .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
+        )
+    }
+
+    private func showAnalysisToast(_ message: String) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            analysisErrorMessage = message
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            guard analysisErrorMessage == message else { return }
+            withAnimation(.easeIn(duration: 0.2)) {
+                analysisErrorMessage = nil
+            }
+        }
+    }
+
+    private func scheduleCacheSave(blocks: [Block]) {
+        cacheSaveWorkItem?.cancel()
+        let entryId = localEntry.id
+        let workItem = DispatchWorkItem {
+            BlocksCache.shared.save(entryId: entryId, blocks: blocks)
+        }
+        cacheSaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
     }
 
     /// Variable blur background for the footer.
@@ -439,7 +511,6 @@ extension EditorOverlay {
             // Kick off upload + analyze pipeline
             let capturedUUID = uuid
             let blockId = newBlock.id
-            let entryIdString = localEntry.id.uuidString // backend requires entryId for analyze-image
             Task.detached(priority: .userInitiated) {
                 do {
                     #if DEBUG
@@ -453,7 +524,7 @@ extension EditorOverlay {
                     // Persist into disk cache for future sessions
                     ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
                     // Persist image URL/objectKey into the corresponding block for future reloads
-                    await MainActor.run {
+                    let blocksSnapshot = await MainActor.run {
                         if let idx = localEntry.blocks.firstIndex(where: { block in
                             if case let .imageText(_, ref, _) = block.type { return ref == capturedUUID }
                             return false
@@ -465,6 +536,25 @@ extension EditorOverlay {
                             // Persist blocks cache immediately
                             BlocksCache.shared.save(entryId: localEntry.id, blocks: localEntry.blocks)
                         }
+                        autosaveService.cancelAll()
+                        return localEntry.blocks
+                    }
+                    await autosaveService.saveBlocksWithoutAIAnalysis(blocks: blocksSnapshot)
+                    let entryIdString = await MainActor.run { autosaveService.entryId.uuidString }
+                    await MainActor.run {
+                        NotificationCenter.default.post(
+                            name: .editorApplyPerBlockMetadata,
+                            object: nil,
+                            userInfo: [
+                                "entryId": entryIdString,
+                                "analyzedBlocks": [[
+                                    "id": blockId.uuidString,
+                                    "position": 0,
+                                    "content": "",
+                                    "isAnalyzing": true
+                                ]]
+                            ]
+                        )
                     }
                     let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
 
@@ -521,6 +611,22 @@ extension EditorOverlay {
                     #if DEBUG
                     print("❌ Pipeline error: \(error)")
                     #endif
+                    await MainActor.run {
+                        NotificationCenter.default.post(
+                            name: .editorApplyPerBlockMetadata,
+                            object: nil,
+                            userInfo: [
+                                "entryId": autosaveService.entryId.uuidString,
+                                "analyzedBlocks": [[
+                                    "id": blockId.uuidString,
+                                    "position": 0,
+                                    "content": "",
+                                    "isAnalyzing": false
+                                ]]
+                            ]
+                        )
+                        showAnalysisToast("We couldn't analyze that photo. Please try again.")
+                    }
                 }
             }
         }

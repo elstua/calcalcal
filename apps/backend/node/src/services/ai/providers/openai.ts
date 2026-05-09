@@ -177,44 +177,96 @@ export class OpenAINutritionProvider implements NutritionProvider {
   }
 
   private async prepareImageForOpenAI(imageUrl: string): Promise<string | undefined> {
+    const imageData = await this.loadImageData(imageUrl);
+    if (imageData) {
+      const dataUrl = `data:${imageData.mimeType};base64,${imageData.data}`;
+      console.log("[OpenAINutritionProvider] Inlined image as data URL");
+      return dataUrl;
+    }
+
     try {
-      const u = new URL(imageUrl);
-      const isLocalHost =
-        u.hostname === "localhost" || u.hostname === "127.0.0.1";
-
-      if (isLocalHost && u.pathname.startsWith("/uploads/")) {
-        const uploadsDir = path.resolve(
-          process.cwd(),
-          "apps",
-          "backend",
-          "node",
-          "uploads",
-        );
-        const relative = u.pathname.replace(/^\/uploads\//, "");
-        const filePath = path.resolve(uploadsDir, relative);
-
-        if (fs.existsSync(filePath)) {
-          const buf = fs.readFileSync(filePath);
-          const ext = path.extname(filePath).toLowerCase();
-          const mime =
-            ext === ".png"
-              ? "image/png"
-              : ext === ".webp"
-                ? "image/webp"
-                : "image/jpeg";
-          const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
-          console.log("[OpenAINutritionProvider] Inlined local image as data URL");
-          return dataUrl;
-        } else {
-          console.warn("[OpenAINutritionProvider] Local file not found for", filePath);
-        }
-      }
-
-      // Return original URL if not local or no conversion needed
+      // Fall back to the original URL only if it is absolute and provider-fetchable.
+      new URL(imageUrl);
       return imageUrl;
     } catch (_e) {
-      // Not a valid URL; return as-is
-      return imageUrl;
+      console.warn("[OpenAINutritionProvider] Could not prepare image for analysis:", imageUrl);
+      return undefined;
+    }
+  }
+
+  private async loadImageData(imageUrl: string): Promise<{ mimeType: string; data: string } | undefined> {
+    const localPath = this.localUploadPathForImageUrl(imageUrl);
+    if (localPath) {
+      if (fs.existsSync(localPath)) {
+        const buf = fs.readFileSync(localPath);
+        return {
+          mimeType: this.mimeTypeForPath(localPath),
+          data: buf.toString("base64"),
+        };
+      }
+      console.warn("[OpenAINutritionProvider] Local file not found for", localPath);
+    }
+
+    try {
+      const u = new URL(imageUrl);
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        return undefined;
+      }
+
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        console.warn("[OpenAINutritionProvider] Failed to fetch remote image:", response.status);
+        return undefined;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const contentType = response.headers.get("content-type") || "image/jpeg";
+      const mimeType = contentType.split(";")[0].trim();
+      return {
+        mimeType,
+        data: Buffer.from(arrayBuffer).toString("base64"),
+      };
+    } catch (fetchErr) {
+      console.warn("[OpenAINutritionProvider] Error fetching remote image:", fetchErr);
+      return undefined;
+    }
+  }
+
+  private localUploadPathForImageUrl(imageUrl: string): string | undefined {
+    let uploadPath: string | undefined;
+    if (imageUrl.startsWith("/uploads/")) {
+      uploadPath = imageUrl;
+    } else {
+      try {
+        const u = new URL(imageUrl);
+        const isLocalHost =
+          u.hostname === "localhost" || u.hostname === "127.0.0.1";
+        if (isLocalHost && u.pathname.startsWith("/uploads/")) {
+          uploadPath = u.pathname;
+        }
+      } catch (_e) {
+        return undefined;
+      }
+    }
+
+    if (!uploadPath) {
+      return undefined;
+    }
+
+    const uploadsDir = path.resolve(__dirname, "..", "..", "..", "..", "uploads");
+    const relative = uploadPath.replace(/^\/uploads\//, "");
+    return path.resolve(uploadsDir, relative);
+  }
+
+  private mimeTypeForPath(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    switch (ext) {
+      case ".png":
+        return "image/png";
+      case ".webp":
+        return "image/webp";
+      default:
+        return "image/jpeg";
     }
   }
 }

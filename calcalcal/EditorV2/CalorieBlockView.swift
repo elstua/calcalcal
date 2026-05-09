@@ -2,7 +2,10 @@ import UIKit
 import SwiftUI
 
 final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
+    static let loadingToken = "__calcalcal_analysis_loading__"
+
     private let label = UILabel()
+    private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private var lastText: String?
 
     // Context menu data
@@ -34,6 +37,10 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
         label.lineBreakMode = .byClipping
         addSubview(label)
 
+        activityIndicator.hidesWhenStopped = true
+        activityIndicator.color = .dsTextSecondary
+        addSubview(activityIndicator)
+
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         addGestureRecognizer(tapGesture)
     }
@@ -41,6 +48,13 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         label.frame = bounds
+        let side = min(bounds.height, 18)
+        activityIndicator.frame = CGRect(
+            x: bounds.maxX - side,
+            y: bounds.midY - (side / 2.0),
+            width: side,
+            height: side
+        )
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -55,6 +69,15 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
     func setCaloriesAnimated(_ text: String) {
         guard text != lastText else { return }
         lastText = text
+        if text == Self.loadingToken {
+            label.text = nil
+            label.alpha = 0
+            activityIndicator.startAnimating()
+            return
+        }
+
+        activityIndicator.stopAnimating()
+        label.alpha = 1
         if window != nil {
             UIView.transition(with: label, duration: 0.15, options: .transitionCrossDissolve, animations: {
                 self.label.text = text
@@ -84,6 +107,7 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
     }
 
     @objc private func handleTap() {
+        guard lastText != Self.loadingToken else { return }
         guard let presentingViewController = presentingViewController,
               let blockID = blockID else { return }
 

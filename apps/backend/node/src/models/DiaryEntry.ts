@@ -1,5 +1,18 @@
 import Database from '../services/database';
 
+function normalizedBlockContent(block: any) {
+  return String(block?.content || '').trim();
+}
+
+function hasMeaningfulNutrition(block: any) {
+  return Boolean(
+    Number(block?.calories) > 0 ||
+      Number(block?.protein) > 0 ||
+      Number(block?.fat) > 0 ||
+      Number(block?.carbs) > 0
+  );
+}
+
 export interface DiaryEntry {
   id: string;
   user_id: string;
@@ -124,24 +137,41 @@ export class DiaryEntryModel {
     
     // Create a map of existing blocks by ID for fast lookup
     const existingBlocksMap = new Map();
+    const existingBlocksByStableId = new Map();
+    const existingBlocksByContent = new Map();
     for (const block of existingBlocks) {
       if (block.id) {
         existingBlocksMap.set(block.id, block);
+      }
+      if (block.stableId) {
+        existingBlocksByStableId.set(block.stableId, block);
+      }
+      const normalizedContent = normalizedBlockContent(block);
+      if (normalizedContent && hasMeaningfulNutrition(block) && !existingBlocksByContent.has(normalizedContent)) {
+        existingBlocksByContent.set(normalizedContent, block);
       }
     }
     
     // Merge: keep nutrition data from existing blocks, update content/position from new blocks
     const mergedBlocks = blocks.map((newBlock: any) => {
-      const existingBlock = existingBlocksMap.get(newBlock.id);
+      const normalizedNewContent = normalizedBlockContent(newBlock);
+      const stableIdMatch = newBlock.stableId ? existingBlocksByStableId.get(newBlock.stableId) : null;
+      const contentMatch = normalizedNewContent ? existingBlocksByContent.get(normalizedNewContent) : null;
+      const existingBlock = existingBlocksMap.get(newBlock.id) ||
+        (stableIdMatch && normalizedBlockContent(stableIdMatch) === normalizedNewContent ? stableIdMatch : null) ||
+        contentMatch;
       if (existingBlock) {
         // Keep all nutrition data from existing block, but update content/position if changed
         const merged = {
           ...existingBlock,
           content: newBlock.content !== undefined ? newBlock.content : existingBlock.content,
           position: newBlock.position !== undefined ? newBlock.position : existingBlock.position,
+          imageUrl: newBlock.imageUrl !== undefined ? newBlock.imageUrl : existingBlock.imageUrl,
+          imageObjectKey: newBlock.imageObjectKey !== undefined ? newBlock.imageObjectKey : existingBlock.imageObjectKey,
+          stableId: newBlock.stableId !== undefined ? newBlock.stableId : existingBlock.stableId,
           // Preserve these from existing:
           // calories, protein, fat, carbs, fiber, sugar, sodium, weight,
-          // metric_description, confidence, ai_analysis, imageUrl, imageObjectKey, etc.
+          // metric_description, confidence, ai_analysis, etc.
         };
         
         // Check if this specific block's content changed

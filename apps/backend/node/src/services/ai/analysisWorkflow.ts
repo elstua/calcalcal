@@ -93,6 +93,28 @@ function mergeAnalyzedBlocksWithExisting(analyzedBlocks: any[], existingBlocks: 
   });
 }
 
+function sameOptionalString(left: unknown, right: unknown) {
+  const leftText = typeof left === "string" ? left.trim() : "";
+  const rightText = typeof right === "string" ? right.trim() : "";
+  return leftText === rightText;
+}
+
+function blockStillMatchesAnalyzeInput(block: any, content: AnalyzeBlockContent) {
+  if (!block) {
+    return false;
+  }
+
+  if (!sameOptionalString(block.content, content.text)) {
+    return false;
+  }
+
+  if (content.imageUrl && !sameOptionalString(block.imageUrl, content.imageUrl)) {
+    return false;
+  }
+
+  return true;
+}
+
 export class AIAnalysisWorkflow {
   static async startFullEntryAnalysis(params: StartFullEntryAnalysisParams) {
     const jobId = crypto.randomUUID();
@@ -280,7 +302,7 @@ export class AIAnalysisWorkflow {
     });
 
     const totals = AIService.calculateTotals(updatedBlocks);
-    const updatedEntry = await DiaryEntryModel.completeAnalysisJob(
+    let updatedEntry = await DiaryEntryModel.completeAnalysisJob(
       entryId,
       jobId,
       updatedBlocks,
@@ -288,11 +310,49 @@ export class AIAnalysisWorkflow {
     );
 
     if (!updatedEntry) {
-      throw new AIAnalysisWorkflowError(
-        "Analysis result is stale",
-        409,
-        "stale_analysis_result",
+      const latestEntry = await DiaryEntryModel.getById(entryId);
+      const latestBlock = latestEntry?.blocks?.find((block: any) => block.id === blockId);
+
+      if (!latestEntry || !blockStillMatchesAnalyzeInput(latestBlock, content)) {
+        throw new AIAnalysisWorkflowError(
+          "Analysis result is stale",
+          409,
+          "stale_analysis_result",
+        );
+      }
+
+      const retryJobId = crypto.randomUUID();
+      const retryStarted = await DiaryEntryModel.startAnalysisJob(entryId, userId, retryJobId);
+      if (!retryStarted) {
+        throw new AIAnalysisWorkflowError("Entry not found", 404, "entry_not_found");
+      }
+
+      const retryBlocks = (latestEntry.blocks || []).map((block: any) => {
+        if (block.id === blockId) {
+          return {
+            ...block,
+            ...analysis,
+            userModified: userModified || false,
+            lastAnalyzedAt: new Date().toISOString(),
+          };
+        }
+        return block;
+      });
+      const retryTotals = AIService.calculateTotals(retryBlocks);
+      updatedEntry = await DiaryEntryModel.completeAnalysisJob(
+        entryId,
+        retryJobId,
+        retryBlocks,
+        retryTotals,
       );
+
+      if (!updatedEntry) {
+        throw new AIAnalysisWorkflowError(
+          "Analysis result is stale",
+          409,
+          "stale_analysis_result",
+        );
+      }
     }
 
     console.log(

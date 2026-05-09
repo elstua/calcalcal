@@ -43,10 +43,11 @@ export class GeminiNutritionProvider implements NutritionProvider {
       // Handle relative paths like /uploads/... directly (common from iOS app)
       if (imageUrl.startsWith("/uploads/")) {
         const uploadsDir = path.resolve(
-          process.cwd(),
-          "apps",
-          "backend",
-          "node",
+          __dirname,
+          "..",
+          "..",
+          "..",
+          "..",
           "uploads",
         );
         const relative = imageUrl.replace(/^\/uploads\//, "");
@@ -79,10 +80,11 @@ export class GeminiNutritionProvider implements NutritionProvider {
 
       if (isLocalHost && u.pathname.startsWith("/uploads/")) {
         const uploadsDir = path.resolve(
-          process.cwd(),
-          "apps",
-          "backend",
-          "node",
+          __dirname,
+          "..",
+          "..",
+          "..",
+          "..",
           "uploads",
         );
         const relative = u.pathname.replace(/^\/uploads\//, "");

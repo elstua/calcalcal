@@ -2,6 +2,7 @@ import crypto from "crypto";
 import Database from "../../services/database";
 import { AIAnalysisCacheModel } from "../../models/AIAnalysisCache";
 import { getNutritionProvider } from "./providers";
+import { PromptContext } from "./prompts";
 import { NutritionAnalysisResult, NutritionProvider } from "./providers/types";
 
 export class AIService {
@@ -100,14 +101,29 @@ export class AIService {
       return block;
     }
 
+    const imageUrl =
+      typeof block?.imageUrl === "string" && block.imageUrl.trim()
+        ? block.imageUrl.trim()
+        : undefined;
+
+    const promptContext: PromptContext | undefined = imageUrl
+      ? {
+          text: content,
+          imageUrl,
+          scenario: "multimodal",
+        }
+      : undefined;
+
     const hash = AIService.hashContent(content);
-    const cached = await AIAnalysisCacheModel.getByContentHash(hash);
-    if (cached) {
-      return {
-        ...block,
-        ...cached.analysis_result,
-        confidence: cached.confidence,
-      };
+    if (!imageUrl) {
+      const cached = await AIAnalysisCacheModel.getByContentHash(hash);
+      if (cached) {
+        return {
+          ...block,
+          ...cached.analysis_result,
+          confidence: cached.confidence,
+        };
+      }
     }
 
     try {
@@ -117,25 +133,29 @@ export class AIService {
           temperature: options.temperature,
           model: options.model,
           promptVersion: options.promptVersion,
+          imageUrl,
+          context: promptContext,
         },
       );
 
-      await AIAnalysisCacheModel.insert({
-        contentHash: hash,
-        content,
-        analysisResult: analysis,
-        confidence: analysis.confidence || 0,
-        rawResponseText: analysis.rawResponseText,
-        providerModel: analysis.providerModel,
-        temperature: analysis.temperature,
-        promptVersion: analysis.promptVersion,
-        parseOk: true,
-        parseErrorText: null,
-        attempt: "primary",
-        usagePromptTokens: analysis.usage?.promptTokens,
-        usageCompletionTokens: analysis.usage?.completionTokens,
-        usageTotalTokens: analysis.usage?.totalTokens,
-      });
+      if (!imageUrl) {
+        await AIAnalysisCacheModel.insert({
+          contentHash: hash,
+          content,
+          analysisResult: analysis,
+          confidence: analysis.confidence || 0,
+          rawResponseText: analysis.rawResponseText,
+          providerModel: analysis.providerModel,
+          temperature: analysis.temperature,
+          promptVersion: analysis.promptVersion,
+          parseOk: true,
+          parseErrorText: null,
+          attempt: "primary",
+          usagePromptTokens: analysis.usage?.promptTokens,
+          usageCompletionTokens: analysis.usage?.completionTokens,
+          usageTotalTokens: analysis.usage?.totalTokens,
+        });
+      }
 
       return {
         ...block,

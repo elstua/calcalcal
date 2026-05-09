@@ -87,7 +87,7 @@ final class BlockEditorBridge {
                 }()
 
                 var block = Block(type: blockType,
-                                  calorieData: metadata.calorieLabel,
+                                  calorieData: persistedCalorieLabel(from: metadata.calorieLabel),
                                   nutrition: metadata.nutrition ?? previous?.nutrition)
                 block.id = blockID
                 block.imageUrl = previous?.imageUrl
@@ -104,7 +104,7 @@ final class BlockEditorBridge {
                 let imageData = resolveImageData(for: imageRef, blockID: blockID, previousBlock: previous)
 
                 var block = Block(type: .imageText(imageData, imageRef, cleaned),
-                                  calorieData: metadata.calorieLabel,
+                                  calorieData: persistedCalorieLabel(from: metadata.calorieLabel),
                                   nutrition: metadata.nutrition ?? previous?.nutrition)
                 block.id = blockID
                 block.imageUrl = previous?.imageUrl
@@ -241,6 +241,11 @@ private extension BlockEditorBridge {
         return labels
     }
 
+    func persistedCalorieLabel(from label: String?) -> String? {
+        guard label != CalorieBlockView.loadingToken else { return nil }
+        return label
+    }
+
     func makeOverlayImages(from blocks: [Block], imageMap: [UUID: UIImage]) -> [BlockID: UIImage] {
         var overlays: [BlockID: UIImage] = [:]
         for block in blocks {
@@ -349,4 +354,3 @@ private extension BlockEditorBridge {
         return Data()
     }
 }
-
