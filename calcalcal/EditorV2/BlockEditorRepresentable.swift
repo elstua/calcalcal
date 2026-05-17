@@ -173,6 +173,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             guard parent.shouldBecomeFirstResponder else { return }
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
+                textView.moveCaretToEndOfDocument()
                 self.parent.shouldBecomeFirstResponder = false
             }
         }

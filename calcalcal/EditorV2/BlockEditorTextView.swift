@@ -201,6 +201,31 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         typingAttributes = attrs
         blockDocumentController.forceRebuild()
     }
+
+    /// Moves the insertion point to the end of the rendered diary content and
+    /// scrolls the bottom of the editor into view.
+    func moveCaretToEndOfDocument() {
+        let storageLength = (textLayoutManager?.textContentManager as? NSTextContentStorage)?
+            .textStorage?
+            .length ?? attributedText.length
+
+        selectedRange = NSRange(location: storageLength, length: 0)
+        typingAttributes = standardParagraphAttributes
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            self.layoutIfNeeded()
+            if storageLength > 0 {
+                self.scrollRangeToVisible(NSRange(location: max(storageLength - 1, 0), length: 1))
+            }
+
+            let bottomOffsetY = self.contentSize.height - self.bounds.height + self.adjustedContentInset.bottom
+            let minimumOffsetY = -self.adjustedContentInset.top
+            let targetOffsetY = max(minimumOffsetY, bottomOffsetY)
+            self.setContentOffset(CGPoint(x: self.contentOffset.x, y: targetOffsetY), animated: false)
+        }
+    }
     
     /// Sets a custom top inset for the text content (used by EditorOverlay to leave space for header)
     func setTopInset(_ topInset: CGFloat) {
