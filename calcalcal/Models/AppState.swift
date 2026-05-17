@@ -77,8 +77,8 @@ class AppState: ObservableObject {
     /// This allows the app to work offline and sync later.
     var hasCompletedOnboarding: Bool {
         // First check backend flag (source of truth when available)
-        if let backendCompleted = currentUser?.onboardingCompleted, backendCompleted {
-            return true
+        if let backendCompleted = currentUser?.onboardingCompleted {
+            return backendCompleted
         }
         
         // Fall back to local UserDefaults

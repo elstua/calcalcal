@@ -12,6 +12,8 @@ import SwiftUI
 struct OnboardingContainerView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var coordinator = OnboardingCoordinator()
+    @State private var isCompleting = false
+    @State private var completionError: String?
     
     var body: some View {
         VStack {
@@ -31,6 +33,30 @@ struct OnboardingContainerView: View {
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
                 .animation(.easeInOut(duration: 0.3), value: coordinator.currentStep)
+            
+            if isCompleting {
+                ProgressView("Saving profile...")
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
+                    .padding(.bottom, DSSpacing.sm)
+            }
+            
+            if let completionError {
+                VStack(spacing: DSSpacing.sm) {
+                    Text(completionError)
+                        .font(.dsCaption)
+                        .foregroundColor(DSColors.error)
+                        .multilineTextAlignment(.center)
+                    
+                    Button("Try Again") {
+                        handleOnboardingComplete()
+                    }
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.primary)
+                }
+                .padding(.horizontal, DSSpacing.lg)
+                .padding(.bottom, DSSpacing.sm)
+            }
             
             Spacer()
         }
@@ -91,15 +117,75 @@ struct OnboardingContainerView: View {
     
     private func handleOnboardingComplete() {
         print("[OnboardingContainerView] Onboarding complete, syncing data...")
-        
-        // Save completion to UserDefaults
-        UserDefaults.standard.set(true, forKey: "onboarding_completed")
-        
-        // TODO: Sync collected data to backend
-        // The coordinator.collectedData contains all the info we need
-        
-        // Trigger AppState update to navigate away from onboarding
-        appState.objectWillChange.send()
+
+        guard !isCompleting else { return }
+
+        isCompleting = true
+        completionError = nil
+
+        Task {
+            do {
+                var updates = coordinator.collectedData.profileUpdates
+                updates["onboarding_completed"] = true
+
+                print("[OnboardingContainerView] Updating profile with onboarding data: \(updates)")
+                let updatedUser = try await appState.authManager.updateProfile(updates)
+                print("[OnboardingContainerView] Profile synced. Weight: \(updatedUser.weightKg ?? 0), height: \(updatedUser.heightCm ?? 0), target: \(updatedUser.targetWeightKg ?? 0), gender: \(updatedUser.gender ?? "nil")")
+
+                await MainActor.run {
+                    // Save completion locally after backend accepts the profile update.
+                    UserDefaults.standard.set(true, forKey: "onboarding_completed")
+                    isCompleting = false
+                    appState.objectWillChange.send()
+                }
+            } catch {
+                await MainActor.run {
+                    isCompleting = false
+                    completionError = "Couldn't save your profile. Please check your connection and try again."
+                    coordinator.error = error.localizedDescription
+                    UserDefaults.standard.set(false, forKey: "onboarding_completed")
+                    print("[OnboardingContainerView] Failed to sync onboarding data: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+}
+
+private extension OnboardingData {
+    var profileUpdates: [String: Any] {
+        var updates: [String: Any] = [:]
+
+        if let weightKg {
+            updates["weight_kg"] = weightKg
+        }
+        if let heightCm {
+            updates["height_cm"] = heightCm
+        }
+        if let age {
+            updates["age"] = age
+        }
+        if let activityLevel {
+            updates["activity_level"] = activityLevel
+        }
+        if let targetWeightKg {
+            updates["target_weight_kg"] = targetWeightKg
+        }
+        if let gender {
+            updates["gender"] = gender
+        }
+        if let weightUnit {
+            updates["weight_unit"] = weightUnit
+        }
+        if let heightUnit {
+            updates["height_unit"] = heightUnit
+        }
+        if let calorieGoal {
+            updates["daily_calorie_goal"] = calorieGoal
+        } else if let calculatedGoal = calculateCalorieGoal() {
+            updates["daily_calorie_goal"] = calculatedGoal
+        }
+
+        return updates
     }
 }
 
@@ -288,5 +374,3 @@ struct OnboardingContainerView_Previews: PreviewProvider {
             .environmentObject(AppState())
     }
 }
-
-
