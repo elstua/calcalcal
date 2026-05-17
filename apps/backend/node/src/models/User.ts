@@ -1,5 +1,5 @@
 import Database from '../services/database';
-import { calculateCalorieGoal, UserHealthData } from '../services/calorieCalculator';
+import { calculateCalorieGoal, calculateMacroGoals, UserHealthData } from '../services/calorieCalculator';
 
 export interface User {
   id: string;
@@ -188,26 +188,51 @@ export class UserModel {
     // Check if daily_calorie_goal is explicitly provided (manual override)
     const hasManualCalorieGoal = 'daily_calorie_goal' in updates;
 
+    // Check if any macro is explicitly provided (manual override)
+    const hasManualProtein = 'daily_protein_goal' in updates;
+    const hasManualFat = 'daily_fat_goal' in updates;
+    const hasManualCarb = 'daily_carb_goal' in updates;
+    const hasAnyManualMacro = hasManualProtein || hasManualFat || hasManualCarb;
+
+    // Build merged health data once — reused for calorie and macro calc
+    const mergedHealth: UserHealthData = {
+      weight_kg: updates.weight_kg !== undefined ? updates.weight_kg : existing.weight_kg,
+      height_cm: updates.height_cm !== undefined ? updates.height_cm : existing.height_cm,
+      age: updates.age !== undefined ? updates.age : existing.age ?? undefined,
+      activity_level: updates.activity_level !== undefined
+        ? updates.activity_level
+        : existing.activity_level ?? undefined,
+      gender: updates.gender !== undefined ? updates.gender : existing.gender ?? undefined,
+      weight_unit: updates.weight_unit || existing.weight_unit || 'kg',
+      height_unit: updates.height_unit || existing.height_unit || 'cm',
+      target_weight_kg: updates.target_weight_kg !== undefined
+        ? updates.target_weight_kg
+        : existing.target_weight_kg ?? undefined,
+    };
+
     // Auto-calculate calorie goal if health fields are updated and no manual override
     if (hasHealthFieldUpdate && !hasManualCalorieGoal) {
-      // Merge existing data with updates for calculation
-      const healthData: UserHealthData = {
-        weight_kg: updates.weight_kg !== undefined ? updates.weight_kg : existing.weight_kg,
-        height_cm: updates.height_cm !== undefined ? updates.height_cm : existing.height_cm,
-        age: updates.age !== undefined ? updates.age : existing.age ?? undefined,
-        activity_level: updates.activity_level !== undefined
-          ? updates.activity_level
-          : existing.activity_level ?? undefined,
-        gender: updates.gender !== undefined ? updates.gender : existing.gender ?? undefined,
-        weight_unit: updates.weight_unit || existing.weight_unit || 'kg',
-        height_unit: updates.height_unit || existing.height_unit || 'cm',
-        target_weight_kg: updates.target_weight_kg !== undefined
-          ? updates.target_weight_kg
-          : existing.target_weight_kg ?? undefined,
-      };
-
-      const calculatedGoal = calculateCalorieGoal(healthData);
+      const calculatedGoal = calculateCalorieGoal(mergedHealth);
       updates.daily_calorie_goal = calculatedGoal;
+    }
+
+    // Auto-calculate macro goals whenever:
+    //  - any health field changes, OR
+    //  - calorie goal was manually overridden in this update
+    // ...unless the caller is explicitly setting a macro themselves (per-field override).
+    // Macros are calculated against the *final* calorie goal landing in this update.
+    const shouldRecalcMacros =
+      (hasHealthFieldUpdate || hasManualCalorieGoal) && !hasAnyManualMacro;
+
+    if (shouldRecalcMacros) {
+      const finalCalorieGoal =
+        updates.daily_calorie_goal !== undefined
+          ? updates.daily_calorie_goal
+          : existing.daily_calorie_goal;
+      const macros = calculateMacroGoals(mergedHealth, finalCalorieGoal);
+      updates.daily_protein_goal = macros.daily_protein_goal;
+      updates.daily_fat_goal = macros.daily_fat_goal;
+      updates.daily_carb_goal = macros.daily_carb_goal;
     }
 
     const keys = Object.keys(updates).filter((k) => k !== 'id');
