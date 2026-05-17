@@ -342,6 +342,9 @@ struct DiaryTabView: View {
                         proteinGoal: appState.currentUser?.dailyProteinGoal,
                         fatGoal: appState.currentUser?.dailyFatGoal,
                         carbGoal: appState.currentUser?.dailyCarbGoal,
+                        proteinRange: appState.currentUser?.dailyProteinRange,
+                        fatRange: appState.currentUser?.dailyFatRange,
+                        carbRange: appState.currentUser?.dailyCarbRange,
                         isPresented: showCardNutritionPopup,
                         onClose: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {

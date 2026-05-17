@@ -78,11 +78,12 @@ private enum MacroShapeKind {
 
 // MARK: - Macro progress ring
 
-/// A single macro indicator: shaped progress ring + current/goal values inside.
+/// A single macro indicator: shaped progress ring + current/goal/range values inside.
 private struct MacroRing: View {
     let title: String
     let current: Double
     let goal: Double?
+    let range: MacroRange?
     let color: Color
     let shape: MacroShapeKind
 
@@ -141,6 +142,13 @@ private struct MacroRing: View {
                 }
             }
             .frame(width: 80, height: 80)
+
+            // Adherence corridor (min–max). Hidden when range is missing.
+            if let r = range {
+                Text("\(Int(r.min))–\(Int(r.max))")
+                    .font(Font.dsCustom(weight: .regular, size: 11))
+                    .foregroundColor(color.opacity(0.6))
+            }
         }
     }
 }
@@ -189,6 +197,9 @@ struct NutritionPopupView: View {
     let proteinGoal: Double?
     let fatGoal: Double?
     let carbGoal: Double?
+    let proteinRange: MacroRange?
+    let fatRange: MacroRange?
+    let carbRange: MacroRange?
     let onClose: () -> Void
 
     @State private var dragOffset: CGFloat = 0
@@ -306,6 +317,7 @@ struct NutritionPopupView: View {
                         title: "Carbs",
                         current: nutrition.carbs ?? 0,
                         goal: carbGoal,
+                        range: carbRange,
                         color: MacroColor.carbs,
                         shape: .wavyCircle
                     )
@@ -314,6 +326,7 @@ struct NutritionPopupView: View {
                         title: "Proteins",
                         current: nutrition.protein ?? 0,
                         goal: proteinGoal,
+                        range: proteinRange,
                         color: MacroColor.protein,
                         shape: .octagon
                     )
@@ -322,6 +335,7 @@ struct NutritionPopupView: View {
                         title: "Fats",
                         current: nutrition.fat ?? 0,
                         goal: fatGoal,
+                        range: fatRange,
                         color: MacroColor.fat,
                         shape: .roundedRect
                     )
@@ -381,6 +395,9 @@ struct NutritionPopupContainer: View {
     let proteinGoal: Double?
     let fatGoal: Double?
     let carbGoal: Double?
+    let proteinRange: MacroRange?
+    let fatRange: MacroRange?
+    let carbRange: MacroRange?
     let isPresented: Bool
     let onClose: () -> Void
 
@@ -412,6 +429,9 @@ struct NutritionPopupContainer: View {
                     proteinGoal: proteinGoal,
                     fatGoal: fatGoal,
                     carbGoal: carbGoal,
+                    proteinRange: proteinRange,
+                    fatRange: fatRange,
+                    carbRange: carbRange,
                     onClose: onClose
                 )
                 .padding(.horizontal, DSSpacing.md)
@@ -490,6 +510,9 @@ struct NutritionPopupView_Previews: PreviewProvider {
                     proteinGoal: 32,
                     fatGoal: 32,
                     carbGoal: 32,
+                    proteinRange: MacroRange(min: 29, max: 40),
+                    fatRange: MacroRange(min: 26, max: 38),
+                    carbRange: MacroRange(min: 27, max: 37),
                     isPresented: true,
                     onClose: {}
                 )
@@ -518,6 +541,9 @@ struct NutritionPopupView_Previews: PreviewProvider {
                     proteinGoal: nil,
                     fatGoal: nil,
                     carbGoal: nil,
+                    proteinRange: nil,
+                    fatRange: nil,
+                    carbRange: nil,
                     isPresented: true,
                     onClose: {}
                 )
@@ -546,6 +572,9 @@ struct NutritionPopupView_Previews: PreviewProvider {
                     proteinGoal: nil,
                     fatGoal: nil,
                     carbGoal: nil,
+                    proteinRange: nil,
+                    fatRange: nil,
+                    carbRange: nil,
                     isPresented: true,
                     onClose: {}
                 )

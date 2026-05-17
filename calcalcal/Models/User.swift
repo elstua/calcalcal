@@ -1,5 +1,12 @@
 import Foundation
 
+/// Adherence corridor for a macro/calorie goal: min/max grams (or kcal).
+/// Provided by the backend; pure derived data from goal values.
+struct MacroRange: Codable, Equatable {
+    let min: Double
+    let max: Double
+}
+
 struct User: Codable, Identifiable {
     let id: String
     let email: String?
@@ -10,6 +17,13 @@ struct User: Codable, Identifiable {
     let dailyProteinGoal: Double?
     let dailyFatGoal: Double?
     let dailyCarbGoal: Double?
+
+    /// Adherence corridor (min/max) derived from the goals — sent by the backend.
+    /// Used in UI to show "100–130 g" beneath each macro value.
+    let dailyCalorieRange: MacroRange?
+    let dailyProteinRange: MacroRange?
+    let dailyFatRange: MacroRange?
+    let dailyCarbRange: MacroRange?
     let units: String?
     let timezoneOffset: Int?
     let createdAt: Date?
@@ -65,6 +79,10 @@ struct User: Codable, Identifiable {
         case dailyProteinGoal = "daily_protein_goal"
         case dailyFatGoal = "daily_fat_goal"
         case dailyCarbGoal = "daily_carb_goal"
+        case dailyCalorieRange = "daily_calorie_range"
+        case dailyProteinRange = "daily_protein_range"
+        case dailyFatRange = "daily_fat_range"
+        case dailyCarbRange = "daily_carb_range"
         case units
         case timezoneOffset = "timezone_offset"
         case createdAt = "created_at"
@@ -96,6 +114,10 @@ struct User: Codable, Identifiable {
         self.dailyProteinGoal = try User.decodeLenientDouble(container: container, forKey: .dailyProteinGoal)
         self.dailyFatGoal = try User.decodeLenientDouble(container: container, forKey: .dailyFatGoal)
         self.dailyCarbGoal = try User.decodeLenientDouble(container: container, forKey: .dailyCarbGoal)
+        self.dailyCalorieRange = try container.decodeIfPresent(MacroRange.self, forKey: .dailyCalorieRange)
+        self.dailyProteinRange = try container.decodeIfPresent(MacroRange.self, forKey: .dailyProteinRange)
+        self.dailyFatRange = try container.decodeIfPresent(MacroRange.self, forKey: .dailyFatRange)
+        self.dailyCarbRange = try container.decodeIfPresent(MacroRange.self, forKey: .dailyCarbRange)
         self.units = try container.decodeIfPresent(String.self, forKey: .units)
         self.timezoneOffset = try container.decodeIfPresent(Int.self, forKey: .timezoneOffset)
         self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)

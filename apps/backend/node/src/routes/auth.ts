@@ -30,15 +30,36 @@ const PROFILE_UPDATE_FIELDS = new Set([
   'onboarding_completed',
 ]);
 
-const serializeUser = (user: any) => ({
-  ...user,
-  created_at: typeof user.created_at === 'string'
-    ? user.created_at
-    : (user.created_at as any)?.toISOString?.() || String(user.created_at),
-  updated_at: typeof user.updated_at === 'string'
-    ? user.updated_at
-    : (user.updated_at as any)?.toISOString?.() || String(user.updated_at),
-});
+import { calculateMacroCorridor } from '../services/calorieCalculator';
+
+const serializeUser = (user: any) => {
+  const calorieGoal = Number(user.daily_calorie_goal) || 0;
+  const proteinGoal = Number(user.daily_protein_goal) || 0;
+  const fatGoal = Number(user.daily_fat_goal) || 0;
+  const carbGoal = Number(user.daily_carb_goal) || 0;
+
+  const ranges = calculateMacroCorridor({
+    daily_calorie_goal: calorieGoal,
+    daily_protein_goal: proteinGoal,
+    daily_fat_goal: fatGoal,
+    daily_carb_goal: carbGoal,
+  });
+
+  return {
+    ...user,
+    created_at: typeof user.created_at === 'string'
+      ? user.created_at
+      : (user.created_at as any)?.toISOString?.() || String(user.created_at),
+    updated_at: typeof user.updated_at === 'string'
+      ? user.updated_at
+      : (user.updated_at as any)?.toISOString?.() || String(user.updated_at),
+    // Adherence corridor — derived from the goal values, sent to clients for display.
+    daily_calorie_range: ranges.daily_calorie_range,
+    daily_protein_range: ranges.daily_protein_range,
+    daily_fat_range: ranges.daily_fat_range,
+    daily_carb_range: ranges.daily_carb_range,
+  };
+};
 
 function buildGoogleName(payload: any): string | null {
   if (payload?.name) return payload.name;
@@ -354,7 +375,7 @@ router.get('/profile', authenticateToken, async (req: AuthRequest, res: Response
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    return res.json({ success: true, profile: user });
+    return res.json({ success: true, profile: serializeUser(user) });
   } catch (_e) {
     return res.status(500).json({ error: 'Failed to get profile' });
   }

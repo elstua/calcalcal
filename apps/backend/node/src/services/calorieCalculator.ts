@@ -55,6 +55,37 @@ export interface MacroGoals {
 }
 
 /**
+ * A target range for a single macro: [min, max] in grams (or kcal for calories).
+ */
+export interface MacroRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Adherence corridor around each daily goal — shown in the UI as "100–130 g".
+ *
+ * Bounds were picked to reflect typical nutrition-coaching guidance:
+ *  - protein: slightly tighter on the floor (under-eating protein matters), loose on top
+ *  - fat:     symmetric (both too low and too high are issues)
+ *  - carbs:   the "budget balancer" — looser corridor
+ *  - calories: symmetric, with a +/-100 kcal minimum band so small goals aren't pinched
+ */
+const CORRIDOR = {
+  protein: { lower: 0.90, upper: 1.25 }, // -10% / +25%
+  fat:     { lower: 0.80, upper: 1.20 }, // ±20%
+  carb:    { lower: 0.85, upper: 1.15 }, // ±15%
+  calorie: { lower: 0.90, upper: 1.10, minBand: 100 }, // ±10%, at least ±100 kcal
+};
+
+export interface MacroCorridor {
+  daily_protein_range: MacroRange;
+  daily_fat_range: MacroRange;
+  daily_carb_range: MacroRange;
+  daily_calorie_range: MacroRange;
+}
+
+/**
  * Convert pounds to kilograms
  */
 export function lbsToKg(lbs: number): number {
@@ -336,5 +367,44 @@ export function calculateMacroGoals(
     daily_protein_goal: protein_g,
     daily_fat_goal: fat_g,
     daily_carb_goal: carb_g,
+  };
+}
+
+/**
+ * Compute the adherence corridor (min/max range) around a set of daily goals.
+ *
+ * Pure function of the goals — no health data needed. Safe to call on any user,
+ * including those still at the migration defaults (their range will simply be
+ * computed around 50/65/250).
+ */
+export function calculateMacroCorridor(goals: {
+  daily_calorie_goal: number;
+  daily_protein_goal: number;
+  daily_fat_goal: number;
+  daily_carb_goal: number;
+}): MacroCorridor {
+  const calorieGoal = goals.daily_calorie_goal;
+  const calorieBand = Math.max(
+    CORRIDOR.calorie.minBand,
+    calorieGoal * (CORRIDOR.calorie.upper - 1)
+  );
+
+  return {
+    daily_calorie_range: {
+      min: Math.max(0, Math.round(calorieGoal - calorieBand)),
+      max: Math.round(calorieGoal + calorieBand),
+    },
+    daily_protein_range: {
+      min: Math.max(0, Math.round(goals.daily_protein_goal * CORRIDOR.protein.lower)),
+      max: Math.round(goals.daily_protein_goal * CORRIDOR.protein.upper),
+    },
+    daily_fat_range: {
+      min: Math.max(0, Math.round(goals.daily_fat_goal * CORRIDOR.fat.lower)),
+      max: Math.round(goals.daily_fat_goal * CORRIDOR.fat.upper),
+    },
+    daily_carb_range: {
+      min: Math.max(0, Math.round(goals.daily_carb_goal * CORRIDOR.carb.lower)),
+      max: Math.round(goals.daily_carb_goal * CORRIDOR.carb.upper),
+    },
   };
 }

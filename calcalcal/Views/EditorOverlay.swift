@@ -86,6 +86,9 @@ struct EditorOverlay: View {
                         proteinGoal: appState.currentUser?.dailyProteinGoal,
                         fatGoal: appState.currentUser?.dailyFatGoal,
                         carbGoal: appState.currentUser?.dailyCarbGoal,
+                        proteinRange: appState.currentUser?.dailyProteinRange,
+                        fatRange: appState.currentUser?.dailyFatRange,
+                        carbRange: appState.currentUser?.dailyCarbRange,
                         isPresented: showNutritionPopup,
                         onClose: { showNutritionPopup = false }
                     )
