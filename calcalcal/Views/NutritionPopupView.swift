@@ -134,7 +134,14 @@ private struct MacroRing: View {
                         .font(.dsTitle3)
                         .foregroundColor(color)
 
-                    if let g = goal {
+                    // Range replaces the bare goal number — gives the user a target
+                    // band instead of a hard point value. Falls back to the goal
+                    // number when the backend didn't send a range.
+                    if let r = range {
+                        Text("\(Int(r.min))–\(Int(r.max))")
+                            .font(Font.dsCustom(weight: .regular, size: 14))
+                            .foregroundColor(color.opacity(0.5))
+                    } else if let g = goal {
                         Text("\(Int(g))")
                             .font(Font.dsCustom(weight: .regular, size: 14))
                             .foregroundColor(color.opacity(0.5))
@@ -142,13 +149,6 @@ private struct MacroRing: View {
                 }
             }
             .frame(width: 80, height: 80)
-
-            // Adherence corridor (min–max). Hidden when range is missing.
-            if let r = range {
-                Text("\(Int(r.min))–\(Int(r.max))")
-                    .font(Font.dsCustom(weight: .regular, size: 11))
-                    .foregroundColor(color.opacity(0.6))
-            }
         }
     }
 }
