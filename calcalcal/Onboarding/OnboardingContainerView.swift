@@ -64,6 +64,8 @@ struct OnboardingContainerView: View {
             // Set temporary user flag before starting
             coordinator.isTemporaryUser = appState.isTemporaryUser
             print("[OnboardingContainerView] isTemporaryUser: \(coordinator.isTemporaryUser)")
+
+            coordinator.reconcileForRequiredOnboarding()
             
             // Start onboarding and pre-fill data if user is returning
             if let user = appState.currentUser, user.hasHealthData {
@@ -142,7 +144,7 @@ struct OnboardingContainerView: View {
                 await MainActor.run {
                     isCompleting = false
                     completionError = "Couldn't save your profile. Please check your connection and try again."
-                    coordinator.error = error.localizedDescription
+                    coordinator.markCompletionSyncFailed(error.localizedDescription)
                     UserDefaults.standard.set(false, forKey: "onboarding_completed")
                     print("[OnboardingContainerView] Failed to sync onboarding data: \(error.localizedDescription)")
                 }

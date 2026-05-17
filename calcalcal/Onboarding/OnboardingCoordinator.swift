@@ -81,6 +81,16 @@ class OnboardingCoordinator: ObservableObject {
         persistState()
         print("[OnboardingCoordinator] Onboarding started")
     }
+
+    /// If app routing says onboarding is still required, do not let a stale
+    /// local completion flag leave the flow stuck on the final screen.
+    func reconcileForRequiredOnboarding() {
+        guard isCompleted else { return }
+
+        print("[OnboardingCoordinator] Clearing stale local completion state")
+        isCompleted = false
+        userDefaults.set(false, forKey: StorageKeys.onboardingCompleted)
+    }
     
     /// Handle advancement action from a step view
     /// - Parameter action: The advancement action to perform
@@ -187,6 +197,15 @@ class OnboardingCoordinator: ObservableObject {
         print("[OnboardingCoordinator] Debug: jumping to step \(step.title)")
         currentStep = step
         analytics.recordStepViewed(step)
+        persistState()
+    }
+
+    /// Allow the user to retry or navigate back after the backend rejects the
+    /// final onboarding profile sync.
+    func markCompletionSyncFailed(_ errorDescription: String) {
+        print("[OnboardingCoordinator] Completion sync failed: \(errorDescription)")
+        isCompleted = false
+        error = errorDescription
         persistState()
     }
     
@@ -422,4 +441,3 @@ extension OnboardingCoordinator {
     }
 }
 #endif
-

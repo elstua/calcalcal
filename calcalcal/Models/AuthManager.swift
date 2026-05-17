@@ -15,11 +15,44 @@ class AuthManager: NSObject, ObservableObject {
     }
     
     private var cancellables = Set<AnyCancellable>()
+
+    private enum StorageKeys {
+        static let firstLaunchKeychainCleanupCompleted = "first_launch_keychain_cleanup_completed"
+        static let currentUserId = "current_user_id"
+        static let onboardingCompleted = "onboarding_completed"
+        static let temporaryDeviceId = "temporary_device_id"
+    }
     
     override init() {
         super.init()
+        clearKeychainTokensIfThisIsAFreshInstall()
         checkExistingSession()
         testNetworkConnection() // Test network connectivity
+    }
+
+    private func clearKeychainTokensIfThisIsAFreshInstall() {
+        let defaults = UserDefaults.standard
+
+        guard !defaults.bool(forKey: StorageKeys.firstLaunchKeychainCleanupCompleted) else {
+            return
+        }
+
+        let hasLocalInstallState =
+            defaults.object(forKey: StorageKeys.currentUserId) != nil ||
+            defaults.object(forKey: StorageKeys.onboardingCompleted) != nil ||
+            defaults.object(forKey: StorageKeys.temporaryDeviceId) != nil
+
+        if !hasLocalInstallState {
+            do {
+                try KeychainManager.shared.deleteTokens()
+                APIClient.shared.clearSession()
+                print("🔐 Cleared leftover keychain session for fresh install")
+            } catch {
+                print("⚠️ Failed to clear leftover keychain session: \(error)")
+            }
+        }
+
+        defaults.set(true, forKey: StorageKeys.firstLaunchKeychainCleanupCompleted)
     }
 
     // MARK: - JSON Decoder (tolerant dates)

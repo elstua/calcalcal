@@ -128,6 +128,7 @@ class AppState: ObservableObject {
     
     /// Reset onboarding (for debugging/testing)
     /// Clears both backend and local onboarding completion status
+    @MainActor
     func resetOnboarding() async {
         print("[AppState] Resetting onboarding")
         

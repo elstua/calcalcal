@@ -173,8 +173,40 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             guard parent.shouldBecomeFirstResponder else { return }
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
-                textView.moveCaretToEndOfDocument()
+                if !self.isPlaceholderOnly(self.parent.blocks) {
+                    textView.moveCaretToEndOfDocument()
+                }
                 self.parent.shouldBecomeFirstResponder = false
+            }
+        }
+
+        private func isPlaceholderOnly(_ blocks: [Block]) -> Bool {
+            let contentBlocks = blocks.filter { block in
+                switch block.type {
+                case .text(let text):
+                    return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                case .imageText(_, _, let text):
+                    return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || block.imageUrl != nil
+                case .image:
+                    return true
+                case .spacer:
+                    return false
+                }
+            }
+
+            guard !contentBlocks.isEmpty else { return true }
+
+            return contentBlocks.allSatisfy { block in
+                switch block.type {
+                case .text(let text):
+                    return text.isPlaceholderText
+                case .imageText(_, _, let text):
+                    return text.isPlaceholderText && block.imageUrl == nil
+                case .image:
+                    return false
+                case .spacer:
+                    return false
+                }
             }
         }
         
