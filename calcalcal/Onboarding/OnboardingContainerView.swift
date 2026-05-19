@@ -183,8 +183,10 @@ private extension OnboardingData {
         }
         if let calorieGoal {
             updates["daily_calorie_goal"] = calorieGoal
+            updates["daily_calorie_goal_is_manual"] = false
         } else if let calculatedGoal = calculateCalorieGoal() {
             updates["daily_calorie_goal"] = calculatedGoal
+            updates["daily_calorie_goal_is_manual"] = false
         }
 
         return updates

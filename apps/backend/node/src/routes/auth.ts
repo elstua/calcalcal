@@ -14,6 +14,7 @@ const PROFILE_UPDATE_FIELDS = new Set([
   'email',
   'name',
   'daily_calorie_goal',
+  'daily_calorie_goal_is_manual',
   'daily_protein_goal',
   'daily_fat_goal',
   'daily_carb_goal',
@@ -481,11 +482,15 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
     }
 
     // Validate boolean fields
-    if (updates.onboarding_completed !== undefined && updates.onboarding_completed !== null) {
-      if (typeof updates.onboarding_completed !== 'boolean') {
+    const booleanFields = ['onboarding_completed', 'daily_calorie_goal_is_manual'];
+    for (const field of booleanFields) {
+      if (updates[field] === undefined || updates[field] === null) {
+        continue;
+      }
+      if (typeof updates[field] !== 'boolean') {
         return res.status(400).json({
-          error: 'Invalid onboarding_completed',
-          message: 'onboarding_completed must be a boolean value',
+          error: `Invalid ${field}`,
+          message: `${field} must be a boolean value`,
         });
       }
     }

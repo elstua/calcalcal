@@ -8,6 +8,7 @@ export interface User {
   apple_id: string | null;
   google_id: string | null;
   daily_calorie_goal: number;
+  daily_calorie_goal_is_manual: boolean;
   daily_protein_goal: number;
   daily_fat_goal: number;
   daily_carb_goal: number;
@@ -36,6 +37,7 @@ export class UserModel {
     'email',
     'name',
     'daily_calorie_goal',
+    'daily_calorie_goal_is_manual',
     'daily_protein_goal',
     'daily_fat_goal',
     'daily_carb_goal',
@@ -185,8 +187,21 @@ export class UserModel {
     // Check if any health fields are being updated
     const hasHealthFieldUpdate = healthFields.some((field) => field in updates);
 
-    // Check if daily_calorie_goal is explicitly provided (manual override)
-    const hasManualCalorieGoal = 'daily_calorie_goal' in updates;
+    const hasCalorieGoalUpdate = 'daily_calorie_goal' in updates;
+    const hasCalorieGoalManualFlagUpdate = 'daily_calorie_goal_is_manual' in updates;
+    const isResettingToCalculatedGoal =
+      hasCalorieGoalManualFlagUpdate && updates.daily_calorie_goal_is_manual === false;
+
+    // A caller that submits a calorie value without an explicit source is choosing
+    // a custom value. Onboarding and reset flows should send the flag explicitly.
+    if (hasCalorieGoalUpdate && !hasCalorieGoalManualFlagUpdate) {
+      updates.daily_calorie_goal_is_manual = true;
+    }
+
+    const calorieGoalIsManual =
+      updates.daily_calorie_goal_is_manual !== undefined
+        ? updates.daily_calorie_goal_is_manual === true
+        : existing.daily_calorie_goal_is_manual === true;
 
     // Check if any macro is explicitly provided (manual override)
     const hasManualProtein = 'daily_protein_goal' in updates;
@@ -210,19 +225,26 @@ export class UserModel {
         : existing.target_weight_kg ?? undefined,
     };
 
-    // Auto-calculate calorie goal if health fields are updated and no manual override
-    if (hasHealthFieldUpdate && !hasManualCalorieGoal) {
+    // Auto-calculate calorie goal when health fields change unless the user has
+    // locked in a manual goal. Also recalculate when explicitly resetting to
+    // calculated mode without sending a calorie value.
+    if (
+      ((hasHealthFieldUpdate && !hasCalorieGoalUpdate) ||
+        (isResettingToCalculatedGoal && !hasCalorieGoalUpdate)) &&
+      !calorieGoalIsManual
+    ) {
       const calculatedGoal = calculateCalorieGoal(mergedHealth);
       updates.daily_calorie_goal = calculatedGoal;
     }
 
     // Auto-calculate macro goals whenever:
     //  - any health field changes, OR
-    //  - calorie goal was manually overridden in this update
+    //  - calorie goal was updated or reset
     // ...unless the caller is explicitly setting a macro themselves (per-field override).
     // Macros are calculated against the *final* calorie goal landing in this update.
     const shouldRecalcMacros =
-      (hasHealthFieldUpdate || hasManualCalorieGoal) && !hasAnyManualMacro;
+      (hasHealthFieldUpdate || hasCalorieGoalUpdate || isResettingToCalculatedGoal) &&
+      !hasAnyManualMacro;
 
     if (shouldRecalcMacros) {
       const finalCalorieGoal =
@@ -316,4 +338,3 @@ export class UserModel {
     }
   }
 }
-
