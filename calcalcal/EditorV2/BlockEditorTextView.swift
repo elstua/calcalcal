@@ -1263,8 +1263,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
         dlog("Updating calories for block \(blockID): calories=\(calories ?? -1), weight=\(weight ?? -1), text=\(text)")
 
-        // Show loading state
-        // TODO: Add loading indicator to UI
+        if let calories {
+            applyVisibleCalorieUpdate(calories: calories, blockID: blockID)
+        }
 
         // Make API call
         Task { [weak self] in
@@ -1310,8 +1311,11 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             userModified: true
         )
 
-        // Update the block document controller
-        blockDocumentController.setNutritionData([blockID: updatedNutrition])
+        // Reconcile macros and other nutrition fields from the backend without
+        // dropping metadata for the other blocks in this entry.
+        var nutritionMap = currentNutritionMap()
+        nutritionMap[blockID] = updatedNutrition
+        blockDocumentController.setNutritionData(nutritionMap)
 
         // Update the calorie overlay to show new calories
         if let calorieOverlay = calorieOverlays[blockID] {
@@ -1324,15 +1328,59 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Trigger a layout update
         scheduleCalorieOverlayUpdate()
 
-        // Notify the coordinator to create a new snapshot and propagate changes,
-        // which will trigger the correct HealthKit sync.
-        if let entryId = self.entryIdentifier {
-            NotificationCenter.default.post(
-                name: .editorApplyPerBlockMetadata,
-                object: nil,
-                userInfo: ["entryId": entryId]
-            )
+        publishCalorieMetadataChange(nutritionMap: nutritionMap)
+    }
+
+    private func applyVisibleCalorieUpdate(calories: Int, blockID: BlockID) {
+        var nutritionMap = currentNutritionMap()
+        let existing = nutritionMap[blockID]
+        let updatedNutrition = NutritionData(
+            calories: calories,
+            protein: existing?.protein,
+            fat: existing?.fat,
+            carbs: existing?.carbs,
+            fiber: existing?.fiber,
+            sugar: existing?.sugar,
+            sodium: existing?.sodium,
+            weight: existing?.weight,
+            metric_description: existing?.metric_description,
+            confidence: existing?.confidence,
+            userModified: true
+        )
+
+        nutritionMap[blockID] = updatedNutrition
+        blockDocumentController.setNutritionData(nutritionMap)
+        blockDocumentController.setCalorieLabel(String(calories), for: blockID)
+
+        if let calorieOverlay = calorieOverlays[blockID] {
+            calorieOverlay.setCaloriesAnimated(String(calories))
         }
+
+        scheduleCalorieOverlayUpdate()
+        publishCalorieMetadataChange(nutritionMap: nutritionMap)
+    }
+
+    private func publishCalorieMetadataChange(nutritionMap: [BlockID: NutritionData]) {
+        guard let entryId = self.entryIdentifier else { return }
+
+        let totalCalories = nutritionMap.values.reduce(0) { total, nutrition in
+            total + (nutrition.calories ?? 0)
+        }
+
+        NotificationCenter.default.post(
+            name: .diaryEntryCaloriesUpdated,
+            object: nil,
+            userInfo: [
+                "entryId": entryId,
+                "totalCalories": totalCalories
+            ]
+        )
+
+        NotificationCenter.default.post(
+            name: .editorApplyPerBlockMetadata,
+            object: nil,
+            userInfo: ["entryId": entryId]
+        )
     }
 
     // MARK: - Helper Methods
