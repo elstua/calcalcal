@@ -37,7 +37,7 @@ struct ContentView: View {
         .onChange(of: appState.authManager.isAuthenticated) { isAuthenticated in
             // When authentication state changes to false, clear any lingering session data
             if !isAuthenticated {
-                print("[ContentView] User logged out, clearing session data")
+                dlog("[ContentView] User logged out, clearing session data")
                 APIClient.shared.clearSession()
             }
         }

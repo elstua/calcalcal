@@ -34,7 +34,7 @@ class AppState: ObservableObject {
             .filter { $0 == true } // Only when authenticated becomes true
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    print("🔐 [Streaks] Authentication completed, refreshing streaks...")
+                    dlog("🔐 [Streaks] Authentication completed, refreshing streaks...")
                     await self?.refreshStreaks()
                 }
             }
@@ -88,7 +88,7 @@ class AppState: ObservableObject {
     /// Start the onboarding flow
     /// Creates a coordinator and pre-fills data if user is returning
     func startOnboarding() {
-        print("[AppState] Starting onboarding flow")
+        dlog("[AppState] Starting onboarding flow")
         
         let coordinator = OnboardingCoordinator()
         
@@ -97,7 +97,7 @@ class AppState: ObservableObject {
         if let user = currentUser, user.hasHealthData {
             let existingData = user.toOnboardingData()
             coordinator.collectedData.merge(with: existingData)
-            print("[AppState] Pre-filled onboarding with existing user data")
+            dlog("[AppState] Pre-filled onboarding with existing user data")
         }
         
         coordinator.start()
@@ -114,7 +114,7 @@ class AppState: ObservableObject {
     
     /// Handle when onboarding is completed
     private func handleOnboardingCompleted() {
-        print("[AppState] Onboarding completed")
+        dlog("[AppState] Onboarding completed")
         
         // Save locally immediately
         UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
@@ -130,7 +130,7 @@ class AppState: ObservableObject {
     /// Clears both backend and local onboarding completion status
     @MainActor
     func resetOnboarding() async {
-        print("[AppState] Resetting onboarding")
+        dlog("[AppState] Resetting onboarding")
         
         // Clear local UserDefaults
         UserDefaults.standard.set(false, forKey: Self.onboardingCompletedKey)
@@ -142,11 +142,11 @@ class AppState: ObservableObject {
         // Update backend if user is authenticated
         if authManager.isAuthenticated {
             do {
-                print("[AppState] Updating backend to reset onboarding_completed")
+                dlog("[AppState] Updating backend to reset onboarding_completed")
                 let updatedUser = try await authManager.updateProfile(["onboarding_completed": false])
-                print("[AppState] Backend updated successfully. User onboarding_completed: \(updatedUser.onboardingCompleted ?? false)")
+                dlog("[AppState] Backend updated successfully. User onboarding_completed: \(updatedUser.onboardingCompleted ?? false)")
             } catch {
-                print("[AppState] Failed to update backend: \(error.localizedDescription)")
+                dlog("[AppState] Failed to update backend: \(error.localizedDescription)")
                 // Continue anyway - local reset is done
             }
         }
@@ -162,17 +162,17 @@ class AppState: ObservableObject {
     func syncHealthKitDataOnLaunch() async {
         // Only sync if HealthKit is available and sync is enabled
         guard healthKitManager.isAvailable && healthKitManager.isSyncEnabled else {
-            print("[AppState] HealthKit sync skipped - not available or disabled")
+            dlog("[AppState] HealthKit sync skipped - not available or disabled")
             return
         }
         
         // Only sync if user is authenticated
         guard authManager.isAuthenticated else {
-            print("[AppState] HealthKit sync skipped - user not authenticated")
+            dlog("[AppState] HealthKit sync skipped - user not authenticated")
             return
         }
         
-        print("[AppState] Starting HealthKit data sync on launch")
+        dlog("[AppState] Starting HealthKit data sync on launch")
         
         do {
             // Read health data from HealthKit
@@ -180,7 +180,7 @@ class AppState: ObservableObject {
             
             // Check if we have any data to update
             guard weight != nil || height != nil || gender != nil || age != nil else {
-                print("[AppState] No HealthKit data available to sync")
+                dlog("[AppState] No HealthKit data available to sync")
                 return
             }
             
@@ -191,67 +191,67 @@ class AppState: ObservableObject {
                 // Only update if significantly different (more than 0.5 kg)
                 if abs(hkWeight - currentWeight) > 0.5 {
                     updates["weight_kg"] = hkWeight
-                    print("[AppState] HealthKit weight differs: \(hkWeight) vs \(currentWeight)")
+                    dlog("[AppState] HealthKit weight differs: \(hkWeight) vs \(currentWeight)")
                 }
             } else if let hkWeight = weight, currentUser?.weightKg == nil {
                 updates["weight_kg"] = hkWeight
-                print("[AppState] Importing HealthKit weight: \(hkWeight)")
+                dlog("[AppState] Importing HealthKit weight: \(hkWeight)")
             }
             
             if let hkHeight = height, let currentHeight = currentUser?.heightCm {
                 // Only update if significantly different (more than 1 cm)
                 if abs(hkHeight - currentHeight) > 1 {
                     updates["height_cm"] = hkHeight
-                    print("[AppState] HealthKit height differs: \(hkHeight) vs \(currentHeight)")
+                    dlog("[AppState] HealthKit height differs: \(hkHeight) vs \(currentHeight)")
                 }
             } else if let hkHeight = height, currentUser?.heightCm == nil {
                 updates["height_cm"] = hkHeight
-                print("[AppState] Importing HealthKit height: \(hkHeight)")
+                dlog("[AppState] Importing HealthKit height: \(hkHeight)")
             }
             
             if let hkGender = gender, currentUser?.gender == nil {
                 updates["gender"] = hkGender
-                print("[AppState] Importing HealthKit gender: \(hkGender)")
+                dlog("[AppState] Importing HealthKit gender: \(hkGender)")
             }
             
             if let hkAge = age, currentUser?.age == nil {
                 updates["age"] = hkAge
-                print("[AppState] Importing HealthKit age: \(hkAge)")
+                dlog("[AppState] Importing HealthKit age: \(hkAge)")
             }
             
             // Update profile if we have changes
             if !updates.isEmpty {
-                print("[AppState] Updating profile with HealthKit data: \(updates)")
+                dlog("[AppState] Updating profile with HealthKit data: \(updates)")
                 await updateUserProfileWithHealthData(updates)
             } else {
-                print("[AppState] No profile updates needed from HealthKit")
+                dlog("[AppState] No profile updates needed from HealthKit")
             }
             
             // Mark sync complete
             healthKitManager.markSynced()
             
         } catch {
-            print("[AppState] HealthKit sync error: \(error.localizedDescription)")
+            dlog("[AppState] HealthKit sync error: \(error.localizedDescription)")
         }
     }
     
     /// Update user profile with health data from HealthKit
     private func updateUserProfileWithHealthData(_ updates: [String: Any]) async {
         guard authManager.isAuthenticated else {
-            print("[AppState] Cannot update profile - user not authenticated")
+            dlog("[AppState] Cannot update profile - user not authenticated")
             return
         }
         
         do {
-            print("[AppState] Updating user profile with HealthKit data: \(updates)")
+            dlog("[AppState] Updating user profile with HealthKit data: \(updates)")
             let updatedUser = try await authManager.updateProfile(updates)
-            print("[AppState] Profile updated successfully")
-            print("[AppState] Updated user - Weight: \(updatedUser.weightKg ?? 0) kg, Height: \(updatedUser.heightCm ?? 0) cm, Age: \(updatedUser.age ?? 0)")
+            dlog("[AppState] Profile updated successfully")
+            dlog("[AppState] Updated user - Weight: \(updatedUser.weightKg ?? 0) kg, Height: \(updatedUser.heightCm ?? 0) cm, Age: \(updatedUser.age ?? 0)")
             
             // The backend auto-recalculates calorie goal when health fields change
             // So updating weight/height/age would trigger a new daily calorie goal
             if let newCalorieGoal = updatedUser.dailyCalorieGoal {
-                print("[AppState] New calorie goal calculated: \(newCalorieGoal) kcal")
+                dlog("[AppState] New calorie goal calculated: \(newCalorieGoal) kcal")
             }
             
             // Notify observers that user data has changed
@@ -259,7 +259,7 @@ class AppState: ObservableObject {
                 objectWillChange.send()
             }
         } catch {
-            print("[AppState] Failed to update profile with HealthKit data: \(error.localizedDescription)")
+            dlog("[AppState] Failed to update profile with HealthKit data: \(error.localizedDescription)")
             // Don't throw - sync can still succeed even if profile update fails
         }
     }
@@ -269,17 +269,17 @@ class AppState: ObservableObject {
     func syncHealthKitDataManually() async {
         // Only sync if HealthKit is available and sync is enabled
         guard healthKitManager.isAvailable && healthKitManager.isSyncEnabled else {
-            print("[AppState] HealthKit sync skipped - not available or disabled")
+            dlog("[AppState] HealthKit sync skipped - not available or disabled")
             return
         }
         
         // Only sync if user is authenticated
         guard authManager.isAuthenticated else {
-            print("[AppState] HealthKit sync skipped - user not authenticated")
+            dlog("[AppState] HealthKit sync skipped - user not authenticated")
             return
         }
         
-        print("[AppState] Starting manual HealthKit data sync")
+        dlog("[AppState] Starting manual HealthKit data sync")
         
         do {
             // Read health data from HealthKit
@@ -287,7 +287,7 @@ class AppState: ObservableObject {
             
             // Check if we have any data to update
             guard weight != nil || height != nil || gender != nil || age != nil else {
-                print("[AppState] No HealthKit data available to sync")
+                dlog("[AppState] No HealthKit data available to sync")
                 return
             }
             
@@ -296,37 +296,37 @@ class AppState: ObservableObject {
             
             if let hkWeight = weight {
                 updates["weight_kg"] = hkWeight
-                print("[AppState] Importing HealthKit weight: \(hkWeight) kg")
+                dlog("[AppState] Importing HealthKit weight: \(hkWeight) kg")
             }
             
             if let hkHeight = height {
                 updates["height_cm"] = hkHeight
-                print("[AppState] Importing HealthKit height: \(hkHeight) cm")
+                dlog("[AppState] Importing HealthKit height: \(hkHeight) cm")
             }
             
             if let hkGender = gender {
                 updates["gender"] = hkGender
-                print("[AppState] Importing HealthKit gender: \(hkGender)")
+                dlog("[AppState] Importing HealthKit gender: \(hkGender)")
             }
             
             if let hkAge = age {
                 updates["age"] = hkAge
-                print("[AppState] Importing HealthKit age: \(hkAge)")
+                dlog("[AppState] Importing HealthKit age: \(hkAge)")
             }
             
             // Update profile if we have changes
             if !updates.isEmpty {
-                print("[AppState] Updating profile with HealthKit data: \(updates)")
+                dlog("[AppState] Updating profile with HealthKit data: \(updates)")
                 await updateUserProfileWithHealthData(updates)
             } else {
-                print("[AppState] No profile updates needed from HealthKit")
+                dlog("[AppState] No profile updates needed from HealthKit")
             }
             
             // Mark sync complete
             healthKitManager.markSynced()
             
         } catch {
-            print("[AppState] HealthKit sync error: \(error.localizedDescription)")
+            dlog("[AppState] HealthKit sync error: \(error.localizedDescription)")
         }
     }
     
@@ -354,19 +354,19 @@ class AppState: ObservableObject {
     
     func refreshStreaks() async {
         guard authManager.isAuthenticated else {
-            print("⚠️ [Streaks] Cannot refresh - not authenticated")
+            dlog("⚠️ [Streaks] Cannot refresh - not authenticated")
             return
         }
         
-        print("🔄 [Streaks] Fetching from backend...")
+        dlog("🔄 [Streaks] Fetching from backend...")
         do {
             let data = try await DiaryAPI.getStreaks()
             await MainActor.run {
                 self.streaksData = data
-                print("✅ [Streaks] Updated: current=\(data.currentStreak), longest=\(data.longestStreak), total=\(data.totalDaysWithEntries)")
+                dlog("✅ [Streaks] Updated: current=\(data.currentStreak), longest=\(data.longestStreak), total=\(data.totalDaysWithEntries)")
             }
         } catch {
-            print("❌ [Streaks] Failed: \(error.localizedDescription)")
+            dlog("❌ [Streaks] Failed: \(error.localizedDescription)")
         }
     }
 } 

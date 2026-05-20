@@ -141,12 +141,12 @@ final class HealthKitManager: ObservableObject {
         return try await withCheckedThrowingContinuation { continuation in
             healthStore.requestAuthorization(toShare: nil, read: readTypes) { success, error in
                 if let error = error {
-                    print("[HealthKit] Read authorization error: \(error.localizedDescription)")
+                    dlog("[HealthKit] Read authorization error: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
                 
-                print("[HealthKit] Read authorization result: \(success)")
+                dlog("[HealthKit] Read authorization result: \(success)")
                 Task { @MainActor in
                     self.isAuthorized = success
                     if success {
@@ -170,12 +170,12 @@ final class HealthKitManager: ObservableObject {
         return try await withCheckedThrowingContinuation { continuation in
             healthStore.requestAuthorization(toShare: writeTypes, read: nil) { success, error in
                 if let error = error {
-                    print("[HealthKit] Write authorization error: \(error.localizedDescription)")
+                    dlog("[HealthKit] Write authorization error: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
                 
-                print("[HealthKit] Write authorization result: \(success)")
+                dlog("[HealthKit] Write authorization result: \(success)")
                 continuation.resume(returning: success)
             }
         }
@@ -193,12 +193,12 @@ final class HealthKitManager: ObservableObject {
         return try await withCheckedThrowingContinuation { continuation in
             healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
                 if let error = error {
-                    print("[HealthKit] Authorization error: \(error.localizedDescription)")
+                    dlog("[HealthKit] Authorization error: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
                 
-                print("[HealthKit] Authorization result: \(success)")
+                dlog("[HealthKit] Authorization result: \(success)")
                 Task { @MainActor in
                     self.isAuthorized = success
                     if success {
@@ -241,19 +241,19 @@ final class HealthKitManager: ObservableObject {
                 sortDescriptors: [sortDescriptor]
             ) { _, samples, error in
                 if let error = error {
-                    print("[HealthKit] Error reading weight: \(error.localizedDescription)")
+                    dlog("[HealthKit] Error reading weight: \(error.localizedDescription)")
                     continuation.resume(throwing: HealthKitError.readFailed(error.localizedDescription))
                     return
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
-                    print("[HealthKit] No weight data available")
+                    dlog("[HealthKit] No weight data available")
                     continuation.resume(returning: nil)
                     return
                 }
                 
                 let weightKg = sample.quantity.doubleValue(for: .gramUnit(with: .kilo))
-                print("[HealthKit] Read weight: \(weightKg) kg")
+                dlog("[HealthKit] Read weight: \(weightKg) kg")
                 continuation.resume(returning: weightKg)
             }
             
@@ -282,19 +282,19 @@ final class HealthKitManager: ObservableObject {
                 sortDescriptors: [sortDescriptor]
             ) { _, samples, error in
                 if let error = error {
-                    print("[HealthKit] Error reading height: \(error.localizedDescription)")
+                    dlog("[HealthKit] Error reading height: \(error.localizedDescription)")
                     continuation.resume(throwing: HealthKitError.readFailed(error.localizedDescription))
                     return
                 }
                 
                 guard let sample = samples?.first as? HKQuantitySample else {
-                    print("[HealthKit] No height data available")
+                    dlog("[HealthKit] No height data available")
                     continuation.resume(returning: nil)
                     return
                 }
                 
                 let heightCm = sample.quantity.doubleValue(for: .meterUnit(with: .centi))
-                print("[HealthKit] Read height: \(heightCm) cm")
+                dlog("[HealthKit] Read height: \(heightCm) cm")
                 continuation.resume(returning: heightCm)
             }
             
@@ -311,10 +311,10 @@ final class HealthKitManager: ObservableObject {
         
         do {
             let biologicalSex = try healthStore.biologicalSex()
-            print("[HealthKit] Read biological sex: \(biologicalSex.biologicalSex.rawValue)")
+            dlog("[HealthKit] Read biological sex: \(biologicalSex.biologicalSex.rawValue)")
             return biologicalSex.biologicalSex
         } catch {
-            print("[HealthKit] Error reading biological sex: \(error.localizedDescription)")
+            dlog("[HealthKit] Error reading biological sex: \(error.localizedDescription)")
             // Return nil instead of throwing - biological sex might not be set
             return nil
         }
@@ -329,10 +329,10 @@ final class HealthKitManager: ObservableObject {
         
         do {
             let dateOfBirth = try healthStore.dateOfBirthComponents()
-            print("[HealthKit] Read date of birth: \(dateOfBirth)")
+            dlog("[HealthKit] Read date of birth: \(dateOfBirth)")
             return dateOfBirth
         } catch {
-            print("[HealthKit] Error reading date of birth: \(error.localizedDescription)")
+            dlog("[HealthKit] Error reading date of birth: \(error.localizedDescription)")
             // Return nil instead of throwing - date of birth might not be set
             return nil
         }
@@ -347,7 +347,7 @@ final class HealthKitManager: ObservableObject {
         }
         
         let age = Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year
-        print("[HealthKit] Calculated age: \(age ?? 0)")
+        dlog("[HealthKit] Calculated age: \(age ?? 0)")
         return age
     }
     
@@ -461,7 +461,7 @@ final class HealthKitManager: ObservableObject {
         }
         
         guard !samplesToSave.isEmpty else {
-            print("[HealthKit] No nutrition data to save (all values are zero)")
+            dlog("[HealthKit] No nutrition data to save (all values are zero)")
             return
         }
         
@@ -469,13 +469,13 @@ final class HealthKitManager: ObservableObject {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             healthStore.save(samplesToSave) { success, error in
                 if let error = error {
-                    print("[HealthKit] Error saving nutrition data: \(error.localizedDescription)")
+                    dlog("[HealthKit] Error saving nutrition data: \(error.localizedDescription)")
                     continuation.resume(throwing: HealthKitError.writeFailed(error.localizedDescription))
                     return
                 }
                 
                 if success {
-                    print("[HealthKit] Successfully saved nutrition data: \(calories) kcal, \(protein)g protein, \(carbs)g carbs, \(fat)g fat")
+                    dlog("[HealthKit] Successfully saved nutrition data: \(calories) kcal, \(protein)g protein, \(carbs)g carbs, \(fat)g fat")
                     Task { @MainActor in
                         self.lastSyncDate = Date()
                     }
@@ -518,11 +518,11 @@ final class HealthKitManager: ObservableObject {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 healthStore.deleteObjects(of: quantityType, predicate: predicate) { success, deletedCount, error in
                     if let error = error {
-                        print("[HealthKit] Error deleting \(typeIdentifier): \(error.localizedDescription)")
+                        dlog("[HealthKit] Error deleting \(typeIdentifier): \(error.localizedDescription)")
                         continuation.resume(throwing: HealthKitError.writeFailed(error.localizedDescription))
                         return
                     }
-                    print("[HealthKit] Deleted \(deletedCount) \(typeIdentifier) samples")
+                    dlog("[HealthKit] Deleted \(deletedCount) \(typeIdentifier) samples")
                     continuation.resume()
                 }
             }

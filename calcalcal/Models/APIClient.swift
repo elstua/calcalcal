@@ -19,14 +19,14 @@ class APIClient {
         let fullURLString = "\(baseURL)\(endpoint)"
         guard let url = URL(string: fullURLString) else {
             #if DEBUG
-            print("❌ APIClient: Invalid URL - \(fullURLString)")
+            dlog("❌ APIClient: Invalid URL - \(fullURLString)")
             #endif
             return Fail(error: APIError.invalidURL)
                 .eraseToAnyPublisher()
         }
 
         #if DEBUG
-        print("🌐 APIClient: Requesting \(method) \(fullURLString)")
+        dlog("🌐 APIClient: Requesting \(method) \(fullURLString)")
         #endif
 
         var request = URLRequest(url: url)
@@ -47,9 +47,9 @@ class APIClient {
         return URLSession.shared.dataTaskPublisher(for: request)
             .mapError { error -> APIError in
                 #if DEBUG
-                print("❌ APIClient: Network error - \(error.localizedDescription)")
-                print("   Base URL: \(self.baseURL)")
-                print("   Endpoint: \(endpoint)")
+                dlog("❌ APIClient: Network error - \(error.localizedDescription)")
+                dlog("   Base URL: \(self.baseURL)")
+                dlog("   Endpoint: \(endpoint)")
                 #endif
 
                 // Check if it's a timeout error
@@ -64,7 +64,7 @@ class APIClient {
             .decode(type: T.self, decoder: JSONDecoder())
             .mapError { error -> APIError in
                 #if DEBUG
-                print("❌ APIClient: Decoding error - \(error.localizedDescription)")
+                dlog("❌ APIClient: Decoding error - \(error.localizedDescription)")
                 #endif
                 return APIError.decodingError
             }

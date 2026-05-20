@@ -221,8 +221,8 @@ struct CameraPolaroidView_Previews: PreviewProvider {
 
             CameraPolaroidView(
                 cameraManager: CameraManager(),
-                onCapture: { print("Capture tapped") },
-                onFlashToggle: { print("Flash toggled") }
+                onCapture: { dlog("Capture tapped") },
+                onFlashToggle: { dlog("Flash toggled") }
             )
         }
     }

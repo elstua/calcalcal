@@ -58,6 +58,6 @@ struct DeleteAccountConfirmationView: View {
 
 #Preview {
     DeleteAccountConfirmationView(onDelete: {
-        print("Delete account confirmed")
+        dlog("Delete account confirmed")
     })
 }

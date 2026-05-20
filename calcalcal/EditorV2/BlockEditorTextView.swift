@@ -1251,20 +1251,20 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     private func handleCalorieUpdate(calories: Int?, weight: Double?, blockID: BlockID) {
         guard let entryIdentifier = entryIdentifier else {
-            print("Error: No entry identifier available for calorie update")
+            dlog("Error: No entry identifier available for calorie update")
             return
         }
 
         // Get the text content for this block
         guard let block = blockDocumentController.document.blocks.first(where: { $0.id == blockID }),
               let textStorage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage else {
-            print("Error: Could not find block or text storage")
+            dlog("Error: Could not find block or text storage")
             return
         }
 
         let text = getBlockText(block: block, textStorage: textStorage)
 
-        print("Updating calories for block \(blockID): calories=\(calories ?? -1), weight=\(weight ?? -1), text=\(text)")
+        dlog("Updating calories for block \(blockID): calories=\(calories ?? -1), weight=\(weight ?? -1), text=\(text)")
 
         // Show loading state
         // TODO: Add loading indicator to UI
@@ -1284,7 +1284,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 case .finished:
                     break
                 case .failure(let error):
-                    print("Error updating calorie popup: \(error)")
+                    dlog("Error updating calorie popup: \(error)")
 
                     // Show appropriate error message to user
                     DispatchQueue.main.async {
@@ -1304,7 +1304,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     }
 
     private func handleCalorieUpdateResponse(response: CaloriePopupUpdateResponse, blockID: BlockID) {
-        print("Successfully updated nutrition for block \(blockID): \(response)")
+        dlog("Successfully updated nutrition for block \(blockID): \(response)")
 
         // Update local nutrition data
         let updatedNutrition = NutritionData(

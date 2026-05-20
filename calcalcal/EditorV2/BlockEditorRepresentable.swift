@@ -108,7 +108,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         func bind(to textView: BlockEditorTextView) {
             self.textView = textView
             #if DEBUG
-            print("🔧 Coordinator.bind - parent.isEditable: \(parent.isEditable)")
+            dlog("🔧 Coordinator.bind - parent.isEditable: \(parent.isEditable)")
             #endif
             textView.isEditable = parent.isEditable
             textView.isUserInteractionEnabled = true
@@ -120,7 +120,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             bridge?.apply(blocks: parent.blocks, imageMap: parent.imageMap)
             lastAppliedBlocks = parent.blocks
             #if DEBUG
-            print("🔧 Coordinator.bind - textView.isEditable after: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
+            dlog("🔧 Coordinator.bind - textView.isEditable after: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
             #endif
             
             notificationToken = NotificationCenter.default.addObserver(

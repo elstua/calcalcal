@@ -87,8 +87,8 @@ struct PhotoPreviewView_Previews: PreviewProvider {
 
             PhotoPreviewView(
                 image: createSampleImage(),
-                onRetake: { print("Retake tapped") },
-                onUsePhoto: { print("Use Photo tapped") }
+                onRetake: { dlog("Retake tapped") },
+                onUsePhoto: { dlog("Use Photo tapped") }
             )
         }
     }

@@ -140,7 +140,7 @@ struct CreateAccountStepView: View {
     }
     
     private func debugResetTemporaryUser() {
-        print("🔧 DEBUG: Resetting temporary user state including backend...")
+        dlog("🔧 DEBUG: Resetting temporary user state including backend...")
         
         Task {
             do {
@@ -178,13 +178,13 @@ struct CreateAccountStepView: View {
                     // Clear APIClient session
                     APIClient.shared.clearSession()
                     
-                    print("✅ DEBUG: Temporary user reset complete - showing AuthChoiceView")
+                    dlog("✅ DEBUG: Temporary user reset complete - showing AuthChoiceView")
                     
                     // Force immediate UI update
                     appState.objectWillChange.send()
                 }
             } catch {
-                print("❌ DEBUG: Failed to reset temporary user: \(error)")
+                dlog("❌ DEBUG: Failed to reset temporary user: \(error)")
                 await MainActor.run {
                     upgradeError = "Debug reset failed: \(error.localizedDescription)"
                 }
@@ -194,7 +194,7 @@ struct CreateAccountStepView: View {
     
     /// Clean up temporary account by device ID
     private func debugCleanupTemporaryByDevice(deviceId: String) async {
-        print("🔧 DEBUG: Cleaning up temporary account for device: \(deviceId)")
+        dlog("🔧 DEBUG: Cleaning up temporary account for device: \(deviceId)")
         
         do {
             let cleanupUrl = URL(string: "\(Configuration.apiURL)/api/auth/debug/cleanup-temporary-by-device")!
@@ -207,14 +207,14 @@ struct CreateAccountStepView: View {
             
             let (data, response) = try await URLSession.shared.data(for: cleanupRequest)
             if let httpResponse = response as? HTTPURLResponse {
-                print("🔧 DEBUG: Device cleanup response: \(httpResponse.statusCode)")
+                dlog("🔧 DEBUG: Device cleanup response: \(httpResponse.statusCode)")
                 if let responseJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("🔧 DEBUG: Device cleanup response: \(responseJson)")
+                    dlog("🔧 DEBUG: Device cleanup response: \(responseJson)")
                 }
             }
             
         } catch {
-            print("🔧 DEBUG: Device-based cleanup failed: \(error)")
+            dlog("🔧 DEBUG: Device-based cleanup failed: \(error)")
         }
     }
     #endif

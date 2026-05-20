@@ -8,100 +8,100 @@ struct HealthKitDebugHelper {
     
     /// Print comprehensive HealthKit status
     static func printStatus() {
-        print("\n🔍 === HealthKit Debug Status ===")
+        dlog("\n🔍 === HealthKit Debug Status ===")
         
         let manager = HealthKitManager.shared
         
         // Availability
-        print("📱 Availability:")
-        print("   - HealthKit Available: \(manager.isAvailable)")
-        print("   - Sync Enabled: \(manager.isSyncEnabled)")
+        dlog("📱 Availability:")
+        dlog("   - HealthKit Available: \(manager.isAvailable)")
+        dlog("   - Sync Enabled: \(manager.isSyncEnabled)")
         if let lastSync = manager.lastSyncDate {
-            print("   - Last Sync: \(lastSync)")
+            dlog("   - Last Sync: \(lastSync)")
         } else {
-            print("   - Last Sync: Never")
+            dlog("   - Last Sync: Never")
         }
         
         // Authorization Status
-        print("\n🔐 Authorization Status:")
+        dlog("\n🔐 Authorization Status:")
         
         if let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass) {
             let status = manager.authorizationStatus(for: weightType)
-            print("   - Weight (Read): \(statusDescription(status))")
+            dlog("   - Weight (Read): \(statusDescription(status))")
         }
         
         if let heightType = HKQuantityType.quantityType(forIdentifier: .height) {
             let status = manager.authorizationStatus(for: heightType)
-            print("   - Height (Read): \(statusDescription(status))")
+            dlog("   - Height (Read): \(statusDescription(status))")
         }
         
         if let biologicalSexType = HKObjectType.characteristicType(forIdentifier: .biologicalSex) {
             let status = manager.authorizationStatus(for: biologicalSexType)
-            print("   - Biological Sex (Read): \(statusDescription(status))")
+            dlog("   - Biological Sex (Read): \(statusDescription(status))")
         }
         
         if let dateOfBirthType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
             let status = manager.authorizationStatus(for: dateOfBirthType)
-            print("   - Date of Birth (Read): \(statusDescription(status))")
+            dlog("   - Date of Birth (Read): \(statusDescription(status))")
         }
         
         if let calorieType = HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed) {
             let status = manager.authorizationStatus(for: calorieType)
-            print("   - Dietary Energy (Write): \(statusDescription(status))")
+            dlog("   - Dietary Energy (Write): \(statusDescription(status))")
         }
         
         if let proteinType = HKQuantityType.quantityType(forIdentifier: .dietaryProtein) {
             let status = manager.authorizationStatus(for: proteinType)
-            print("   - Protein (Write): \(statusDescription(status))")
+            dlog("   - Protein (Write): \(statusDescription(status))")
         }
         
-        print("\n================================\n")
+        dlog("\n================================\n")
     }
     
     /// Test reading all health data
     static func testReadAllData() async {
-        print("\n🧪 === Testing HealthKit Read ===")
+        dlog("\n🧪 === Testing HealthKit Read ===")
         
         let manager = HealthKitManager.shared
         
         do {
             let (weight, height, gender, age) = try await manager.readAllHealthData()
             
-            print("📊 Read Results:")
+            dlog("📊 Read Results:")
             if let weight = weight {
-                print("   ✅ Weight: \(weight) kg")
+                dlog("   ✅ Weight: \(weight) kg")
             } else {
-                print("   ❌ Weight: Not available")
+                dlog("   ❌ Weight: Not available")
             }
             
             if let height = height {
-                print("   ✅ Height: \(height) cm")
+                dlog("   ✅ Height: \(height) cm")
             } else {
-                print("   ❌ Height: Not available")
+                dlog("   ❌ Height: Not available")
             }
             
             if let gender = gender {
-                print("   ✅ Gender: \(gender)")
+                dlog("   ✅ Gender: \(gender)")
             } else {
-                print("   ❌ Gender: Not available")
+                dlog("   ❌ Gender: Not available")
             }
             
             if let age = age {
-                print("   ✅ Age: \(age) years")
+                dlog("   ✅ Age: \(age) years")
             } else {
-                print("   ❌ Age: Not available")
+                dlog("   ❌ Age: Not available")
             }
             
         } catch {
-            print("   ❌ Error: \(error.localizedDescription)")
+            dlog("   ❌ Error: \(error.localizedDescription)")
         }
         
-        print("================================\n")
+        dlog("================================\n")
     }
     
     /// Test writing sample nutrition data
     static func testWriteNutritionData() async {
-        print("\n🧪 === Testing HealthKit Write ===")
+        dlog("\n🧪 === Testing HealthKit Write ===")
         
         let manager = HealthKitManager.shared
         
@@ -111,11 +111,11 @@ struct HealthKitDebugHelper {
         let testCarbs = 50.0
         let testFat = 20.0
         
-        print("📝 Writing test data:")
-        print("   - Calories: \(testCalories) kcal")
-        print("   - Protein: \(testProtein) g")
-        print("   - Carbs: \(testCarbs) g")
-        print("   - Fat: \(testFat) g")
+        dlog("📝 Writing test data:")
+        dlog("   - Calories: \(testCalories) kcal")
+        dlog("   - Protein: \(testProtein) g")
+        dlog("   - Carbs: \(testCarbs) g")
+        dlog("   - Fat: \(testFat) g")
         
         do {
             try await manager.writeNutritionData(
@@ -126,21 +126,21 @@ struct HealthKitDebugHelper {
                 date: Date(),
                 entryId: "test-entry-\(UUID().uuidString)"
             )
-            print("   ✅ Successfully wrote to HealthKit")
-            print("   📱 Check Health app > Nutrition to verify")
+            dlog("   ✅ Successfully wrote to HealthKit")
+            dlog("   📱 Check Health app > Nutrition to verify")
         } catch {
-            print("   ❌ Error: \(error.localizedDescription)")
+            dlog("   ❌ Error: \(error.localizedDescription)")
         }
         
-        print("================================\n")
+        dlog("================================\n")
     }
     
     /// Check what data exists in HealthKit for today
     static func checkTodayNutritionData() async {
-        print("\n🔍 === Checking Today's Nutrition Data ===")
+        dlog("\n🔍 === Checking Today's Nutrition Data ===")
         
         guard let healthStore = HealthKitManager.shared.healthStore else {
-            print("   ❌ HealthKit not available")
+            dlog("   ❌ HealthKit not available")
             return
         }
         
@@ -161,15 +161,15 @@ struct HealthKitDebugHelper {
                 sortDescriptors: nil
             ) { _, samples, error in
                 if let error = error {
-                    print("   ❌ Error reading calories: \(error.localizedDescription)")
+                    dlog("   ❌ Error reading calories: \(error.localizedDescription)")
                     return
                 }
                 
                 if let samples = samples as? [HKQuantitySample], !samples.isEmpty {
                     let totalCalories = samples.reduce(0.0) { $0 + $1.quantity.doubleValue(for: .kilocalorie()) }
-                    print("   ✅ Calories: \(Int(totalCalories)) kcal (\(samples.count) samples)")
+                    dlog("   ✅ Calories: \(Int(totalCalories)) kcal (\(samples.count) samples)")
                 } else {
-                    print("   ❌ Calories: No data found")
+                    dlog("   ❌ Calories: No data found")
                 }
             }
             healthStore.execute(query)
@@ -184,21 +184,21 @@ struct HealthKitDebugHelper {
                 sortDescriptors: nil
             ) { _, samples, error in
                 if let error = error {
-                    print("   ❌ Error reading protein: \(error.localizedDescription)")
+                    dlog("   ❌ Error reading protein: \(error.localizedDescription)")
                     return
                 }
                 
                 if let samples = samples as? [HKQuantitySample], !samples.isEmpty {
                     let totalProtein = samples.reduce(0.0) { $0 + $1.quantity.doubleValue(for: .gram()) }
-                    print("   ✅ Protein: \(totalProtein) g (\(samples.count) samples)")
+                    dlog("   ✅ Protein: \(totalProtein) g (\(samples.count) samples)")
                 } else {
-                    print("   ❌ Protein: No data found")
+                    dlog("   ❌ Protein: No data found")
                 }
             }
             healthStore.execute(query)
         }
         
-        print("================================\n")
+        dlog("================================\n")
     }
     
     // MARK: - Helper Methods

@@ -239,7 +239,7 @@ struct CalorieContextMenuView_Previews: PreviewProvider {
             weight: 100.0,
             nutrition: sampleNutrition
         ) { calories, weight in
-            print("Update: calories=\(calories ?? -1), weight=\(weight ?? -1)")
+            dlog("Update: calories=\(calories ?? -1), weight=\(weight ?? -1)")
         }
         .previewDisplayName("Calorie Context Menu")
     }
