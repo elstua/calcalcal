@@ -236,9 +236,9 @@ struct EditorOverlay: View {
                 localEntry.totalCalories = calories
             }
 
-            // Auto-focus the editor after a short delay to let the transition complete
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                guard !showImagePicker else { return }
+            // Auto-focus the editor immediately; SwiftUI will route firstResponder once the view mounts.
+            // (The previous 0.35s delay added perceived latency to every editor open.)
+            if !showImagePicker {
                 shouldBecomeFirstResponder = true
             }
             
@@ -633,8 +633,8 @@ extension EditorOverlay {
                 }
             }
         }
-        // Ensure keyboard focuses after insert
-        DispatchQueue.main.asyncAfter(deadline: .now()) {
+        // Ensure keyboard focuses after insert (next runloop hop, not a delay).
+        DispatchQueue.main.async {
             shouldBecomeFirstResponder = true
         }
     }

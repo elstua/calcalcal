@@ -75,8 +75,7 @@ struct StreakPopupView: View {
                     if dragOffset > dragThreshold || velocity > 300 {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             dragOffset = UIScreen.main.bounds.height
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        } completion: {
                             onClose()
                         }
                     } else {
@@ -156,8 +155,7 @@ struct StreakPopupContainer: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             popupOffset = UIScreen.main.bounds.height
             backgroundOpacity = 0
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        } completion: {
             onClose()
         }
     }
