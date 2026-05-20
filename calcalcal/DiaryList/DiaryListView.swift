@@ -407,7 +407,7 @@ struct DiaryEntryPopupView: View {
     private func scheduleAutosaveIfTextChanged(blocks: [Block]) {
         let content = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
         if content == lastSavedContent {
-            print("⏭️ Autosave skipped (text unchanged)")
+            dlog("⏭️ Autosave skipped (text unchanged)")
             return
         }
         scheduleAutosave(blocks: blocks)
@@ -415,9 +415,9 @@ struct DiaryEntryPopupView: View {
 
     private func scheduleAutosave(blocks: [Block]) {
         debounceWorkItem?.cancel()
-        print("🕐 Autosave scheduled in 1s…")
+        dlog("🕐 Autosave scheduled in 1s…")
         let workItem = DispatchWorkItem { [entry] in
-            print("💾 Autosave firing…")
+            dlog("💾 Autosave firing…")
             Task { await save(blocks: blocks) }
         }
         debounceWorkItem = workItem
@@ -429,7 +429,7 @@ struct DiaryEntryPopupView: View {
             work.cancel()   
             debounceWorkItem = nil
         }
-        print("🔚 Flushing autosave on close…")
+        dlog("🔚 Flushing autosave on close…")
         Task { await save(blocks: entry.blocks) }
     }
 
@@ -448,13 +448,13 @@ struct DiaryEntryPopupView: View {
             }
         }
         if trimmed.isEmpty || hasOnlyPlaceholder {
-            print("⏭️ Autosave skipped (empty/placeholder content)")
+            dlog("⏭️ Autosave skipped (empty/placeholder content)")
             return
         }
         // Compute yyyy-MM-dd for entry.date using device timezone for now (timeline already applied offset)
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entry.date, offsetMinutes: offsetMinutes)
-        print("⬆️ Upserting content for day \(day)…")
+        dlog("⬆️ Upserting content for day \(day)…")
         do {
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content)
@@ -477,19 +477,19 @@ struct DiaryEntryPopupView: View {
                             )
                         }
                     } catch {
-                        print("⚠️ Failed to refresh streaks after autosave: \(error)")
+                        dlog("⚠️ Failed to refresh streaks after autosave: \(error)")
                     }
                 }
             } else {
                 // Fallback: do nothing; next save will update once user id is available.
-                print("⚠️ Missing user id; deferring insert until available")
+                dlog("⚠️ Missing user id; deferring insert until available")
             }
             lastSavedAt = Date()
             lastSavedContent = trimmed
-            print("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
+            dlog("✅ Autosave success at \(lastSavedAt?.description ?? "now")")
         } catch {
             // For v1, ignore errors silently; could add retry/indicator later.
-            print("❌ Autosave error: \(error)")
+            dlog("❌ Autosave error: \(error)")
         }
     }
 }

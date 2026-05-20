@@ -151,7 +151,7 @@ struct AuthChoiceView: View {
     }
     
     private func debugResetAllData() {
-        print("🔧 DEBUG: Resetting all app data including backend...")
+        dlog("🔧 DEBUG: Resetting all app data including backend...")
         
         Task {
             do {
@@ -192,13 +192,13 @@ struct AuthChoiceView: View {
                     // Clear APIClient session
                     APIClient.shared.clearSession()
                     
-                    print("✅ DEBUG: All data reset complete - showing AuthChoiceView")
+                    dlog("✅ DEBUG: All data reset complete - showing AuthChoiceView")
                     
                     // Force immediate UI update
                     appState.objectWillChange.send()
                 }
             } catch {
-                print("❌ DEBUG: Failed to reset data: \(error)")
+                dlog("❌ DEBUG: Failed to reset data: \(error)")
                 await MainActor.run {
                     appState.authManager.error = "Debug reset failed: \(error.localizedDescription)"
                 }
@@ -208,12 +208,12 @@ struct AuthChoiceView: View {
     
     /// Clean up backend data for temporary accounts
     private func debugCleanupBackend(userId: String, deviceId: String) async {
-        print("🔧 DEBUG: Cleaning up backend data for user: \(userId), device: \(deviceId)")
+        dlog("🔧 DEBUG: Cleaning up backend data for user: \(userId), device: \(deviceId)")
         
         do {
             // Try to get session tokens for cleanup (might fail if already cleared)
             guard let session = try? KeychainManager.shared.loadTokens() else {
-                print("🔧 DEBUG: No session tokens available, attempting device-based cleanup")
+                dlog("🔧 DEBUG: No session tokens available, attempting device-based cleanup")
                 await debugCleanupByDeviceId(deviceId: deviceId)
                 return
             }
@@ -226,17 +226,17 @@ struct AuthChoiceView: View {
             
             let (_, deleteResponse) = try await URLSession.shared.data(for: deleteRequest)
             if let httpResponse = deleteResponse as? HTTPURLResponse {
-                print("🔧 DEBUG: Delete user response: \(httpResponse.statusCode)")
+                dlog("🔧 DEBUG: Delete user response: \(httpResponse.statusCode)")
             }
             
         } catch {
-            print("🔧 DEBUG: Backend cleanup failed: \(error)")
+            dlog("🔧 DEBUG: Backend cleanup failed: \(error)")
         }
     }
     
     /// Fallback cleanup by device ID (if no auth tokens available)
     private func debugCleanupByDeviceId(deviceId: String) async {
-        print("🔧 DEBUG: Attempting device-based cleanup for: \(deviceId)")
+        dlog("🔧 DEBUG: Attempting device-based cleanup for: \(deviceId)")
         
         do {
             let cleanupUrl = URL(string: "\(Configuration.apiURL)/api/debug/cleanup-temporary-by-device")!
@@ -249,11 +249,11 @@ struct AuthChoiceView: View {
             
             let (_, response) = try await URLSession.shared.data(for: cleanupRequest)
             if let httpResponse = response as? HTTPURLResponse {
-                print("🔧 DEBUG: Device cleanup response: \(httpResponse.statusCode)")
+                dlog("🔧 DEBUG: Device cleanup response: \(httpResponse.statusCode)")
             }
             
         } catch {
-            print("🔧 DEBUG: Device-based cleanup failed: \(error)")
+            dlog("🔧 DEBUG: Device-based cleanup failed: \(error)")
         }
     }
     #endif

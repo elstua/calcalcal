@@ -71,7 +71,7 @@ struct ImageAPI {
         request.httpBody = body
 
         #if DEBUG
-        print("📤 Upload start -> \(filename) (\(data.count) bytes)")
+        dlog("📤 Upload start -> \(filename) (\(data.count) bytes)")
         #endif
 
         let maxAttempts = 3
@@ -82,16 +82,16 @@ struct ImageAPI {
                 guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
                 if !(200..<300).contains(http.statusCode) {
                     let bodyText = String(data: respData, encoding: .utf8) ?? "<no body>"
-                    print("❌ Upload failed HTTP=\(http.statusCode) body=\(bodyText)")
+                    dlog("❌ Upload failed HTTP=\(http.statusCode) body=\(bodyText)")
                     throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Upload failed: HTTP \(http.statusCode)"])
                 }
                 let decoder = JSONDecoder()
                 let decoded = try decoder.decode(UploadResponse.self, from: respData)
                 #if DEBUG
-                print("✅ Upload success publicUrl=\(decoded.publicUrl)")
-                print("✅ Upload publicUrl length=\(decoded.publicUrl.count), last10='\(String(decoded.publicUrl.suffix(10)))'")
+                dlog("✅ Upload success publicUrl=\(decoded.publicUrl)")
+                dlog("✅ Upload publicUrl length=\(decoded.publicUrl.count), last10='\(String(decoded.publicUrl.suffix(10)))'")
                 if decoded.publicUrl.hasSuffix(".") {
-                    print("⚠️ WARNING: Upload response publicUrl ends with a trailing dot!")
+                    dlog("⚠️ WARNING: Upload response publicUrl ends with a trailing dot!")
                 }
                 #endif
                 return decoded
@@ -100,7 +100,7 @@ struct ImageAPI {
                 let retryable = isRetryableUploadError(error)
                 #if DEBUG
                 if retryable && attempt < maxAttempts {
-                    print("📤 Upload attempt \(attempt) failed (retryable): \(error.localizedDescription); retrying…")
+                    dlog("📤 Upload attempt \(attempt) failed (retryable): \(error.localizedDescription); retrying…")
                 }
                 #endif
                 if retryable && attempt < maxAttempts {
@@ -123,7 +123,7 @@ struct ImageAPI {
         for ext in validExtensions {
             if trimmed.lowercased().hasSuffix(ext) {
                 #if DEBUG
-                print("⚠️ normalizeImageURL: stripping trailing dot from URL ending with '\(ext)': \(trimmed)")
+                dlog("⚠️ normalizeImageURL: stripping trailing dot from URL ending with '\(ext)': \(trimmed)")
                 #endif
                 trimmed.removeLast() // Remove trailing dot
                 break
@@ -171,7 +171,7 @@ struct ImageAPI {
 
         #if DEBUG
         if let img = absoluteImageUrl {
-            print("🤖 Analyze-block (image) imageUrl=\(img.suffix(30))... entryId=\(entryId) blockId=\(blockId)")
+            dlog("🤖 Analyze-block (image) imageUrl=\(img.suffix(30))... entryId=\(entryId) blockId=\(blockId)")
         }
         #endif
 
@@ -179,14 +179,14 @@ struct ImageAPI {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Analyze-block failed HTTP=\(http.statusCode) body=\(bodyText)")
+            dlog("❌ Analyze-block failed HTTP=\(http.statusCode) body=\(bodyText)")
             throw NSError(domain: "ImageAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Analyze failed: HTTP \(http.statusCode)"])
         }
 
         let raw = try JSONDecoder().decode(AnalyzeBlockRawResponse.self, from: data)
         let result = raw.toAnalyzeImageResponse()
         #if DEBUG
-        print("✅ Analyze-block success desc='\(result.description)' calories=\(String(describing: result.calories))")
+        dlog("✅ Analyze-block success desc='\(result.description)' calories=\(String(describing: result.calories))")
         #endif
         return result
     }

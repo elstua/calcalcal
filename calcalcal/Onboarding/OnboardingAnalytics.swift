@@ -69,7 +69,7 @@ struct OnboardingAnalytics: Codable, Equatable {
     mutating func markStarted() {
         if startedAt == nil {
             startedAt = Date()
-            print("[Onboarding Analytics] Started onboarding at \(startedAt!)")
+            dlog("[Onboarding Analytics] Started onboarding at \(startedAt!)")
         }
     }
     
@@ -86,7 +86,7 @@ struct OnboardingAnalytics: Codable, Equatable {
             record.viewedAt = Date()
             stepRecords.append(record)
         }
-        print("[Onboarding Analytics] Step viewed: \(stepType.title)")
+        dlog("[Onboarding Analytics] Step viewed: \(stepType.title)")
     }
     
     /// Record that a step was completed
@@ -106,9 +106,9 @@ struct OnboardingAnalytics: Codable, Equatable {
         let action = wasSkipped ? "skipped" : "completed"
         if let record = stepRecords.first(where: { $0.stepType == stepType }),
            let timeSpent = record.timeSpentSeconds {
-            print("[Onboarding Analytics] Step \(action): \(stepType.title) (time: \(String(format: "%.1f", timeSpent))s)")
+            dlog("[Onboarding Analytics] Step \(action): \(stepType.title) (time: \(String(format: "%.1f", timeSpent))s)")
         } else {
-            print("[Onboarding Analytics] Step \(action): \(stepType.title)")
+            dlog("[Onboarding Analytics] Step \(action): \(stepType.title)")
         }
     }
     
@@ -117,9 +117,9 @@ struct OnboardingAnalytics: Codable, Equatable {
         completedAt = Date()
         if let started = startedAt {
             let totalTime = completedAt!.timeIntervalSince(started)
-            print("[Onboarding Analytics] Completed onboarding in \(String(format: "%.1f", totalTime))s")
+            dlog("[Onboarding Analytics] Completed onboarding in \(String(format: "%.1f", totalTime))s")
         } else {
-            print("[Onboarding Analytics] Completed onboarding")
+            dlog("[Onboarding Analytics] Completed onboarding")
         }
     }
     
@@ -164,16 +164,16 @@ struct OnboardingAnalytics: Codable, Equatable {
     
     /// Print a summary of analytics (useful for debugging)
     func printSummary() {
-        print("[Onboarding Analytics] ===== Summary =====")
-        print("  Started: \(startedAt?.description ?? "not started")")
-        print("  Completed: \(completedAt?.description ?? "not completed")")
+        dlog("[Onboarding Analytics] ===== Summary =====")
+        dlog("  Started: \(startedAt?.description ?? "not started")")
+        dlog("  Completed: \(completedAt?.description ?? "not completed")")
         if let total = totalTimeSpent {
-            print("  Total time: \(String(format: "%.1f", total))s")
+            dlog("  Total time: \(String(format: "%.1f", total))s")
         }
-        print("  Steps completed: \(completedStepsCount)/\(OnboardingStepType.totalSteps)")
-        print("  Steps skipped: \(skippedStepsCount)")
+        dlog("  Steps completed: \(completedStepsCount)/\(OnboardingStepType.totalSteps)")
+        dlog("  Steps skipped: \(skippedStepsCount)")
         
-        print("  Step breakdown:")
+        dlog("  Step breakdown:")
         for step in OnboardingStepType.allCases {
             if let record = stepRecords.first(where: { $0.stepType == step }) {
                 let status: String
@@ -185,12 +185,12 @@ struct OnboardingAnalytics: Codable, Equatable {
                     status = "not started"
                 }
                 let time = record.timeSpentSeconds.map { String(format: "%.1fs", $0) } ?? "-"
-                print("    - \(step.title): \(status) (\(time))")
+                dlog("    - \(step.title): \(status) (\(time))")
             } else {
-                print("    - \(step.title): not started")
+                dlog("    - \(step.title): not started")
             }
         }
-        print("[Onboarding Analytics] ===================")
+        dlog("[Onboarding Analytics] ===================")
     }
 }
 

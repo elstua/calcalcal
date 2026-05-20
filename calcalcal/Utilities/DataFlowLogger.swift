@@ -7,8 +7,13 @@ final class DataFlowLogger {
     
     // MARK: - Configuration
     
-    /// Set to false in production to disable all data flow logging
+    /// Set to false in production to disable all data flow logging.
+    /// Gated to Debug-only as of PR #2 (perf triage 2026-05-20).
+    #if DEBUG
     var isEnabled: Bool = true
+    #else
+    var isEnabled: Bool = false
+    #endif
     
     private init() {}
     
@@ -16,7 +21,7 @@ final class DataFlowLogger {
     private func log(_ message: String) {
         guard isEnabled else { return }
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        print("[\(timestamp)] \(message)")
+        dlog("[\(timestamp)] \(message)")
     }
     
     // MARK: - Cache Operations

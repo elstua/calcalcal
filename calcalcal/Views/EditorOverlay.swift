@@ -260,7 +260,7 @@ struct EditorOverlay: View {
             }
         }
         .onDisappear {
-            print("🟣 onDisappear START")
+            dlog("🟣 onDisappear START")
             let finalEntryId = localEntry.id
             let finalBlocks = localEntry.blocks
             
@@ -286,12 +286,12 @@ struct EditorOverlay: View {
             
             // CRITICAL: Call onClose BEFORE flushSave to ensure parent has latest data
             if !hasCalledOnClose {
-                print("🟣 onDisappear calling onClose to sync data (dismissEditor was NOT called)")
+                dlog("🟣 onDisappear calling onClose to sync data (dismissEditor was NOT called)")
                 hasCalledOnClose = true
                 onClose(localEntry)
                 // NOTE: Streaks are refreshed AFTER save completes in EditorAutosaveService
             } else {
-                print("🟣 onDisappear skipping onClose (already called from dismissEditor)")
+                dlog("🟣 onDisappear skipping onClose (already called from dismissEditor)")
             }
             
             // Now flush any pending save after parent has been notified
@@ -305,7 +305,7 @@ struct EditorOverlay: View {
             suppressRemoteBlockUpdates = false
             
             DataFlowLogger.shared.editorDisappeared(entryId: finalEntryId)
-            print("🟣 onDisappear END")
+            dlog("🟣 onDisappear END")
         }
         // Listen for paragraph-level commit/edit notifications to control autosave
         .onReceive(NotificationCenter.default.publisher(for: .editorParagraphCommitted)) { _ in
@@ -458,7 +458,7 @@ extension EditorOverlay {
     }
     
     private func dismissEditor() {
-        print("🔵 dismissEditor() called")
+        dlog("🔵 dismissEditor() called")
         
         // Set flag to prevent any autosaves during close
         autosaveService.markAsClosing()
@@ -469,13 +469,13 @@ extension EditorOverlay {
         // Pass the final entry data to parent via callback BEFORE dismissing
         // This ensures the parent view has updated data before the overlay animates away
         if !hasCalledOnClose {
-            print("🔵 dismissEditor() calling onClose with localEntry")
+            dlog("🔵 dismissEditor() calling onClose with localEntry")
             hasCalledOnClose = true
             onClose(localEntry)
-            print("🔵 dismissEditor() onClose completed")
+            dlog("🔵 dismissEditor() onClose completed")
             // NOTE: Streaks are refreshed AFTER save completes in EditorAutosaveService
         } else {
-            print("🔵 dismissEditor() skipping onClose (already called)")
+            dlog("🔵 dismissEditor() skipping onClose (already called)")
         }
         
         // Now trigger the dismissal
@@ -517,12 +517,12 @@ extension EditorOverlay {
             Task.detached(priority: .userInitiated) {
                 do {
                     #if DEBUG
-                    print("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
+                    dlog("📸 Pipeline: start (uuid=\(capturedUUID)) - compress ok, uploading…")
                     #endif
                     let upload = try await ImageAPI.uploadJPEG(data: compressed.data, filename: "photo.jpg", contentType: "image/jpeg")
 
                     #if DEBUG
-                    print("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
+                    dlog("📸 Pipeline: uploaded -> \(upload.publicUrl), analyzing…")
                     #endif
                     // Persist into disk cache for future sessions
                     ImageCache.shared.store(compressed.resizedImage, for: upload.publicUrl)
@@ -562,7 +562,7 @@ extension EditorOverlay {
                     let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
 
                     #if DEBUG
-                    print("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
+                    dlog("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
                     #endif
 
                     // Build nutrition model
@@ -602,17 +602,17 @@ extension EditorOverlay {
                             localEntry.blocks[idx] = updated
                             BlocksCache.shared.save(entryId: localEntry.id, blocks: localEntry.blocks)
                             #if DEBUG
-                            print("📸 Pipeline: block \(idx) updated with analysis")
+                            dlog("📸 Pipeline: block \(idx) updated with analysis")
                             #endif
                         } else {
                             #if DEBUG
-                            print("⚠️ Pipeline: could not find block by imageRef=\(capturedUUID)")
+                            dlog("⚠️ Pipeline: could not find block by imageRef=\(capturedUUID)")
                             #endif
                         }
                     }
                 } catch {
                     #if DEBUG
-                    print("❌ Pipeline error: \(error)")
+                    dlog("❌ Pipeline error: \(error)")
                     #endif
                     await MainActor.run {
                         NotificationCenter.default.post(

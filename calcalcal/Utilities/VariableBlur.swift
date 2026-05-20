@@ -43,12 +43,12 @@ open class VariableBlurUIView: UIVisualEffectView {
 
         let clsName = String("retliFAC".reversed())
         guard let Cls = NSClassFromString(clsName)! as? NSObject.Type else {
-            print("[VariableBlur] Error: Can't find filter class")
+            dlog("[VariableBlur] Error: Can't find filter class")
             return
         }
         let selName = String(":epyThtiWretlif".reversed())
         guard let variableBlur = Cls.self.perform(NSSelectorFromString(selName), with: "variableBlur").takeUnretainedValue() as? NSObject else {
-            print("[VariableBlur] Error: Can't create variableBlur filter")
+            dlog("[VariableBlur] Error: Can't create variableBlur filter")
             return
         }
 

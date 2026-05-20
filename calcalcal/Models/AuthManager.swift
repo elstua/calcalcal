@@ -46,9 +46,9 @@ class AuthManager: NSObject, ObservableObject {
             do {
                 try KeychainManager.shared.deleteTokens()
                 APIClient.shared.clearSession()
-                print("🔐 Cleared leftover keychain session for fresh install")
+                dlog("🔐 Cleared leftover keychain session for fresh install")
             } catch {
-                print("⚠️ Failed to clear leftover keychain session: \(error)")
+                dlog("⚠️ Failed to clear leftover keychain session: \(error)")
             }
         }
 
@@ -106,13 +106,13 @@ class AuthManager: NSObject, ObservableObject {
         isLoading = true
         error = nil
         
-        print("🔐 Creating temporary account...")
+        dlog("🔐 Creating temporary account...")
         
         // Clear any cached sessions
         do {
             try KeychainManager.shared.deleteTokens()
         } catch {
-            print("⚠️ Failed to clear cached sessions: \(error)")
+            dlog("⚠️ Failed to clear cached sessions: \(error)")
         }
         
         // Generate a unique device ID
@@ -121,8 +121,8 @@ class AuthManager: NSObject, ObservableObject {
         Task {
             do {
                 let urlString = "\(Configuration.apiURL)/api/auth/create-temporary"
-                print("🔍 === TEMPORARY ACCOUNT DEBUG ===")
-                print("Attempting to connect to: \(urlString)")
+                dlog("🔍 === TEMPORARY ACCOUNT DEBUG ===")
+                dlog("Attempting to connect to: \(urlString)")
                 
                 guard let url = URL(string: urlString) else {
                     await MainActor.run {
@@ -142,7 +142,7 @@ class AuthManager: NSObject, ObservableObject {
                 
                 request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
                 
-                print("🌐 Sending request with deviceId: \(deviceId)")
+                dlog("🌐 Sending request with deviceId: \(deviceId)")
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
@@ -153,11 +153,11 @@ class AuthManager: NSObject, ObservableObject {
                     return
                 }
                 
-                print("📥 Response received - Status: \(httpResponse.statusCode)")
+                dlog("📥 Response received - Status: \(httpResponse.statusCode)")
                 
                 guard httpResponse.statusCode == 200 else {
                     let responseText = String(data: data, encoding: .utf8) ?? "No response data"
-                    print("❌ Backend error response: \(responseText)")
+                    dlog("❌ Backend error response: \(responseText)")
                     await MainActor.run {
                         self.isLoading = false
                         self.error = "Failed to create temporary account (Status: \(httpResponse.statusCode))"
@@ -168,10 +168,10 @@ class AuthManager: NSObject, ObservableObject {
                 let decoder = AuthManager.makeJSONDecoder()
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 
-                print("✅ Temporary account created!")
-                print("   - User ID: \(authResponse.user?.id ?? "nil")")
-                print("   - Is Temporary: \(authResponse.user?.isTemporary ?? false)")
-                print("🔍 === END TEMPORARY ACCOUNT DEBUG ===")
+                dlog("✅ Temporary account created!")
+                dlog("   - User ID: \(authResponse.user?.id ?? "nil")")
+                dlog("   - Is Temporary: \(authResponse.user?.isTemporary ?? false)")
+                dlog("🔍 === END TEMPORARY ACCOUNT DEBUG ===")
                 
                 await MainActor.run {
                     self.isLoading = false
@@ -185,7 +185,7 @@ class AuthManager: NSObject, ObservableObject {
                             self.isAuthenticated = true
                             UserDefaults.standard.set(user.id, forKey: "current_user_id")
                             
-                            print("✅ Temporary session saved successfully")
+                            dlog("✅ Temporary session saved successfully")
                         } catch {
                             self.error = "Failed to save session: \(error.localizedDescription)"
                         }
@@ -194,7 +194,7 @@ class AuthManager: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("Network error: \(error)")
+                dlog("Network error: \(error)")
                 await MainActor.run {
                     self.isLoading = false
                     self.error = "Network error: \(error.localizedDescription)"
@@ -209,7 +209,7 @@ class AuthManager: NSObject, ObservableObject {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
         }
         
-        print("🔄 Upgrading temporary account...")
+        dlog("🔄 Upgrading temporary account...")
         
         let urlString = "\(Configuration.apiURL)/api/auth/upgrade-temporary"
         guard let url = URL(string: urlString) else {
@@ -261,7 +261,7 @@ class AuthManager: NSObject, ObservableObject {
             await MainActor.run {
                 self.currentUser = user
             }
-            print("✅ Account upgraded successfully")
+            dlog("✅ Account upgraded successfully")
         } else {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: upgradeResponse.error ?? "Upgrade failed"])
         }
@@ -288,12 +288,12 @@ class AuthManager: NSObject, ObservableObject {
         error = nil
         
         // Clear any cached sessions before Apple Sign-In to ensure we use anon key
-        print("🧹 Clearing any cached sessions before Apple Sign-In...")
+        dlog("🧹 Clearing any cached sessions before Apple Sign-In...")
         do {
             try KeychainManager.shared.deleteTokens()
-            print("✅ Cached sessions cleared")
+            dlog("✅ Cached sessions cleared")
         } catch {
-            print("⚠️ Failed to clear cached sessions: \(error)")
+            dlog("⚠️ Failed to clear cached sessions: \(error)")
         }
         
         let request = ASAuthorizationAppleIDProvider().createRequest()
@@ -323,12 +323,12 @@ class AuthManager: NSObject, ObservableObject {
         error = nil
         
         // Clear any cached sessions before Google Sign-In
-        print("🧹 Clearing any cached sessions before Google Sign-In...")
+        dlog("🧹 Clearing any cached sessions before Google Sign-In...")
         do {
             try KeychainManager.shared.deleteTokens()
-            print("✅ Cached sessions cleared")
+            dlog("✅ Cached sessions cleared")
         } catch {
-            print("⚠️ Failed to clear cached sessions: \(error)")
+            dlog("⚠️ Failed to clear cached sessions: \(error)")
         }
         
         // Check if Google Sign-In is configured
@@ -355,7 +355,7 @@ class AuthManager: NSObject, ObservableObject {
             guard let self = self else { return }
             
             if let error = error {
-                print("❌ Google Sign-In error: \(error.localizedDescription)")
+                dlog("❌ Google Sign-In error: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = "Google Sign-In failed: \(error.localizedDescription)"
@@ -381,10 +381,10 @@ class AuthManager: NSObject, ObservableObject {
                 return
             }
             
-            print("✅ Google Sign-In successful")
-            print("   - User ID: \(user.userID ?? "nil")")
-            print("   - Email: \(user.profile?.email ?? "nil")")
-            print("   - Name: \(user.profile?.name ?? "nil")")
+            dlog("✅ Google Sign-In successful")
+            dlog("   - User ID: \(user.userID ?? "nil")")
+            dlog("   - Email: \(user.profile?.email ?? "nil")")
+            dlog("   - Name: \(user.profile?.name ?? "nil")")
             
             // Authenticate with backend
             self.authenticateWithBackendGoogle(idToken: idToken, user: user)
@@ -395,8 +395,8 @@ class AuthManager: NSObject, ObservableObject {
         Task {
             do {
                 let urlString = "\(Configuration.apiURL)/api/auth/signin-google"
-                print("🔍 === GOOGLE SIGN-IN DEBUG ===")
-                print("Attempting to connect to: \(urlString)")
+                dlog("🔍 === GOOGLE SIGN-IN DEBUG ===")
+                dlog("Attempting to connect to: \(urlString)")
                 
                 guard let url = URL(string: urlString) else {
                     DispatchQueue.main.async {
@@ -420,15 +420,15 @@ class AuthManager: NSObject, ObservableObject {
                     ]
                 ]
                 
-                print("📤 Request Body:")
-                print("   - ID Token: \(String(idToken.prefix(20)))...")
-                print("   - User ID: \(user.userID ?? "nil")")
-                print("   - Email: \(user.profile?.email ?? "nil")")
-                print("   - Name: \(user.profile?.name ?? "nil")")
+                dlog("📤 Request Body:")
+                dlog("   - ID Token: \(String(idToken.prefix(20)))...")
+                dlog("   - User ID: \(user.userID ?? "nil")")
+                dlog("   - Email: \(user.profile?.email ?? "nil")")
+                dlog("   - Name: \(user.profile?.name ?? "nil")")
                 
                 request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
                 
-                print("🌐 Sending request...")
+                dlog("🌐 Sending request...")
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
@@ -439,13 +439,13 @@ class AuthManager: NSObject, ObservableObject {
                     return
                 }
                 
-                print("📥 Response received:")
-                print("   - Status Code: \(httpResponse.statusCode)")
+                dlog("📥 Response received:")
+                dlog("   - Status Code: \(httpResponse.statusCode)")
                 
                 guard httpResponse.statusCode == 200 else {
                     let responseText = String(data: data, encoding: .utf8) ?? "No response data"
-                    print("❌ Backend error response: \(responseText)")
-                    print("🔍 === END GOOGLE SIGN-IN DEBUG ===")
+                    dlog("❌ Backend error response: \(responseText)")
+                    dlog("🔍 === END GOOGLE SIGN-IN DEBUG ===")
                     DispatchQueue.main.async {
                         self.isLoading = false
                         self.error = "Backend authentication failed (Status: \(httpResponse.statusCode)): \(responseText)"
@@ -456,11 +456,11 @@ class AuthManager: NSObject, ObservableObject {
                 let decoder = AuthManager.makeJSONDecoder()
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 
-                print("✅ Google authentication successful!")
-                print("   - Success: \(authResponse.success)")
-                print("   - User: \(authResponse.user?.email ?? "nil")")
-                print("   - User ID: \(authResponse.user?.id ?? "nil")")
-                print("🔍 === END GOOGLE SIGN-IN DEBUG ===")
+                dlog("✅ Google authentication successful!")
+                dlog("   - Success: \(authResponse.success)")
+                dlog("   - User: \(authResponse.user?.email ?? "nil")")
+                dlog("   - User ID: \(authResponse.user?.id ?? "nil")")
+                dlog("🔍 === END GOOGLE SIGN-IN DEBUG ===")
                 
                 DispatchQueue.main.async {
                     self.isLoading = false
@@ -478,7 +478,7 @@ class AuthManager: NSObject, ObservableObject {
                             // Persist user id for DiaryAPI inserts
                             UserDefaults.standard.set(user.id, forKey: "current_user_id")
                             
-                            print("✅ Session saved and APIClient updated successfully")
+                            dlog("✅ Session saved and APIClient updated successfully")
                         } catch {
                             self.error = "Failed to save session: \(error.localizedDescription)"
                         }
@@ -487,7 +487,7 @@ class AuthManager: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("Network error: \(error)")
+                dlog("Network error: \(error)")
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = "Network error: \(error.localizedDescription)"
@@ -512,7 +512,7 @@ class AuthManager: NSObject, ObservableObject {
                 self.currentUser = nil
             }
             
-            print("✅ Sign out completed - all sessions cleared (including Google)")
+            dlog("✅ Sign out completed - all sessions cleared (including Google)")
         } catch {
             DispatchQueue.main.async {
                 self.error = "Failed to sign out: \(error.localizedDescription)"
@@ -538,10 +538,10 @@ class AuthManager: NSObject, ObservableObject {
                 self.error = "✅ All authentication data cleared. You can now sign in fresh."
             }
             
-            print("✅ All authentication data cleared successfully (including Google)")
-            print("ℹ️ Next time you try to sign in, you may see a 'canceled' error first - this is normal!")
+            dlog("✅ All authentication data cleared successfully (including Google)")
+            dlog("ℹ️ Next time you try to sign in, you may see a 'canceled' error first - this is normal!")
         } catch {
-            print("❌ Failed to clear authentication data: \(error)")
+            dlog("❌ Failed to clear authentication data: \(error)")
             DispatchQueue.main.async {
                 self.error = "Failed to clear authentication data: \(error.localizedDescription)"
             }
@@ -555,29 +555,29 @@ class AuthManager: NSObject, ObservableObject {
         
         // You can also try to revoke Apple ID credentials if needed
         // Note: This requires user interaction and may not always work
-        print("🔄 Apple ID credentials cleared")
+        dlog("🔄 Apple ID credentials cleared")
     }
     
     func debugCurrentAuthenticationState() {
-        print("🔍 === Authentication Debug Info ===")
+        dlog("🔍 === Authentication Debug Info ===")
         
         // Check if we have stored tokens
         if let session = try? KeychainManager.shared.loadTokens() {
-            print("✅ Found stored session:")
-            print("   - Access Token: \(String(session.accessToken.prefix(20)))...")
-            print("   - Refresh Token: \(String(session.refreshToken.prefix(20)))...")
+            dlog("✅ Found stored session:")
+            dlog("   - Access Token: \(String(session.accessToken.prefix(20)))...")
+            dlog("   - Refresh Token: \(String(session.refreshToken.prefix(20)))...")
         } else {
-            print("❌ No stored session found")
+            dlog("❌ No stored session found")
         }
         
         // Check authentication state
-        print("📱 Current app state:")
-        print("   - isAuthenticated: \(isAuthenticated)")
-        print("   - currentUser: \(currentUser?.email ?? "nil")")
-        print("   - isLoading: \(isLoading)")
-        print("   - error: \(error ?? "nil")")
+        dlog("📱 Current app state:")
+        dlog("   - isAuthenticated: \(isAuthenticated)")
+        dlog("   - currentUser: \(currentUser?.email ?? "nil")")
+        dlog("   - isLoading: \(isLoading)")
+        dlog("   - error: \(error ?? "nil")")
         
-        print("🔍 === End Debug Info ===")
+        dlog("🔍 === End Debug Info ===")
     }
     
     // MARK: - Session Management
@@ -595,7 +595,7 @@ class AuthManager: NSObject, ObservableObject {
                 
                 // Update APIClient with loaded session
                 APIClient.shared.updateSession(session)
-                print("🔄 Loaded existing session and updated APIClient")
+                dlog("🔄 Loaded existing session and updated APIClient")
                 
                 // Validate session with backend
                 guard let url = URL(string: "\(Configuration.apiURL)/api/auth/profile") else {
@@ -615,13 +615,13 @@ class AuthManager: NSObject, ObservableObject {
                 if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
                     // If unauthorized, try refreshing the session once
                     if httpResponse.statusCode == 401 {
-                        print("🔁 Access token invalid/expired. Attempting refresh...")
+                        dlog("🔁 Access token invalid/expired. Attempting refresh...")
                         do {
                             let refreshed = try await self.refreshSession(using: session.refreshToken)
                             // Persist and apply refreshed session
                             try KeychainManager.shared.saveTokens(refreshed)
                             APIClient.shared.updateSession(refreshed)
-                            print("✅ Token refresh succeeded. Revalidating session...")
+                            dlog("✅ Token refresh succeeded. Revalidating session...")
                             
                             // Revalidate with refreshed access token
                             var revalidate = URLRequest(url: url)
@@ -656,7 +656,7 @@ class AuthManager: NSObject, ObservableObject {
                             }
                             return
                         } catch {
-                            print("❌ Token refresh failed: \(error)")
+                            dlog("❌ Token refresh failed: \(error)")
                             // Fall through to clearing tokens below
                         }
                     }
@@ -689,7 +689,7 @@ class AuthManager: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("No existing session: \(error)")
+                dlog("No existing session: \(error)")
                 DispatchQueue.main.async {
                     self.isAuthenticated = false
                     self.currentUser = nil
@@ -737,10 +737,10 @@ class AuthManager: NSObject, ObservableObject {
             do {
                 // Test backend health endpoint
                 let urlString = "\(Configuration.apiURL)/health"
-                print("Testing connection to: \(urlString)")
+                dlog("Testing connection to: \(urlString)")
                 
                 guard let url = URL(string: urlString) else {
-                    print("Invalid URL")
+                    dlog("Invalid URL")
                     return
                 }
                 
@@ -750,17 +750,17 @@ class AuthManager: NSObject, ObservableObject {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Network test - Status: \(httpResponse.statusCode)")
+                    dlog("Network test - Status: \(httpResponse.statusCode)")
                     if httpResponse.statusCode != 200 {
-                        print("Response data: \(String(data: data, encoding: .utf8) ?? "No data")")
+                        dlog("Response data: \(String(data: data, encoding: .utf8) ?? "No data")")
                     } else {
-                        print("Network test successful!")
+                        dlog("Network test successful!")
                     }
                 } else {
-                    print("Network test failed - Invalid response")
+                    dlog("Network test failed - Invalid response")
                 }
             } catch {
-                print("Network test failed: \(error)")
+                dlog("Network test failed: \(error)")
             }
         }
     }
@@ -819,7 +819,7 @@ class AuthManager: NSObject, ObservableObject {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
         }
         
-        print("🗑️ Deleting account...")
+        dlog("🗑️ Deleting account...")
         
         let urlString = "\(Configuration.apiURL)/api/auth/account"
         guard let url = URL(string: urlString) else {
@@ -855,7 +855,7 @@ class AuthManager: NSObject, ObservableObject {
             // Clear user defaults
             UserDefaults.standard.removeObject(forKey: "current_user_id")
             UserDefaults.standard.removeObject(forKey: "temporary_device_id")
-            print("✅ Account deleted and all local data cleared")
+            dlog("✅ Account deleted and all local data cleared")
         }
     }
     
@@ -865,16 +865,16 @@ class AuthManager: NSObject, ObservableObject {
         Task {
             do {
                 let urlString = "\(Configuration.apiURL)/api/auth/signin-apple"
-                print("🔍 === APPLE SIGN-IN DEBUG ===")
-                print("Attempting to connect to: \(urlString)")
+                dlog("🔍 === APPLE SIGN-IN DEBUG ===")
+                dlog("Attempting to connect to: \(urlString)")
                 
                 // Check if there's a cached session that might interfere
                 if let cachedSession = try? KeychainManager.shared.loadTokens() {
-                    print("⚠️ WARNING: Found cached session that might interfere:")
-                    print("   - Cached Access Token: \(String(cachedSession.accessToken.prefix(20)))...")
-                    print("   - Cached Refresh Token: \(String(cachedSession.refreshToken.prefix(20)))...")
+                    dlog("⚠️ WARNING: Found cached session that might interfere:")
+                    dlog("   - Cached Access Token: \(String(cachedSession.accessToken.prefix(20)))...")
+                    dlog("   - Cached Refresh Token: \(String(cachedSession.refreshToken.prefix(20)))...")
                 } else {
-                    print("✅ No cached session found - this is good for Apple Sign-In")
+                    dlog("✅ No cached session found - this is good for Apple Sign-In")
                 }
                 
                 guard let url = URL(string: urlString) else {
@@ -898,15 +898,15 @@ class AuthManager: NSObject, ObservableObject {
                     let formatter = PersonNameComponentsFormatter()
                     formatter.style = .long
                     fullNameString = formatter.string(from: fullName)
-                    print("📋 Name components received from Apple:")
-                    print("   - Given name: \(fullName.givenName ?? "nil")")
-                    print("   - Family name: \(fullName.familyName ?? "nil")")
-                    print("   - Middle name: \(fullName.middleName ?? "nil")")
-                    print("   - Formatted: \(fullNameString ?? "nil")")
+                    dlog("📋 Name components received from Apple:")
+                    dlog("   - Given name: \(fullName.givenName ?? "nil")")
+                    dlog("   - Family name: \(fullName.familyName ?? "nil")")
+                    dlog("   - Middle name: \(fullName.middleName ?? "nil")")
+                    dlog("   - Formatted: \(fullNameString ?? "nil")")
                 } else {
                     fullNameString = nil
-                    print("⚠️ No name components received - this is normal for subsequent sign-ins")
-                    print("   Apple only provides name on the FIRST sign-in for privacy reasons")
+                    dlog("⚠️ No name components received - this is normal for subsequent sign-ins")
+                    dlog("   Apple only provides name on the FIRST sign-in for privacy reasons")
                 }
                 
                 let authRequest: [String: Any] = [
@@ -918,15 +918,15 @@ class AuthManager: NSObject, ObservableObject {
                     ]
                 ]
                 
-                print("📤 Request Body:")
-                print("   - Identity Token: \(String(identityToken.prefix(20)))...")
-                print("   - User ID: \(user.user)")
-                print("   - Email: \(user.email ?? "nil")")
-                print("   - Name: \(fullNameString ?? "nil")")
+                dlog("📤 Request Body:")
+                dlog("   - Identity Token: \(String(identityToken.prefix(20)))...")
+                dlog("   - User ID: \(user.user)")
+                dlog("   - Email: \(user.email ?? "nil")")
+                dlog("   - Name: \(fullNameString ?? "nil")")
                 
                 request.httpBody = try JSONSerialization.data(withJSONObject: authRequest)
                 
-                print("🌐 Sending request...")
+                dlog("🌐 Sending request...")
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
@@ -937,14 +937,14 @@ class AuthManager: NSObject, ObservableObject {
                     return
                 }
                 
-                print("📥 Response received:")
-                print("   - Status Code: \(httpResponse.statusCode)")
-                print("   - Headers: \(httpResponse.allHeaderFields)")
+                dlog("📥 Response received:")
+                dlog("   - Status Code: \(httpResponse.statusCode)")
+                dlog("   - Headers: \(httpResponse.allHeaderFields)")
                 
                 guard httpResponse.statusCode == 200 else {
                     let responseText = String(data: data, encoding: .utf8) ?? "No response data"
-                    print("❌ Backend error response: \(responseText)")
-                    print("🔍 === END APPLE SIGN-IN DEBUG ===")
+                    dlog("❌ Backend error response: \(responseText)")
+                    dlog("🔍 === END APPLE SIGN-IN DEBUG ===")
                     DispatchQueue.main.async {
                         self.isLoading = false
                         self.error = "Backend authentication failed (Status: \(httpResponse.statusCode)): \(responseText)"
@@ -955,13 +955,13 @@ class AuthManager: NSObject, ObservableObject {
                 let decoder = AuthManager.makeJSONDecoder()
                 let authResponse = try decoder.decode(AuthResponse.self, from: data)
                 
-                print("✅ Authentication successful!")
-                print("   - Success: \(authResponse.success)")
-                print("   - User: \(authResponse.user?.email ?? "nil")")
-                print("   - User ID: \(authResponse.user?.id ?? "nil")")
-                print("   - Session access token: \(String(authResponse.session?.accessToken.prefix(20) ?? "nil"))...")
-                print("   - Session expires in: \(authResponse.session?.expiresIn ?? 0) seconds")
-                print("🔍 === END APPLE SIGN-IN DEBUG ===")
+                dlog("✅ Authentication successful!")
+                dlog("   - Success: \(authResponse.success)")
+                dlog("   - User: \(authResponse.user?.email ?? "nil")")
+                dlog("   - User ID: \(authResponse.user?.id ?? "nil")")
+                dlog("   - Session access token: \(String(authResponse.session?.accessToken.prefix(20) ?? "nil"))...")
+                dlog("   - Session expires in: \(authResponse.session?.expiresIn ?? 0) seconds")
+                dlog("🔍 === END APPLE SIGN-IN DEBUG ===")
                 
                 DispatchQueue.main.async {
                     self.isLoading = false
@@ -979,7 +979,7 @@ class AuthManager: NSObject, ObservableObject {
                             // Persist user id for DiaryAPI inserts
                             UserDefaults.standard.set(user.id, forKey: "current_user_id")
                             
-                            print("✅ Session saved and APIClient updated successfully")
+                            dlog("✅ Session saved and APIClient updated successfully")
                         } catch {
                             self.error = "Failed to save session: \(error.localizedDescription)"
                         }
@@ -988,7 +988,7 @@ class AuthManager: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("Network error: \(error)")
+                dlog("Network error: \(error)")
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = "Network error: \(error.localizedDescription)"
@@ -1015,14 +1015,14 @@ extension AuthManager: ASAuthorizationControllerDelegate {
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         isLoading = false
-        print("Apple Sign-In Error: \(error)")
-        print("Error Domain: \(error._domain)")
-        print("Error Code: \(error._code)")
+        dlog("Apple Sign-In Error: \(error)")
+        dlog("Error Domain: \(error._domain)")
+        dlog("Error Code: \(error._code)")
         
         if let authError = error as? ASAuthorizationError {
             switch authError.code {
             case .canceled:
-                print("ℹ️ Apple Sign-In was canceled - this is normal after clearing credentials")
+                dlog("ℹ️ Apple Sign-In was canceled - this is normal after clearing credentials")
                 self.error = "Sign in was canceled. This is normal after clearing data. Please try again."
             case .failed:
                 self.error = "Sign in failed"

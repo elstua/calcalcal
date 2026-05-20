@@ -69,7 +69,7 @@ class OnboardingCoordinator: ObservableObject {
         // Set up auto-save when data changes
         setupAutoSave()
         
-        print("[OnboardingCoordinator] Initialized at step: \(currentStep.title)")
+        dlog("[OnboardingCoordinator] Initialized at step: \(currentStep.title)")
     }
     
     // MARK: - Public Methods
@@ -79,7 +79,7 @@ class OnboardingCoordinator: ObservableObject {
         analytics.markStarted()
         analytics.recordStepViewed(currentStep)
         persistState()
-        print("[OnboardingCoordinator] Onboarding started")
+        dlog("[OnboardingCoordinator] Onboarding started")
     }
 
     /// If app routing says onboarding is still required, do not let a stale
@@ -87,7 +87,7 @@ class OnboardingCoordinator: ObservableObject {
     func reconcileForRequiredOnboarding() {
         guard isCompleted else { return }
 
-        print("[OnboardingCoordinator] Clearing stale local completion state")
+        dlog("[OnboardingCoordinator] Clearing stale local completion state")
         isCompleted = false
         userDefaults.set(false, forKey: StorageKeys.onboardingCompleted)
     }
@@ -97,10 +97,10 @@ class OnboardingCoordinator: ObservableObject {
     /// - Returns: Result indicating success or failure
     @discardableResult
     func advance(_ action: OnboardingAdvancement) -> OnboardingAdvancementResult {
-        print("[OnboardingCoordinator] Advance action: \(action) from step: \(currentStep.title)")
+        dlog("[OnboardingCoordinator] Advance action: \(action) from step: \(currentStep.title)")
         
         guard !isCompleted else {
-            print("[OnboardingCoordinator] Warning: Trying to advance but onboarding already completed")
+            dlog("[OnboardingCoordinator] Warning: Trying to advance but onboarding already completed")
             return .alreadyCompleted
         }
         
@@ -123,13 +123,13 @@ class OnboardingCoordinator: ObservableObject {
     /// This is the preferred way to update data as it ensures persistence
     func updateData(_ update: (inout OnboardingData) -> Void) {
         update(&collectedData)
-        print("[OnboardingCoordinator] Data updated")
+        dlog("[OnboardingCoordinator] Data updated")
         // Auto-save will handle persistence
     }
     
     /// Pre-fill data from backend user profile (for returning users)
     func prefillFromUser(_ user: User) {
-        print("[OnboardingCoordinator] Pre-filling data from user profile")
+        dlog("[OnboardingCoordinator] Pre-filling data from user profile")
         
         // Map user fields to onboarding data
         // Note: This requires User model to have these fields
@@ -146,7 +146,7 @@ class OnboardingCoordinator: ObservableObject {
     
     /// Pre-fill data from a dictionary (useful for backend sync)
     func prefillFromDictionary(_ dict: [String: Any]) {
-        print("[OnboardingCoordinator] Pre-filling data from dictionary")
+        dlog("[OnboardingCoordinator] Pre-filling data from dictionary")
         
         if let weight = dict["weight_kg"] as? Double {
             collectedData.weightKg = weight
@@ -175,7 +175,7 @@ class OnboardingCoordinator: ObservableObject {
     
     /// Reset onboarding to initial state (useful for debugging/testing)
     func reset() {
-        print("[OnboardingCoordinator] Resetting onboarding")
+        dlog("[OnboardingCoordinator] Resetting onboarding")
         
         currentStep = .aboutApp
         collectedData = OnboardingData()
@@ -189,12 +189,12 @@ class OnboardingCoordinator: ObservableObject {
         userDefaults.removeObject(forKey: StorageKeys.onboardingCompleted)
         userDefaults.removeObject(forKey: StorageKeys.currentStepIndex)
         
-        print("[OnboardingCoordinator] Reset complete")
+        dlog("[OnboardingCoordinator] Reset complete")
     }
     
     /// Go to a specific step (useful for debugging)
     func goToStep(_ step: OnboardingStepType) {
-        print("[OnboardingCoordinator] Debug: jumping to step \(step.title)")
+        dlog("[OnboardingCoordinator] Debug: jumping to step \(step.title)")
         currentStep = step
         analytics.recordStepViewed(step)
         persistState()
@@ -203,7 +203,7 @@ class OnboardingCoordinator: ObservableObject {
     /// Allow the user to retry or navigate back after the backend rejects the
     /// final onboarding profile sync.
     func markCompletionSyncFailed(_ errorDescription: String) {
-        print("[OnboardingCoordinator] Completion sync failed: \(errorDescription)")
+        dlog("[OnboardingCoordinator] Completion sync failed: \(errorDescription)")
         isCompleted = false
         error = errorDescription
         persistState()
@@ -249,13 +249,13 @@ class OnboardingCoordinator: ObservableObject {
         
         // Move to next step
         guard var nextStep = currentStep.next else {
-            print("[OnboardingCoordinator] Error: No next step available")
+            dlog("[OnboardingCoordinator] Error: No next step available")
             return .invalidStep
         }
         
         // Skip createAccount step for non-temporary users
         if nextStep == .createAccount && !isTemporaryUser {
-            print("[OnboardingCoordinator] Skipping createAccount step (not a temporary user)")
+            dlog("[OnboardingCoordinator] Skipping createAccount step (not a temporary user)")
             if let stepAfter = nextStep.next {
                 nextStep = stepAfter
             } else {
@@ -267,25 +267,25 @@ class OnboardingCoordinator: ObservableObject {
         analytics.recordStepViewed(nextStep)
         persistState()
         
-        print("[OnboardingCoordinator] Moved to step: \(nextStep.title)")
+        dlog("[OnboardingCoordinator] Moved to step: \(nextStep.title)")
         return .success
     }
     
     private func moveToPreviousStep() -> OnboardingAdvancementResult {
         guard let previousStep = currentStep.previous else {
-            print("[OnboardingCoordinator] Warning: No previous step available")
+            dlog("[OnboardingCoordinator] Warning: No previous step available")
             return .invalidStep
         }
         
         currentStep = previousStep
         persistState()
         
-        print("[OnboardingCoordinator] Moved back to step: \(previousStep.title)")
+        dlog("[OnboardingCoordinator] Moved back to step: \(previousStep.title)")
         return .success
     }
     
     private func completeOnboarding() -> OnboardingAdvancementResult {
-        print("[OnboardingCoordinator] Completing onboarding...")
+        dlog("[OnboardingCoordinator] Completing onboarding...")
         
         // Mark final step as completed
         analytics.recordStepCompleted(currentStep, wasSkipped: false)
@@ -294,7 +294,7 @@ class OnboardingCoordinator: ObservableObject {
         // Auto-calculate calorie goal if not set
         if collectedData.calorieGoal == nil {
             collectedData.calorieGoal = collectedData.calculateCalorieGoal()
-            print("[OnboardingCoordinator] Auto-calculated calorie goal: \(collectedData.calorieGoal ?? 0)")
+            dlog("[OnboardingCoordinator] Auto-calculated calorie goal: \(collectedData.calorieGoal ?? 0)")
         }
         
         isCompleted = true
@@ -303,14 +303,14 @@ class OnboardingCoordinator: ObservableObject {
         // Print analytics summary
         analytics.printSummary()
         
-        print("[OnboardingCoordinator] Onboarding completed!")
+        dlog("[OnboardingCoordinator] Onboarding completed!")
         return .success
     }
     
     // MARK: - Persistence
     
     private func loadPersistedState() {
-        print("[OnboardingCoordinator] Loading persisted state...")
+        dlog("[OnboardingCoordinator] Loading persisted state...")
         
         // Load completion status
         isCompleted = userDefaults.bool(forKey: StorageKeys.onboardingCompleted)
@@ -325,9 +325,9 @@ class OnboardingCoordinator: ObservableObject {
         if let data = userDefaults.data(forKey: StorageKeys.onboardingData) {
             do {
                 collectedData = try JSONDecoder().decode(OnboardingData.self, from: data)
-                print("[OnboardingCoordinator] Loaded persisted data: weight=\(collectedData.weightKg ?? 0), height=\(collectedData.heightCm ?? 0)")
+                dlog("[OnboardingCoordinator] Loaded persisted data: weight=\(collectedData.weightKg ?? 0), height=\(collectedData.heightCm ?? 0)")
             } catch {
-                print("[OnboardingCoordinator] Failed to decode persisted data: \(error)")
+                dlog("[OnboardingCoordinator] Failed to decode persisted data: \(error)")
             }
         }
         
@@ -336,15 +336,15 @@ class OnboardingCoordinator: ObservableObject {
             do {
                 analytics = try JSONDecoder().decode(OnboardingAnalytics.self, from: data)
             } catch {
-                print("[OnboardingCoordinator] Failed to decode persisted analytics: \(error)")
+                dlog("[OnboardingCoordinator] Failed to decode persisted analytics: \(error)")
             }
         }
         
-        print("[OnboardingCoordinator] Loaded state - step: \(currentStep.title), completed: \(isCompleted)")
+        dlog("[OnboardingCoordinator] Loaded state - step: \(currentStep.title), completed: \(isCompleted)")
     }
     
     private func persistState() {
-        print("[OnboardingCoordinator] Persisting state...")
+        dlog("[OnboardingCoordinator] Persisting state...")
         
         // Save completion status
         userDefaults.set(isCompleted, forKey: StorageKeys.onboardingCompleted)
@@ -357,7 +357,7 @@ class OnboardingCoordinator: ObservableObject {
             let data = try JSONEncoder().encode(collectedData)
             userDefaults.set(data, forKey: StorageKeys.onboardingData)
         } catch {
-            print("[OnboardingCoordinator] Failed to encode data: \(error)")
+            dlog("[OnboardingCoordinator] Failed to encode data: \(error)")
         }
         
         // Save analytics
@@ -365,7 +365,7 @@ class OnboardingCoordinator: ObservableObject {
             let data = try JSONEncoder().encode(analytics)
             userDefaults.set(data, forKey: StorageKeys.onboardingAnalytics)
         } catch {
-            print("[OnboardingCoordinator] Failed to encode analytics: \(error)")
+            dlog("[OnboardingCoordinator] Failed to encode analytics: \(error)")
         }
     }
     
@@ -425,19 +425,19 @@ extension OnboardingCoordinator {
     
     /// Print current state for debugging
     func debugPrint() {
-        print("=== OnboardingCoordinator Debug ===")
-        print("Current step: \(currentStep.title) (\(currentStepNumber)/\(totalSteps))")
-        print("Progress: \(Int(progress * 100))%")
-        print("Is completed: \(isCompleted)")
-        print("Data:")
-        print("  - Weight: \(collectedData.weightKg ?? 0) kg")
-        print("  - Height: \(collectedData.heightCm ?? 0) cm")
-        print("  - Age: \(collectedData.age ?? 0)")
-        print("  - Gender: \(collectedData.gender ?? "not set")")
-        print("  - Activity: \(collectedData.activityLevel ?? "not set")")
-        print("  - Target weight: \(collectedData.targetWeightKg ?? 0) kg")
-        print("  - Calorie goal: \(collectedData.calorieGoal ?? 0)")
-        print("===================================")
+        dlog("=== OnboardingCoordinator Debug ===")
+        dlog("Current step: \(currentStep.title) (\(currentStepNumber)/\(totalSteps))")
+        dlog("Progress: \(Int(progress * 100))%")
+        dlog("Is completed: \(isCompleted)")
+        dlog("Data:")
+        dlog("  - Weight: \(collectedData.weightKg ?? 0) kg")
+        dlog("  - Height: \(collectedData.heightCm ?? 0) cm")
+        dlog("  - Age: \(collectedData.age ?? 0)")
+        dlog("  - Gender: \(collectedData.gender ?? "not set")")
+        dlog("  - Activity: \(collectedData.activityLevel ?? "not set")")
+        dlog("  - Target weight: \(collectedData.targetWeightKg ?? 0) kg")
+        dlog("  - Calorie goal: \(collectedData.calorieGoal ?? 0)")
+        dlog("===================================")
     }
 }
 #endif

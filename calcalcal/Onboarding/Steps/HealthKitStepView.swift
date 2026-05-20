@@ -317,7 +317,7 @@ struct HealthKitStepView: View {
                     }
                 }
             } catch {
-                print("[HealthKitStep] Error requesting permissions: \(error.localizedDescription)")
+                dlog("[HealthKitStep] Error requesting permissions: \(error.localizedDescription)")
                 await MainActor.run {
                     withAnimation {
                         authorizationState = .denied
@@ -346,24 +346,24 @@ struct HealthKitStepView: View {
                     // Don't overwrite existing user-entered data
                     if let weight = weight, data.weightKg == nil {
                         data.weightKg = weight
-                        print("[HealthKitStep] Imported weight: \(weight) kg")
+                        dlog("[HealthKitStep] Imported weight: \(weight) kg")
                     }
                     if let height = height, data.heightCm == nil {
                         data.heightCm = height
-                        print("[HealthKitStep] Imported height: \(height) cm")
+                        dlog("[HealthKitStep] Imported height: \(height) cm")
                     }
                     if let gender = gender, data.gender == nil {
                         data.gender = gender
-                        print("[HealthKitStep] Imported gender: \(gender)")
+                        dlog("[HealthKitStep] Imported gender: \(gender)")
                     }
                     if let age = age, data.age == nil {
                         data.age = age
-                        print("[HealthKitStep] Imported age: \(age)")
+                        dlog("[HealthKitStep] Imported age: \(age)")
                     }
                 }
             }
         } catch {
-            print("[HealthKitStep] Error reading health data: \(error.localizedDescription)")
+            dlog("[HealthKitStep] Error reading health data: \(error.localizedDescription)")
             // Don't show error to user - partial data is acceptable
         }
     }

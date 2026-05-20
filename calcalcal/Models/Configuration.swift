@@ -50,13 +50,13 @@ struct Configuration {
            !plistURL.isEmpty,
            !plistURL.hasPrefix("$") {  // Check that variable was expanded (not ${API_URL})
             let fixedURL = fixURLFromXCConfig(plistURL)
-            print("🔧 Configuration: Using API_URL from Info.plist: \(fixedURL) (raw: \(plistURL))")
+            dlog("🔧 Configuration: Using API_URL from Info.plist: \(fixedURL) (raw: \(plistURL))")
             return fixedURL
         }
         
         #if DEBUG
         let localURL = "http://localhost:3000"
-        print("🔧 Configuration: Using default local URL: \(localURL)")
+        dlog("🔧 Configuration: Using default local URL: \(localURL)")
         return localURL
         #else
         // In release, this is a critical error
@@ -130,7 +130,7 @@ struct Configuration {
 extension Configuration {
     /// Print current configuration (for debugging)
     static func printConfiguration() {
-        print("""
+        dlog("""
         🔧 Configuration:
            Environment: \(environmentName)
            API URL: \(apiURL)

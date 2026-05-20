@@ -277,7 +277,7 @@ struct DiaryAPI {
             let blocks: [DBBlock]?
         }
         let fullEntry = try decoder.decode(FullEntry.self, from: data)
-        print("🐛 DEBUG: getBlocksById(\(id)) returning \(fullEntry.blocks?.count ?? 0) blocks")
+        dlog("🐛 DEBUG: getBlocksById(\(id)) returning \(fullEntry.blocks?.count ?? 0) blocks")
         return fullEntry.blocks ?? []
     }
 
@@ -309,7 +309,7 @@ struct DiaryAPI {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Insert failed HTTP=\(status) body=\(bodyText)")
+            dlog("❌ Insert failed HTTP=\(status) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: status, userInfo: [NSLocalizedDescriptionKey: "Insert failed (HTTP \(status)): \(bodyText)"])
         }
         // Backend returns single object, not array
@@ -331,7 +331,7 @@ struct DiaryAPI {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ Update failed HTTP=\(status) body=\(bodyText)")
+            dlog("❌ Update failed HTTP=\(status) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: status, userInfo: [NSLocalizedDescriptionKey: "Update failed (HTTP \(status)): \(bodyText)"])
         }
         // Backend returns single object, not array
@@ -365,12 +365,12 @@ struct DiaryAPI {
                 let message: String?
             }
             if let apiErr = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                print("❌ Analyze HTTP \(http.statusCode): error=\(apiErr.error) message=\(apiErr.message ?? "-")")
+                dlog("❌ Analyze HTTP \(http.statusCode): error=\(apiErr.error) message=\(apiErr.message ?? "-")")
                 throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
                     NSLocalizedDescriptionKey: apiErr.message ?? apiErr.error
                 ])
             } else if let body = String(data: data, encoding: .utf8) {
-                print("❌ Analyze HTTP \(http.statusCode) raw body: \(body)")
+                dlog("❌ Analyze HTTP \(http.statusCode) raw body: \(body)")
             }
             throw URLError(.badServerResponse)
         }
@@ -445,7 +445,7 @@ struct DiaryAPI {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ analyzeBlock failed HTTP=\(http.statusCode) body=\(bodyText)")
+            dlog("❌ analyzeBlock failed HTTP=\(http.statusCode) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
                 NSLocalizedDescriptionKey: "analyzeBlock failed (HTTP \(http.statusCode)): \(bodyText)"
             ])
@@ -469,7 +469,7 @@ struct DiaryAPI {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
-            print("❌ getStreaks failed HTTP=\(http.statusCode) body=\(bodyText)")
+            dlog("❌ getStreaks failed HTTP=\(http.statusCode) body=\(bodyText)")
             throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
                 NSLocalizedDescriptionKey: "getStreaks failed (HTTP \(http.statusCode)): \(bodyText)"
             ])
@@ -504,7 +504,7 @@ private extension KeyedDecodingContainer {
 extension DiaryAPI.Row {
     func toDiaryEntry() -> DiaryEntry {
         let uuid = UUID(uuidString: id) ?? UUID()
-        print("🐛 DEBUG: toDiaryEntry - db_id=\(id), db_date=\(date), local_id=\(uuid.uuidString)")
+        dlog("🐛 DEBUG: toDiaryEntry - db_id=\(id), db_date=\(date), local_id=\(uuid.uuidString)")
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
 
         // Robustly parse server `date` which may arrive as "YYYY-MM-DD" or ISO8601.

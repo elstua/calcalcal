@@ -420,7 +420,7 @@ struct DiaryTabView: View {
     }
     
     private func handleOverlayClose(with updatedEntry: DiaryEntry) {
-        print("🟢 handleOverlayClose START - blocks=\(updatedEntry.blocks.count)")
+        dlog("🟢 handleOverlayClose START - blocks=\(updatedEntry.blocks.count)")
         var visibleEntry = updatedEntry
         visibleEntry.totalCalories = updatedEntry.blocks.resolvedCalorieTotal() ?? updatedEntry.totalCalories
         visibleEntry.lastModified = Date()
@@ -432,7 +432,7 @@ struct DiaryTabView: View {
         )
         
         // CRITICAL: Clear presentedEntry FIRST to prevent re-triggering fullScreenCover
-        print("🟢 Setting presentedEntry = nil")
+        dlog("🟢 Setting presentedEntry = nil")
         presentedEntry = nil
         shouldFocusEditor = false
         // Clear any pending image so the next editor open doesn't re-attach it.
@@ -443,7 +443,7 @@ struct DiaryTabView: View {
         viewModel.replaceEntryForVisibleDay(visibleEntry, isPlaceholder: isPlaceholder)
         DataFlowLogger.shared.viewModelUpdated(entryId: visibleEntry.id, isPlaceholder: isPlaceholder)
         
-        print("🟢 handleOverlayClose END")
+        dlog("🟢 handleOverlayClose END")
         
         // Mark that we just closed the editor to prevent immediate refresh
         justClosedEditor = true
@@ -540,7 +540,7 @@ struct DiaryTabView: View {
 //        isAnimatingStreak = true
 //        shouldAnimateStreak = true
 //        
-//        print("🔥 DEBUG: Testing streak animation from \(previousStreak) to \(currentStreak)")
+//        dlog("🔥 DEBUG: Testing streak animation from \(previousStreak) to \(currentStreak)")
 //        
 //        streakAnimationTask = Task { @MainActor in
 //            // Wait 0.4s delay
@@ -556,7 +556,7 @@ struct DiaryTabView: View {
 //            shouldAnimateStreak = false
 //            isAnimatingStreak = false
 //            
-//            print("🔥 DEBUG: Animation test complete")
+//            dlog("🔥 DEBUG: Animation test complete")
 //        }
 //    }
 //    #endif

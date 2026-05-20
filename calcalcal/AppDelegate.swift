@@ -14,13 +14,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func configureGoogleSignIn() {
         let clientId = Configuration.googleClientId
         guard !clientId.isEmpty else {
-            print("⚠️ Google Sign-In: No client ID configured. Set GOOGLE_CLIENT_ID in Info.plist or Configuration.swift")
+            dlog("⚠️ Google Sign-In: No client ID configured. Set GOOGLE_CLIENT_ID in Info.plist or Configuration.swift")
             return
         }
         
         let config = GIDConfiguration(clientID: clientId)
         GIDSignIn.sharedInstance.configuration = config
-        print("✅ Google Sign-In configured with client ID: \(clientId.prefix(20))...")
+        dlog("✅ Google Sign-In configured with client ID: \(clientId.prefix(20))...")
     }
     
     // Handle URL for Google Sign-In callback

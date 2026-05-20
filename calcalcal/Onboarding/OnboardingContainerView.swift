@@ -63,7 +63,7 @@ struct OnboardingContainerView: View {
         .onAppear {
             // Set temporary user flag before starting
             coordinator.isTemporaryUser = appState.isTemporaryUser
-            print("[OnboardingContainerView] isTemporaryUser: \(coordinator.isTemporaryUser)")
+            dlog("[OnboardingContainerView] isTemporaryUser: \(coordinator.isTemporaryUser)")
 
             coordinator.reconcileForRequiredOnboarding()
             
@@ -71,7 +71,7 @@ struct OnboardingContainerView: View {
             if let user = appState.currentUser, user.hasHealthData {
                 let existingData = user.toOnboardingData()
                 coordinator.collectedData.merge(with: existingData)
-                print("[OnboardingContainerView] Pre-filled with existing user data")
+                dlog("[OnboardingContainerView] Pre-filled with existing user data")
             }
             coordinator.start()
         }
@@ -118,7 +118,7 @@ struct OnboardingContainerView: View {
     // MARK: - Completion Handler
     
     private func handleOnboardingComplete() {
-        print("[OnboardingContainerView] Onboarding complete, syncing data...")
+        dlog("[OnboardingContainerView] Onboarding complete, syncing data...")
 
         guard !isCompleting else { return }
 
@@ -130,9 +130,9 @@ struct OnboardingContainerView: View {
                 var updates = coordinator.collectedData.profileUpdates
                 updates["onboarding_completed"] = true
 
-                print("[OnboardingContainerView] Updating profile with onboarding data: \(updates)")
+                dlog("[OnboardingContainerView] Updating profile with onboarding data: \(updates)")
                 let updatedUser = try await appState.authManager.updateProfile(updates)
-                print("[OnboardingContainerView] Profile synced. Weight: \(updatedUser.weightKg ?? 0), height: \(updatedUser.heightCm ?? 0), target: \(updatedUser.targetWeightKg ?? 0), gender: \(updatedUser.gender ?? "nil")")
+                dlog("[OnboardingContainerView] Profile synced. Weight: \(updatedUser.weightKg ?? 0), height: \(updatedUser.heightCm ?? 0), target: \(updatedUser.targetWeightKg ?? 0), gender: \(updatedUser.gender ?? "nil")")
 
                 await MainActor.run {
                     // Save completion locally after backend accepts the profile update.
@@ -146,7 +146,7 @@ struct OnboardingContainerView: View {
                     completionError = "Couldn't save your profile. Please check your connection and try again."
                     coordinator.markCompletionSyncFailed(error.localizedDescription)
                     UserDefaults.standard.set(false, forKey: "onboarding_completed")
-                    print("[OnboardingContainerView] Failed to sync onboarding data: \(error.localizedDescription)")
+                    dlog("[OnboardingContainerView] Failed to sync onboarding data: \(error.localizedDescription)")
                 }
             }
         }
