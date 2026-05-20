@@ -1,7 +1,12 @@
 import Foundation
-import Combine
 
-class APIClient {
+/// Minimal session-token holder and a single async API used by the editor.
+///
+/// The Combine-based generic `request<T>()` helper that used to live here was
+/// dead code (only `updateCaloriePopup` used it, and `updateCaloriePopup` had
+/// only one caller). PR #3 of the perf triage removed it; everything else in
+/// the app already builds URLSession requests directly via async/await.
+final class APIClient {
     static let shared = APIClient()
 
     private let baseURL = Configuration.apiURL
@@ -13,62 +18,6 @@ class APIClient {
 
     private func loadSession() {
         session = try? KeychainManager.shared.loadTokens()
-    }
-
-    func request<T: Codable>(_ endpoint: String, method: String = "GET", body: [String: Any]? = nil) -> AnyPublisher<T, Error> {
-        let fullURLString = "\(baseURL)\(endpoint)"
-        guard let url = URL(string: fullURLString) else {
-            #if DEBUG
-            dlog("❌ APIClient: Invalid URL - \(fullURLString)")
-            #endif
-            return Fail(error: APIError.invalidURL)
-                .eraseToAnyPublisher()
-        }
-
-        #if DEBUG
-        dlog("🌐 APIClient: Requesting \(method) \(fullURLString)")
-        #endif
-
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Set timeout for the request
-        request.timeoutInterval = 60.0 // 60 seconds timeout
-
-        if let session = session {
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        }
-
-        if let body = body {
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        }
-
-        return URLSession.shared.dataTaskPublisher(for: request)
-            .mapError { error -> APIError in
-                #if DEBUG
-                dlog("❌ APIClient: Network error - \(error.localizedDescription)")
-                dlog("   Base URL: \(self.baseURL)")
-                dlog("   Endpoint: \(endpoint)")
-                #endif
-
-                // Check if it's a timeout error
-                if let urlError = error as? URLError,
-                   urlError.code == .timedOut {
-                    return APIError.timeout
-                }
-
-                return APIError.networkError(error)
-            }
-            .map(\.data)
-            .decode(type: T.self, decoder: JSONDecoder())
-            .mapError { error -> APIError in
-                #if DEBUG
-                dlog("❌ APIClient: Decoding error - \(error.localizedDescription)")
-                #endif
-                return APIError.decodingError
-            }
-            .eraseToAnyPublisher()
     }
 
     func updateSession(_ newSession: Session) {
@@ -87,23 +36,15 @@ class APIClient {
         text: String,
         calories: Int? = nil,
         weight: Double? = nil
-    ) -> AnyPublisher<CaloriePopupUpdateResponse, Error> {
-        // Build user provided data for unified analysis
+    ) async throws -> CaloriePopupUpdateResponse {
         var userProvidedData: [String: Any] = [:]
-        
-        if let calories = calories {
-            userProvidedData["calories"] = calories
-        }
+        if let calories = calories { userProvidedData["calories"] = calories }
+        if let weight = weight { userProvidedData["weight"] = weight }
 
-        if let weight = weight {
-            userProvidedData["weight"] = weight
-        }
-        
         let content: [String: Any] = [
             "text": text,
             "userProvidedData": userProvidedData
         ]
-
         let body: [String: Any] = [
             "entryId": entryId,
             "blockId": blockId,
@@ -111,7 +52,39 @@ class APIClient {
             "userModified": true
         ]
 
-        return request("/api/ai/analyze-block", method: "POST", body: body)
+        let endpoint = "/api/ai/analyze-block"
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 45  // matches DiaryAPI write timeout; AI analysis can be slow
+
+        if let session = session ?? (try? KeychainManager.shared.loadTokens()) {
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw APIError.timeout
+        } catch {
+            throw APIError.networkError(error)
+        }
+
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.networkError(URLError(.badServerResponse))
+        }
+
+        do {
+            return try JSONDecoder().decode(CaloriePopupUpdateResponse.self, from: data)
+        } catch {
+            throw APIError.decodingError
+        }
     }
 }
 

@@ -26,9 +26,16 @@ struct ImageAPI {
         let confidence: Double?
     }
 
+    /// Explicit timeouts; previously requests used URLSession's 60s default
+    /// uniformly. Uploads can be slow on cellular, downloads should fail fast.
+    private static let uploadTimeout: TimeInterval = 60
+    private static let downloadTimeout: TimeInterval = 30
+
     private static func authorizedRequest(url: URL, method: String) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
+        // GET = download; everything else (POST upload, POST analyze) = upload-class.
+        request.timeoutInterval = (method == "GET") ? downloadTimeout : uploadTimeout
         if let session = try? KeychainManager.shared.loadTokens() {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         } else {
