@@ -188,13 +188,84 @@ export class DiaryEntryModel {
     });
     
     console.log(`[DiaryEntry] Merged blocks=${mergedBlocks.length}, preserving nutrition data`);
-    
+
+    // 🛡️ Defensive dedup: iOS-sync path can occasionally send two blocks with the
+    // same stableId or the same normalized content under different ids (state-drift
+    // bug, see references/diary-blocks-debugging.md). Collapse those here so we
+    // never double-count calories. Preference order on collision:
+    //   1. userModified: true wins
+    //   2. block with meaningful nutrition data wins
+    //   3. otherwise keep the earlier (lower-position) block
+    // Skip position-1 placeholder ("write what you ate today") — it is always pos 1
+    // and is intentionally allowed to repeat across entries.
+    const PLACEHOLDER = 'write what you ate today';
+    const blockScore = (b: any) => {
+      const userMod = b?.userModified === true ? 2 : 0;
+      const hasNut = hasMeaningfulNutrition(b) ? 1 : 0;
+      return userMod + hasNut;
+    };
+    const seenStableId = new Map<string, number>(); // stableId -> index in dedupedBlocks
+    const seenContent = new Map<string, number>(); // normalized content -> index in dedupedBlocks
+    const dedupedBlocks: any[] = [];
+    let droppedDuplicates = 0;
+    for (const block of mergedBlocks) {
+      const normalized = normalizedBlockContent(block).toLowerCase();
+      const isPlaceholder = normalized === PLACEHOLDER || normalized === '';
+      const stableId = block?.stableId;
+
+      let collidedIdx = -1;
+      if (stableId && seenStableId.has(stableId)) {
+        collidedIdx = seenStableId.get(stableId)!;
+      } else if (!isPlaceholder && normalized && seenContent.has(normalized)) {
+        collidedIdx = seenContent.get(normalized)!;
+      }
+
+      if (collidedIdx >= 0) {
+        const existing = dedupedBlocks[collidedIdx];
+        const incomingScore = blockScore(block);
+        const existingScore = blockScore(existing);
+        droppedDuplicates += 1;
+        console.warn(
+          `[DiaryEntry] Dropping duplicate block in entry=${entryId} ` +
+            `(content="${normalized.slice(0, 40)}", incomingScore=${incomingScore}, existingScore=${existingScore})`
+        );
+        if (incomingScore > existingScore) {
+          // Replace existing with incoming, preserve position of the original
+          dedupedBlocks[collidedIdx] = { ...block, position: existing.position };
+          if (stableId) seenStableId.set(stableId, collidedIdx);
+          if (!isPlaceholder && normalized) seenContent.set(normalized, collidedIdx);
+        }
+        // else: keep existing, drop incoming
+        continue;
+      }
+
+      const idx = dedupedBlocks.length;
+      dedupedBlocks.push(block);
+      if (stableId) seenStableId.set(stableId, idx);
+      if (!isPlaceholder && normalized) seenContent.set(normalized, idx);
+    }
+
+    if (droppedDuplicates > 0) {
+      // Renumber positions to be contiguous starting at the first block's position.
+      // Preserve the leading placeholder at position 1 if present.
+      const basePos = dedupedBlocks.length > 0
+        ? Number(dedupedBlocks[0]?.position ?? 1)
+        : 1;
+      dedupedBlocks.forEach((b, i) => {
+        b.position = basePos + i;
+      });
+      console.warn(
+        `[DiaryEntry] Defensive dedup removed ${droppedDuplicates} duplicate block(s) from entry=${entryId}, ` +
+          `final count=${dedupedBlocks.length}`
+      );
+    }
+
     const result = await Database.query(
       `UPDATE diary_entries
        SET content = $1, blocks = $2, updated_at = NOW()
        WHERE id = $3 AND user_id = $4
        RETURNING ${this.selectColumns}`,
-      [content, JSON.stringify(mergedBlocks), entryId, userId]
+      [content, JSON.stringify(dedupedBlocks), entryId, userId]
     );
     
     const updated = result.rows[0] || null;
