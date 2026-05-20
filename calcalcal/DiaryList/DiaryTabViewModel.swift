@@ -19,6 +19,9 @@ final class DiaryTabViewModel: ObservableObject {
     
     // MARK: - Dependencies
     private let calendar: Calendar
+    private var currentRefreshTask: Task<Void, Never>?
+    private var lastRefreshCompletedAt: Date?
+    private let refreshDebounceInterval: TimeInterval = 0.25
     
     // MARK: - Initialization
     init(calendar: Calendar = .current) {
@@ -184,15 +187,33 @@ final class DiaryTabViewModel: ObservableObject {
     // MARK: - Data Fetching
     
     func refreshVisibleEntries() async {
+        if let currentRefreshTask {
+            await currentRefreshTask.value
+            return
+        }
+
+        if let lastRefreshCompletedAt,
+           Date().timeIntervalSince(lastRefreshCompletedAt) < refreshDebounceInterval {
+            DataFlowLogger.shared.backendRefreshSkipped(reason: "debounced")
+            return
+        }
+
+        let task = Task { @MainActor in
+            await self.performRefreshVisibleEntries()
+        }
+        currentRefreshTask = task
+        await task.value
+        currentRefreshTask = nil
+        lastRefreshCompletedAt = Date()
+    }
+
+    private func performRefreshVisibleEntries() async {
         anchorDate = calendar.startOfDay(for: Date())
         clampSelectedDayIfNeeded()
         ensurePlaceholdersForVisibleDays()
-        
-        guard !isLoadingRecentDays else { 
-            DataFlowLogger.shared.backendRefreshSkipped(reason: "already loading")
-            return 
-        }
+
         isLoadingRecentDays = true
+        defer { isLoadingRecentDays = false }
         
         let dates = visibleDates
         let offset = effectiveOffsetMinutes()
@@ -207,10 +228,8 @@ final class DiaryTabViewModel: ObservableObject {
             let rows = try await DiaryAPI.listEntries(dateFrom: dateFrom, dateTo: dateTo)
             let mapped = rows.map { $0.toDiaryEntry() }
             apply(entries: mapped)
-            isLoadingRecentDays = false
             DataFlowLogger.shared.backendRefreshCompleted(entryCount: mapped.count)
         } catch {
-            isLoadingRecentDays = false
             DataFlowLogger.shared.backendRefreshFailed(error: error.localizedDescription)
         }
     }

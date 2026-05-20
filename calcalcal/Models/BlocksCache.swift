@@ -35,6 +35,7 @@ final class BlocksCache {
 
     private struct CachedBlock: Codable {
         var id: String?
+        var stableId: String?
         var type: String // "text" | "imageText" | "spacer"
         var text: String?
         var imageRef: String?
@@ -52,10 +53,12 @@ final class BlocksCache {
 
     private func encodeBlocks(_ blocks: [Block]) -> [CachedBlock] {
         return blocks.map { block in
+            let stableId = block.stableId?.uuidString ?? block.id.uuidString
             switch block.type {
             case .text(let text):
                 return CachedBlock(
                     id: block.id.uuidString,
+                    stableId: stableId,
                     type: "text",
                     text: text,
                     imageRef: nil,
@@ -80,6 +83,7 @@ final class BlocksCache {
             case .imageText(_, let ref, let text):
                 return CachedBlock(
                     id: block.id.uuidString,
+                    stableId: stableId,
                     type: "imageText",
                     text: text,
                     imageRef: ref.uuidString,
@@ -105,6 +109,7 @@ final class BlocksCache {
                 // Editor currently normalizes to imageText; persist as imageText with empty text
                 return CachedBlock(
                     id: block.id.uuidString,
+                    stableId: stableId,
                     type: "imageText",
                     text: "",
                     imageRef: UUID().uuidString,
@@ -129,6 +134,7 @@ final class BlocksCache {
             case .spacer:
                 return CachedBlock(
                     id: block.id.uuidString,
+                    stableId: stableId,
                     type: "spacer",
                     text: nil,
                     imageRef: nil,
@@ -143,9 +149,13 @@ final class BlocksCache {
 
     private func decodeBlocks(_ cached: [CachedBlock]) -> [Block] {
         return cached.compactMap { cb in
+            let id = cb.id.flatMap(UUID.init(uuidString:)) ?? UUID()
+            let stableId = cb.stableId.flatMap(UUID.init(uuidString:)) ?? cb.id.flatMap(UUID.init(uuidString:))
+
             switch cb.type {
             case "text":
                 return Block(
+                    id: id,
                     type: .text(cb.text ?? ""),
                     calorieData: cb.calorieData,
                     nutrition: cb.nutrition.map { n in
@@ -162,11 +172,12 @@ final class BlocksCache {
                     },
                     imageUrl: cb.imageUrl,
                     imageObjectKey: cb.imageObjectKey,
-                    stableId: nil
+                    stableId: stableId
                 )
             case "imageText":
                 if let sref = cb.imageRef, let ref = UUID(uuidString: sref) {
                     var block = Block(
+                        id: id,
                         type: .imageText(Data(), ref, cb.text ?? ""),
                         calorieData: cb.calorieData,
                         nutrition: cb.nutrition.map { n in
@@ -184,12 +195,18 @@ final class BlocksCache {
                     )
                     block.imageUrl = cb.imageUrl
                     block.imageObjectKey = cb.imageObjectKey
+                    block.stableId = stableId
                     return block
                 } else {
-                    return Block(type: .text(cb.text ?? ""), calorieData: cb.calorieData)
+                    return Block(
+                        id: id,
+                        type: .text(cb.text ?? ""),
+                        calorieData: cb.calorieData,
+                        stableId: stableId
+                    )
                 }
             case "spacer":
-                return Block(type: .spacer, calorieData: nil, nutrition: nil)
+                return Block(id: id, type: .spacer, calorieData: nil, nutrition: nil, stableId: stableId)
             default:
                 return nil
             }
