@@ -8,6 +8,40 @@ const router = Router();
 // Protect all streak routes
 router.use(authenticateToken);
 
+function toDayKey(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseTimezoneOffset(value: unknown): number | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return null;
+  }
+
+  const offset = Number(rawValue);
+  if (!Number.isInteger(offset) || offset < -1440 || offset > 1440) {
+    return null;
+  }
+
+  return offset;
+}
+
 // GET /api/streaks - Get current streak information
 router.get('/', async (req: AuthRequest, res) => {
   try {
@@ -26,11 +60,17 @@ router.get('/', async (req: AuthRequest, res) => {
     console.log(`[GET /api/streaks] Found streaks: current=${streaksData?.currentStreak}, total=${streaksData?.totalDaysWithEntries}, lastEntry=${streaksData?.lastEntryDate}`);
     
     // Check if streak data needs recalculation
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const timezoneOffset = parseTimezoneOffset(req.query.timezoneOffset) ??
+      await StreakCalculator.getUserTimezoneOffset(userId);
+    const today = StreakCalculator.getTimezoneAwareDate(new Date(), timezoneOffset);
+    const yesterday = StreakCalculator.getTimezoneAwareDate(
+      new Date(Date.now() - 24 * 60 * 60 * 1000),
+      timezoneOffset
+    );
+    const lastEntry = toDayKey(streaksData?.lastEntryDate);
 
-    const lastEntryIsRecent = streaksData?.lastEntryDate &&
-      (streaksData.lastEntryDate === today || streaksData.lastEntryDate === yesterday);
+    const lastEntryIsRecent = lastEntry !== null &&
+      (lastEntry === today || lastEntry === yesterday);
 
     // Streak has expired: last entry is older than yesterday but currentStreak still > 0
     const streakExpired = streaksData && streaksData.currentStreak > 0 && !lastEntryIsRecent;

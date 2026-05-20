@@ -46,19 +46,33 @@ function cloneBlocks(blocks: any[]): any[] {
   }
 }
 
-function mergeAnalyzedBlocksWithExisting(analyzedBlocks: any[], existingBlocks: any[]) {
-  const blockMap = new Map<string, any>();
-  for (const block of existingBlocks) {
+export function mergeAnalyzedBlocksWithExisting(
+  analyzedBlocks: any[],
+  existingBlocks: any[],
+) {
+  const analyzedById = new Map<string, any>();
+  const analyzedByStableId = new Map<string, any>();
+  for (const block of analyzedBlocks) {
     if (block.id) {
-      blockMap.set(block.id, block);
+      analyzedById.set(block.id, block);
+    }
+    if (block.stableId) {
+      analyzedByStableId.set(block.stableId, block);
     }
   }
 
-  return analyzedBlocks.map((analyzed: any) => {
-    const existing = blockMap.get(analyzed.id);
-    if (!existing) {
-      return analyzed;
+  const matched = new Set<any>();
+
+  const merged = existingBlocks.map((existing: any) => {
+    const analyzed =
+      (existing.id && analyzedById.get(existing.id)) ||
+      (existing.stableId && analyzedByStableId.get(existing.stableId)) ||
+      null;
+
+    if (!analyzed) {
+      return existing;
     }
+    matched.add(analyzed);
 
     if (existing.userModified) {
       console.log(
@@ -91,6 +105,14 @@ function mergeAnalyzedBlocksWithExisting(analyzedBlocks: any[], existingBlocks: 
       stableId: existing.stableId || analyzed.stableId,
     };
   });
+
+  for (const analyzed of analyzedBlocks) {
+    if (!matched.has(analyzed)) {
+      merged.push(analyzed);
+    }
+  }
+
+  return merged;
 }
 
 function sameOptionalString(left: unknown, right: unknown) {
@@ -399,6 +421,21 @@ export class AIAnalysisWorkflow {
         analyzedBlocks,
         existingEntry.blocks || [],
       );
+
+      if (mergedBlocks.length < (existingEntry.blocks || []).length) {
+        console.error(
+          `[ai:analyze] REFUSING to shrink entry ${entryId}: ` +
+            `existing=${existingEntry.blocks?.length || 0}, merged=${mergedBlocks.length}. ` +
+            "Aborting write-back to prevent data loss.",
+        );
+        await DiaryEntryModel.failAnalysisJob(
+          entryId,
+          jobId,
+          "merge_shrunk_entry",
+        );
+        throw new Error("merge_shrunk_entry");
+      }
+
       const totals = AIService.calculateTotals(mergedBlocks);
 
       const completed = await DiaryEntryModel.completeAnalysisJob(

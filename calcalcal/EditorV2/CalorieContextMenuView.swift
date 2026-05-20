@@ -7,11 +7,13 @@ struct CalorieContextMenuView: View {
     @State private var weightText: String
     @State private var isUpdating: Bool = false
     @State private var showUpdateSuccess: Bool = false
+    @State private var isPresented: Bool = false
 
     private let originalCalories: Int
     private let originalWeight: Double?
     private let nutrition: NutritionData?
     private let onUpdate: (Int?, Double?) -> Void
+    private let cardWidth: CGFloat = 320
 
     init(
         calories: Int,
@@ -29,96 +31,94 @@ struct CalorieContextMenuView: View {
         self.onUpdate = onUpdate
     }
 
-        var body: some View {
-            ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: DSSpacing.smd) {
-                        // Header
-                        Text("Nutrition Details")
-                            .font(.dsHeadline)
-                            .fontWeight(.regular)
-
-                        // Calories Section
-                        HStack {
-
-                            TextField("0", text: $caloriesText)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .disabled(isUpdating)
-
-
-                            Text("Calories")
-                                .font(.dsSubheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(DSColors.textSecondary)
-
-
-
-                        }
-
-                        // Weight Section
-                        HStack {
-                            TextField("0", text: $weightText)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .disabled(isUpdating)
-
-                            Text(getWeightUnit())
-                                .font(.dsSubheadline)
-                                .foregroundColor(DSColors.textSecondary)
-                        }
-
-                        // Display metric description if available
-                        if let metricDescription = nutrition?.metric_description, !metricDescription.isEmpty {
-                            Text("Serving size: \(metricDescription)")
-                                .font(.dsCaption)
-                                .foregroundColor(DSColors.textSecondary)
-                                .padding(.top, -4)
-                        }
-
-                        Divider()
-
-                        // Nutrition Details
-                        if let nutrition = nutrition {
-                            VStack(alignment: .leading, spacing: DSSpacing.xs) {
-                                nutritionRow(label: "Protein", value: nutrition.protein, unit: "g")
-                                nutritionRow(label: "Fat", value: nutrition.fat, unit: "g")
-                                nutritionRow(label: "Carbs", value: nutrition.carbs, unit: "g")
-                                nutritionRow(label: "Fiber", value: nutrition.fiber, unit: "g")
-                                nutritionRow(label: "Sugar", value: nutrition.sugar, unit: "g")
-                                nutritionRow(label: "Sodium", value: nutrition.sodium, unit: "mg")
-                            }
-                        }
-                    }
-                    .padding()
-                    .padding(.bottom, 72) // Space for the floating button
-                }
-
-                // Sticky Update button
-                Button(action: {
-                    performUpdate()
-                }) {
-                    HStack {
-                        if isUpdating {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else if showUpdateSuccess {
-                            Image(systemName: "checkmark")
-                                .font(.dsHeadline)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.dsHeadline)
-                        }
-                    }
-                    .frame(width: DSSpacing.xxxl, height: DSSpacing.xxxl)
-                    .background(DSColors.primary)
-                    .foregroundColor(DSColors.textInverted)
-                    .clipShape(Circle())
-                    .shadow(color: DSColors.shadowHeavy, radius: 5, y: 5)
-                }
-                .padding(.trailing, DSSpacing.xs)
-                .padding(.bottom, DSSpacing.sm)
-                .disabled(isUpdating || !hasValidChanges())
+    var body: some View {
+        VStack(spacing: 0) {
+            CalorieEditorHeader(title: "Nutrition Details") {
+                dismissWithScale()
             }
+
+            VStack(spacing: DSSpacing.sm) {
+                CalorieEditorNumberRow(
+                    title: "Calories",
+                    unit: "kcal",
+                    text: $caloriesText,
+                    keyboardType: .numberPad,
+                    isDisabled: isUpdating
+                )
+
+                CalorieEditorNumberRow(
+                    title: "Weight",
+                    unit: getWeightUnit(),
+                    text: $weightText,
+                    keyboardType: .decimalPad,
+                    isDisabled: isUpdating
+                )
+
+                if let metricDescription = nutrition?.metric_description, !metricDescription.isEmpty {
+                    Text("Serving size: \(metricDescription)")
+                        .font(.dsCaption)
+                        .foregroundColor(DSColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, DSSpacing.xs)
+                }
+
+                if let nutrition = nutrition {
+                    Divider()
+                        .padding(.vertical, DSSpacing.xs)
+
+                    VStack(alignment: .leading, spacing: DSSpacing.xs) {
+                        nutritionRow(label: "Protein", value: nutrition.protein, unit: "g")
+                        nutritionRow(label: "Fat", value: nutrition.fat, unit: "g")
+                        nutritionRow(label: "Carbs", value: nutrition.carbs, unit: "g")
+                        nutritionRow(label: "Fiber", value: nutrition.fiber, unit: "g")
+                        nutritionRow(label: "Sugar", value: nutrition.sugar, unit: "g")
+                        nutritionRow(label: "Sodium", value: nutrition.sodium, unit: "mg")
+                    }
+                }
+
+                updateButton
+                    .padding(.top, DSSpacing.smd)
+            }
+            .padding(.horizontal, DSSpacing.lg)
+            .padding(.bottom, DSSpacing.xl)
         }
+        .frame(width: cardWidth)
+        .background(DSColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .scaleEffect(isPresented ? 1 : 0.72, anchor: .topTrailing)
+        .opacity(isPresented ? 1 : 0)
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isPresented)
+        .onAppear {
+            isPresented = true
+        }
+    }
+
+    private var updateButton: some View {
+        Button(action: performUpdate) {
+            HStack(spacing: DSSpacing.xs) {
+                if isUpdating {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else if showUpdateSuccess {
+                    Image(systemName: "checkmark")
+                        .font(Font.dsCustom(weight: .semiBold, size: 14))
+                }
+
+                Text("update")
+                    .font(Font.dsCustom(weight: .medium, size: 17))
+            }
+            .foregroundColor(DSColors.textInverted.opacity(hasValidChanges() ? 1 : 0.92))
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(DSColors.primary.opacity(hasValidChanges() ? 1 : 0.55))
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isUpdating || !hasValidChanges())
+    }
+
     private func nutritionRow(label: String, value: Double?, unit: String) -> some View {
         HStack {
             Text(label)
@@ -132,6 +132,7 @@ struct CalorieContextMenuView: View {
                     .font(.dsSubheadline)
                     .fontWeight(.medium)
                     .foregroundColor(DSColors.textPrimary)
+                    .monospacedDigit()
             } else {
                 Text("--")
                     .font(.dsSubheadline)
@@ -196,8 +197,18 @@ struct CalorieContextMenuView: View {
                 withAnimation {
                     self.showUpdateSuccess = false
                 }
-                self.presentationMode.wrappedValue.dismiss()
+                self.dismissWithScale()
             }
+        }
+    }
+
+    private func dismissWithScale() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            isPresented = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            presentationMode.wrappedValue.dismiss()
         }
     }
 
@@ -215,6 +226,73 @@ struct CalorieContextMenuView: View {
         }
         // Default to grams
         return "g"
+    }
+}
+
+private struct CalorieEditorHeader: View {
+    let title: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.dsHeadline)
+                .foregroundColor(DSColors.textPrimary)
+
+            Spacer()
+
+            DSIconButton(icon: "xmark", style: .ghost, size: .regular) {
+                onClose()
+            }
+        }
+        .padding(.leading, DSSpacing.lg)
+        .padding(.trailing, DSSpacing.smd)
+        .padding(.top, DSSpacing.lg)
+        .padding(.bottom, DSSpacing.md)
+    }
+}
+
+private struct CalorieEditorNumberRow: View {
+    let title: String
+    let unit: String
+    @Binding var text: String
+    let keyboardType: UIKeyboardType
+    let isDisabled: Bool
+
+    var body: some View {
+        HStack(spacing: DSSpacing.md) {
+            Text(title)
+                .font(.dsBody)
+                .foregroundColor(DSColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(width: 82, alignment: .leading)
+
+            Spacer(minLength: DSSpacing.sm)
+
+            HStack(spacing: DSSpacing.xs) {
+                TextField("0", text: $text)
+                    .keyboardType(keyboardType)
+                    .multilineTextAlignment(.trailing)
+                    .font(.dsBodyEmphasized)
+                    .foregroundColor(DSColors.textPrimary)
+                    .monospacedDigit()
+                    .frame(width: 82)
+                    .disabled(isDisabled)
+
+                Text(unit)
+                    .font(.dsSubheadline)
+                    .foregroundColor(DSColors.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 36, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, DSSpacing.smd)
+        .frame(minHeight: 48)
+        .background(
+            RoundedRectangle(cornerRadius: DSCornerRadius.md, style: .continuous)
+                .fill(DSColors.surfaceSecondary)
+        )
     }
 }
 
@@ -241,6 +319,7 @@ struct CalorieContextMenuView_Previews: PreviewProvider {
         ) { calories, weight in
             dlog("Update: calories=\(calories ?? -1), weight=\(weight ?? -1)")
         }
+        .environmentObject(AppState())
         .previewDisplayName("Calorie Context Menu")
     }
 

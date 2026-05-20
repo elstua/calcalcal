@@ -120,13 +120,15 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
         }
 
         let hostingController = UIHostingController(rootView: calorieContextMenu)
-        hostingController.preferredContentSize = CGSize(width: 240, height: 356)
+        hostingController.view.backgroundColor = .clear
+        hostingController.preferredContentSize = CGSize(width: 320, height: 404)
         hostingController.modalPresentationStyle = .popover
 
         if let popover = hostingController.popoverPresentationController {
             popover.sourceView = self
             popover.sourceRect = bounds
             popover.permittedArrowDirections = []
+            popover.backgroundColor = .clear
             popover.delegate = self
         }
 

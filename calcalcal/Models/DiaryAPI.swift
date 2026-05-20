@@ -193,11 +193,19 @@ struct DiaryAPI {
     }
     private struct BlocksRow: Codable { let blocks: [DBBlock]? }
 
+    /// Per-method timeouts. URLSession default is 60s, which is far too long for
+    /// interactive read paths — the UI sits frozen on bad cellular. Reads now
+    /// time out after 20s, writes after 45s (writes often trigger AI analysis on
+    /// the backend, which can legitimately take 30s+).
+    private static let readTimeout: TimeInterval = 20
+    private static let writeTimeout: TimeInterval = 45
+
     private static func makeRequest(url: URL, method: String = "GET", body: Data? = nil) throws -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let isWrite = (method == "POST" || method == "PATCH" || method == "PUT" || method == "DELETE")
+        request.timeoutInterval = isWrite ? writeTimeout : readTimeout
         if let session = (try? KeychainManager.shared.loadTokens()) ?? nil {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         } else {

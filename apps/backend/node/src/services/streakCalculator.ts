@@ -234,7 +234,7 @@ export class StreakCalculator {
   /**
    * Get user's timezone offset from database
    */
-  private static async getUserTimezoneOffset(userId: string): Promise<number> {
+  static async getUserTimezoneOffset(userId: string): Promise<number> {
     try {
       const result = await Database.query(
         'SELECT timezone_offset FROM user_profiles WHERE id = $1',
