@@ -507,9 +507,7 @@ private struct ProfileHealthEditorContainer: View {
         withAnimation(.easeInOut(duration: 0.22)) {
             backgroundOpacity = 0
             popupOffset = 520
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        } completion: {
             onClose()
         }
     }
@@ -735,9 +733,7 @@ private struct ProfileGoalsEditorContainer: View {
         withAnimation(.easeInOut(duration: 0.22)) {
             backgroundOpacity = 0
             popupOffset = 520
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        } completion: {
             onClose()
         }
     }

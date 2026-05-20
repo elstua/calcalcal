@@ -257,8 +257,7 @@ struct NutritionPopupView: View {
                     if dragOffset > dragThreshold || velocity > 300 {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             dragOffset = UIScreen.main.bounds.height
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        } completion: {
                             onClose()
                         }
                     } else {
@@ -475,8 +474,7 @@ struct NutritionPopupContainer: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             popupOffset = UIScreen.main.bounds.height
             backgroundOpacity = 0
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        } completion: {
             onClose()
         }
     }
