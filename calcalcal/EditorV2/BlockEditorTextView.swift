@@ -1,6 +1,5 @@
 import UIKit
 import SwiftUI
-import Combine
 
 struct BlockEditorConfiguration {
     var initialText: String = ""
@@ -86,8 +85,6 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private var isApplyingStyles = false
     /// Tracks pending block-style applications to avoid running while TextKit is mid-edit.
     private var isBlockStyleUpdateScheduled = false
-    /// Store for Combine subscriptions
-    private var cancellables = Set<AnyCancellable>()
 
     init(configuration: BlockEditorConfiguration = BlockEditorConfiguration()) {
         super.init(frame: .zero, textContainer: nil)
@@ -1270,37 +1267,29 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // TODO: Add loading indicator to UI
 
         // Make API call
-        APIClient.shared.updateCaloriePopup(
-            entryId: entryIdentifier.uuidString,
-            blockId: blockID.rawValue.uuidString,
-            text: text,
-            calories: calories,
-            weight: weight
-        )
-        .receive(on: DispatchQueue.main)
-        .sink(
-            receiveCompletion: { [weak self] completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
-                    dlog("Error updating calorie popup: \(error)")
-
-                    // Show appropriate error message to user
-                    DispatchQueue.main.async {
-                        if let apiError = error as? APIError {
-                            self?.showErrorAlert(message: apiError.localizedDescription)
-                        } else {
-                            self?.showErrorAlert(message: "Failed to update nutrition information. Please try again.")
-                        }
+        Task { [weak self] in
+            do {
+                let response = try await APIClient.shared.updateCaloriePopup(
+                    entryId: entryIdentifier.uuidString,
+                    blockId: blockID.rawValue.uuidString,
+                    text: text,
+                    calories: calories,
+                    weight: weight
+                )
+                await MainActor.run {
+                    self?.handleCalorieUpdateResponse(response: response, blockID: blockID)
+                }
+            } catch {
+                dlog("Error updating calorie popup: \(error)")
+                await MainActor.run {
+                    if let apiError = error as? APIError {
+                        self?.showErrorAlert(message: apiError.localizedDescription)
+                    } else {
+                        self?.showErrorAlert(message: "Failed to update nutrition information. Please try again.")
                     }
                 }
-            },
-            receiveValue: { [weak self] response in
-                self?.handleCalorieUpdateResponse(response: response, blockID: blockID)
             }
-        )
-        .store(in: &cancellables)
+        }
     }
 
     private func handleCalorieUpdateResponse(response: CaloriePopupUpdateResponse, blockID: BlockID) {
