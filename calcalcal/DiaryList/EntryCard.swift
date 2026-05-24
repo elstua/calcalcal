@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import UIKit
+import Combine
 
 
 /// Entry card view that combines the block editor with footer.
@@ -25,6 +26,7 @@ struct EntryCard: View {
     @Binding var scrollOffset: CGFloat
     var onParagraphCommitted: (() -> Void)? = nil
     var onSavedParagraphEdited: (() -> Void)? = nil
+    var metadataUpdates: PassthroughSubject<EditorMetadataUpdate, Never>? = nil
     // Custom top content inset (used by EditorOverlay to leave space for header)
     var topContentInset: CGFloat? = nil
     // Custom bottom content inset (used by EditorOverlay to leave space for footer)
@@ -65,6 +67,7 @@ struct EntryCard: View {
          scrollOffset: Binding<CGFloat> = .constant(0),
          onParagraphCommitted: (() -> Void)? = nil,
          onSavedParagraphEdited: (() -> Void)? = nil,
+         metadataUpdates: PassthroughSubject<EditorMetadataUpdate, Never>? = nil,
          topContentInset: CGFloat? = nil,
          bottomContentInset: CGFloat? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
@@ -87,6 +90,7 @@ struct EntryCard: View {
         self._scrollOffset = scrollOffset
         self.onParagraphCommitted = onParagraphCommitted
         self.onSavedParagraphEdited = onSavedParagraphEdited
+        self.metadataUpdates = metadataUpdates
         self.topContentInset = topContentInset
         self.bottomContentInset = bottomContentInset
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
@@ -115,6 +119,7 @@ struct EntryCard: View {
                 onTextViewReady: onTextViewReady,
                 onParagraphCommitted: onParagraphCommitted,
                 onSavedParagraphEdited: onSavedParagraphEdited,
+                metadataUpdates: metadataUpdates,
                 onNewImageOverlayPositioned: onNewImageOverlayPositioned,
                 pendingFlyToAnimation: pendingFlyToAnimation,
                 topContentInset: topContentInset,

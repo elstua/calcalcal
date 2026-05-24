@@ -1,5 +1,11 @@
 import Foundation
+import Combine
 import os.log
+
+struct EditorMetadataUpdate {
+    let entryId: String
+    let analyzedBlocks: [[String: Any]]
+}
 
 /// Service responsible for autosaving diary entries with AI analysis and polling for results
 @MainActor
@@ -16,6 +22,8 @@ class EditorAutosaveService: ObservableObject {
 
     /// Last analysis error message to surface in the editor.
     @Published var lastAnalysisError: String? = nil
+
+    let metadataUpdates = PassthroughSubject<EditorMetadataUpdate, Never>()
     
     // MARK: - Private State
     
@@ -85,14 +93,7 @@ class EditorAutosaveService: ObservableObject {
                             "confidence": (block.confidence as Any?) ?? NSNull()
                         ]
                     }
-                    NotificationCenter.default.post(
-                        name: .editorApplyPerBlockMetadata,
-                        object: nil,
-                        userInfo: [
-                            "entryId": entryId.uuidString,
-                            "analyzedBlocks": payload
-                        ]
-                    )
+                    self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
                 }
             } catch {
                 // Best-effort; ignore if blocks not available yet
@@ -198,14 +199,7 @@ class EditorAutosaveService: ObservableObject {
                 "isAnalyzing": isAnalyzing
             ]
         }
-        NotificationCenter.default.post(
-            name: .editorApplyPerBlockMetadata,
-            object: nil,
-            userInfo: [
-                "entryId": entryId.uuidString,
-                "analyzedBlocks": payload
-            ]
-        )
+        self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
     }
 
     private func postAnalysisError(_ message: String) {
@@ -458,11 +452,7 @@ class EditorAutosaveService: ObservableObject {
                                         "confidence": (block.confidence as Any?) ?? NSNull()
                                     ]
                                 }
-                                NotificationCenter.default.post(
-                                    name: .editorApplyPerBlockMetadata,
-                                    object: nil,
-                                    userInfo: ["entryId": entryId.uuidString, "analyzedBlocks": payload]
-                                )
+                                self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
                             }
                         }
                     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Combine
 
 struct BlockEditorRepresentable: UIViewRepresentable {
     @Binding var blocks: [Block]
@@ -12,6 +13,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var onTextViewReady: ((BlockEditorTextView) -> Void)?
     var onParagraphCommitted: (() -> Void)?
     var onSavedParagraphEdited: (() -> Void)?
+    var metadataUpdates: PassthroughSubject<EditorMetadataUpdate, Never>?
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
     var pendingFlyToAnimation: Bool = false
     var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
@@ -27,6 +29,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
          onParagraphCommitted: (() -> Void)? = nil,
          onSavedParagraphEdited: (() -> Void)? = nil,
+         metadataUpdates: PassthroughSubject<EditorMetadataUpdate, Never>? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
          topContentInset: CGFloat? = nil,
@@ -41,6 +44,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.onTextViewReady = onTextViewReady
         self.onParagraphCommitted = onParagraphCommitted
         self.onSavedParagraphEdited = onSavedParagraphEdited
+        self.metadataUpdates = metadataUpdates
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.topContentInset = topContentInset
@@ -57,6 +61,12 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         context.coordinator.bind(to: textView)
         textView.onParagraphCommitted = onParagraphCommitted
         textView.onSavedParagraphEdited = onSavedParagraphEdited
+        textView.onMetadataApplied = { [weak coordinator = context.coordinator] in
+            coordinator?.scheduleSnapshot()
+        }
+        if let metadataUpdates = metadataUpdates {
+            textView.subscribeToMetadataUpdates(metadataUpdates)
+        }
         textView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         textView.pendingFlyToAnimation = pendingFlyToAnimation
         onTextViewReady?(textView)
@@ -79,6 +89,9 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         // Update fly-to animation callback
         uiView.onParagraphCommitted = onParagraphCommitted
         uiView.onSavedParagraphEdited = onSavedParagraphEdited
+        uiView.onMetadataApplied = { [weak coordinator = context.coordinator] in
+            coordinator?.scheduleSnapshot()
+        }
         uiView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         // Only set pendingFlyToAnimation to true, never overwrite back to false
         // (the text view clears it itself after the animation completes)
@@ -94,7 +107,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
         private var notificationToken: NSObjectProtocol?
-        private var metadataToken: NSObjectProtocol?
+        private var metadataSubscription: AnyCancellable?
         private var pendingSnapshot: DispatchWorkItem?
         private var lastAppliedBlocks: [Block] = []
         
@@ -105,9 +118,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         
         deinit {
             if let token = notificationToken {
-                NotificationCenter.default.removeObserver(token)
-            }
-            if let token = metadataToken {
                 NotificationCenter.default.removeObserver(token)
             }
         }
@@ -138,12 +148,12 @@ struct BlockEditorRepresentable: UIViewRepresentable {
                 self?.scheduleSnapshot()
             }
             
-            metadataToken = NotificationCenter.default.addObserver(
-                forName: .editorApplyPerBlockMetadata,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                self?.handleMetadataNotification(notification)
+            if let metadataUpdates = parent.metadataUpdates {
+                metadataSubscription = metadataUpdates
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] update in
+                        self?.handleMetadataUpdate(update)
+                    }
             }
         }
         
@@ -209,7 +219,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             }
         }
         
-        private func scheduleSnapshot() {
+        func scheduleSnapshot() {
             guard let bridge, !bridge.isApplyingExternalUpdate else { return }
             pendingSnapshot?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -225,33 +235,22 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
         }
         
-        private func handleMetadataNotification(_ notification: Notification) {
+        private func handleMetadataUpdate(_ update: EditorMetadataUpdate) {
             guard
                 let entryId = parent.entryId,
-                let userInfo = notification.userInfo
+                UUID(uuidString: update.entryId) == entryId
             else {
                 return
             }
-            
-            // Handle both UUID and String for backwards compatibility
-            let notifiedEntryID: UUID?
-            if let uuidValue = userInfo["entryId"] as? UUID {
-                notifiedEntryID = uuidValue
-            } else if let stringValue = userInfo["entryId"] as? String {
-                notifiedEntryID = UUID(uuidString: stringValue)
-            } else {
-                return
-            }
-            
-            guard notifiedEntryID == entryId else { return }
-            if isAnalysisStateOnlyNotification(userInfo) {
+
+            if isAnalysisStateOnly(update.analyzedBlocks) {
                 return
             }
             scheduleSnapshot()
         }
 
-        private func isAnalysisStateOnlyNotification(_ userInfo: [AnyHashable: Any]) -> Bool {
-            guard let blocks = userInfo["analyzedBlocks"] as? [[String: Any]], !blocks.isEmpty else {
+        private func isAnalysisStateOnly(_ blocks: [[String: Any]]) -> Bool {
+            guard !blocks.isEmpty else {
                 return false
             }
 

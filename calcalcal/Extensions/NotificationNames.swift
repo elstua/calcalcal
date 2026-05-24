@@ -3,10 +3,6 @@ import Foundation
 /// Centralized notification names used throughout the app
 extension Notification.Name {
     // MARK: - Editor Notifications
-    
-    /// Posted when AI analysis results arrive with per-block nutrition metadata
-    /// userInfo: ["entryId": String, "analyzedBlocks": [[String: Any]]]
-    static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
 
     // MARK: - App-level Events
     
