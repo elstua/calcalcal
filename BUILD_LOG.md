@@ -52,3 +52,21 @@ Summary:
 Caveats:
 - Did not run Xcode/build, per request.
 - `Docs/state-consolidation-audit-2026-05-23.md` was not present in this checkout.
+
+## 2026-05-24 - editor image overlay reveal direct call
+
+Files changed:
+- `calcalcal/Views/EditorOverlay.swift`
+- `calcalcal/DiaryList/EntryCard.swift`
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+
+Summary:
+- Replaced the image overlay reveal NotificationCenter handoff with a direct `BlockEditorTextView.revealImageOverlay(for:)` call after the fly-to animation completes.
+- Added a private `WeakRef<BlockEditorTextView>` holder in `EditorOverlay` because `@State` cannot store a `weak` property directly.
+- Threaded `onTextViewReady` through `EntryCard` into the existing `BlockEditorRepresentable` callback to capture the text view weakly.
+- Removed the reveal observer, handler, and `editorRevealImageOverlay` notification name declaration.
+
+Caveats:
+- Did not run Xcode/build, per request.
+- `Docs/state-consolidation-audit-2026-05-23.md` was not present in this checkout.

@@ -8,10 +8,6 @@ extension Notification.Name {
     /// userInfo: ["entryId": String, "analyzedBlocks": [[String: Any]]]
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
 
-    /// Posted when a fly-to animation completes and the real image overlay should be revealed
-    /// userInfo: ["blockID": UUID]
-    static let editorRevealImageOverlay = Notification.Name("editorRevealImageOverlay")
-    
     // MARK: - App-level Events
     
     /// Posted when a diary entry's local ID is resolved to a canonical server ID

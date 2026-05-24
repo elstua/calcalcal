@@ -31,6 +31,7 @@ struct EntryCard: View {
     var bottomContentInset: CGFloat? = nil
     // Fly-to animation support
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil
+    var onTextViewReady: ((BlockEditorTextView) -> Void)? = nil
     var pendingFlyToAnimation: Bool = false
     
     // When provided, this binding will be used as the source of truth
@@ -67,6 +68,7 @@ struct EntryCard: View {
          topContentInset: CGFloat? = nil,
          bottomContentInset: CGFloat? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
+         onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
          externalBlocks: Binding<[Block]>? = nil) {
         self.entry = entry
@@ -88,6 +90,7 @@ struct EntryCard: View {
         self.topContentInset = topContentInset
         self.bottomContentInset = bottomContentInset
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
+        self.onTextViewReady = onTextViewReady
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.externalBlocks = externalBlocks
         _internalBlocks = State(initialValue: entry.blocks.withStableIdsAndChangeTracking())
@@ -109,6 +112,7 @@ struct EntryCard: View {
                     self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
                 },
+                onTextViewReady: onTextViewReady,
                 onParagraphCommitted: onParagraphCommitted,
                 onSavedParagraphEdited: onSavedParagraphEdited,
                 onNewImageOverlayPositioned: onNewImageOverlayPositioned,

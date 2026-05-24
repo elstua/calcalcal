@@ -171,10 +171,6 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                                                name: .editorApplyPerBlockMetadata,
                                                object: nil)
 
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(handleRevealOverlayNotification(_:)),
-                                               name: .editorRevealImageOverlay,
-                                               object: nil)
     }
 
     @available(*, unavailable)
@@ -811,12 +807,6 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Explicitly trigger overlay update after applying metadata
         // This ensures CalorieBlockView overlays are created/updated immediately
         scheduleCalorieOverlayUpdate()
-    }
-
-    @objc private func handleRevealOverlayNotification(_ notification: Notification) {
-        guard let uuid = notification.userInfo?["blockID"] as? UUID else { return }
-        let blockID = BlockID(rawValue: uuid)
-        revealImageOverlay(for: blockID)
     }
 
     /// Called when cursor moves - set typing attributes based on current block type.
