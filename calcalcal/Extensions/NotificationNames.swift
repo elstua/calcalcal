@@ -10,10 +10,6 @@ extension Notification.Name {
 
     // MARK: - App-level Events
     
-    /// Posted when a diary entry's local ID is resolved to a canonical server ID
-    /// userInfo: ["localId": UUID, "serverId": UUID]
-    static let diaryEntryCanonicalIdResolved = Notification.Name("diaryEntryCanonicalIdResolved")
-    
     /// Posted when streaks data is updated from the backend
     /// userInfo: ["streaks": StreaksResponse]
     static let streaksDataUpdated = Notification.Name("streaksDataUpdated")

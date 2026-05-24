@@ -94,10 +94,9 @@ struct DiaryListView: View {
             recalcTimeline()
             Task { await loadInitialEntries() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
-            guard let info = notification.userInfo,
-                  let localId = info["localId"] as? UUID,
-                  let serverId = info["serverId"] as? UUID else { return }
+        .onReceive(EntryIdentityCoordinator.shared.canonicalizations) { event in
+            let localId = event.localId
+            let serverId = event.serverId
             if let index = entries.firstIndex(where: { $0.id == localId }) {
                 entries[index].id = serverId
                 recalcTimeline()

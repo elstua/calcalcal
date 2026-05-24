@@ -1,4 +1,10 @@
+import Combine
 import Foundation
+
+struct EntryCanonicalization {
+    let localId: UUID
+    let serverId: UUID
+}
 
 /// Centralized helper that keeps diary entry identifiers in sync between
 /// locally generated placeholder IDs and the canonical IDs returned by the backend.
@@ -6,6 +12,7 @@ import Foundation
 /// lose locally captured content such as photos.
 final class EntryIdentityCoordinator {
     static let shared = EntryIdentityCoordinator()
+    let canonicalizations = PassthroughSubject<EntryCanonicalization, Never>()
     private init() {}
     
     /// Update caches and broadcast that a placeholder entry has been assigned a canonical server ID.
@@ -27,15 +34,7 @@ final class EntryIdentityCoordinator {
         ImageCache.shared.promoteLegacyLocalImages(from: localId, refs: imageRefs)
         
         DispatchQueue.main.async {
-            NotificationCenter.default.post(
-                name: .diaryEntryCanonicalIdResolved,
-                object: nil,
-                userInfo: [
-                    "localId": localId,
-                    "serverId": serverId
-                ]
-            )
+            self.canonicalizations.send(EntryCanonicalization(localId: localId, serverId: serverId))
         }
     }
 }
-

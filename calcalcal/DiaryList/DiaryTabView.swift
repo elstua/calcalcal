@@ -119,8 +119,8 @@ struct DiaryTabView: View {
                 DataFlowLogger.shared.backendRefreshSkipped(reason: "just closed editor (onAppear)")
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCanonicalIdResolved)) { notification in
-            handleCanonicalIdResolved(notification)
+        .onReceive(EntryIdentityCoordinator.shared.canonicalizations) { event in
+            handleCanonicalIdResolved(event)
         }
         .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
             handleStreaksUpdated(notification)
@@ -460,10 +460,9 @@ struct DiaryTabView: View {
     }
     
     // MARK: - Notification Handlers
-    private func handleCanonicalIdResolved(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let localId = info["localId"] as? UUID,
-              let serverId = info["serverId"] as? UUID else { return }
+    private func handleCanonicalIdResolved(_ event: EntryCanonicalization) {
+        let localId = event.localId
+        let serverId = event.serverId
         
         // IMPORTANT: Do NOT update presentedEntry while the editor is open.
         // EditorOverlay already updates its own localEntry.id internally.
