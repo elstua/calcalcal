@@ -1,5 +1,24 @@
 # Build Log
 
+## 2026-05-24 - entry identity Combine publisher
+
+Files changed:
+- `calcalcal/Models/EntryIdentityCoordinator.swift`
+- `calcalcal/DiaryList/DiaryListView.swift`
+- `calcalcal/DiaryList/DiaryTabView.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+
+Summary:
+- Replaced the `diaryEntryCanonicalIdResolved` NotificationCenter fan-out with `EntryIdentityCoordinator.shared.canonicalizations`.
+- Added the co-located `EntryCanonicalization` struct with `localId` and `serverId` fields.
+- Kept cache migration and the main-queue dispatch in `EntryIdentityCoordinator.canonicalize(localId:serverId:blocks:)`.
+- Updated both iOS receivers to consume the typed Combine event and removed the notification name declaration.
+- Verified `rg -n "diaryEntryCanonicalIdResolved" calcalcal` returns no matches.
+
+Caveats:
+- Did not run Xcode/build, per request.
+- `Docs/state-consolidation-audit-2026-05-23.md` was not present in this checkout.
+
 ## 2026-05-24 - editor analysis error published state
 
 Files changed:
