@@ -10,10 +10,6 @@ extension Notification.Name {
     /// Posted when a previously saved paragraph is edited
     static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
     
-    /// Posted when editor scroll offset changes
-    /// userInfo: ["entryId": UUID, "offsetY": CGFloat]
-    static let editorScrollOffsetDidChange = Notification.Name("editorScrollOffsetDidChange")
-    
     /// Posted when AI analysis results arrive with per-block nutrition metadata
     /// userInfo: ["entryId": String, "analyzedBlocks": [[String: Any]]]
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")

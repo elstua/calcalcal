@@ -6,10 +6,10 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var imageMap: [UUID: UIImage]
     var isEditable: Bool
     @Binding var shouldBecomeFirstResponder: Bool
+    @Binding var scrollOffset: CGFloat
     var entryId: UUID?
     var onBlocksChange: (([Block]) -> Void)?
     var onTextViewReady: ((BlockEditorTextView) -> Void)?
-    var onScrollOffsetChange: ((CGFloat) -> Void)?
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
     var pendingFlyToAnimation: Bool = false
     var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
@@ -19,10 +19,10 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          imageMap: [UUID: UIImage] = [:],
          isEditable: Bool = true,
          shouldBecomeFirstResponder: Binding<Bool> = .constant(false),
+         scrollOffset: Binding<CGFloat> = .constant(0),
          entryId: UUID? = nil,
          onBlocksChange: (([Block]) -> Void)? = nil,
          onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
-         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
          topContentInset: CGFloat? = nil,
@@ -31,10 +31,10 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.imageMap = imageMap
         self.isEditable = isEditable
         self._shouldBecomeFirstResponder = shouldBecomeFirstResponder
+        self._scrollOffset = scrollOffset
         self.entryId = entryId
         self.onBlocksChange = onBlocksChange
         self.onTextViewReady = onTextViewReady
-        self.onScrollOffsetChange = onScrollOffsetChange
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.topContentInset = topContentInset
@@ -68,8 +68,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         if let bottomInset = bottomContentInset {
             uiView.setBottomInset(bottomInset)
         }
-        // Update scroll callback so coordinator can forward scroll events
-        context.coordinator.onScrollOffsetChange = onScrollOffsetChange
         // Update fly-to animation callback
         uiView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         // Only set pendingFlyToAnimation to true, never overwrite back to false
@@ -85,7 +83,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         var parent: BlockEditorRepresentable
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
-        var onScrollOffsetChange: ((CGFloat) -> Void)?
         private var notificationToken: NSObjectProtocol?
         private var metadataToken: NSObjectProtocol?
         private var pendingSnapshot: DispatchWorkItem?
@@ -144,15 +141,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             let offsetY = scrollView.contentOffset.y
-            onScrollOffsetChange?(offsetY)
-            // Also post the notification for backward compatibility
-            if let entryId = textView?.entryIdentifier {
-                NotificationCenter.default.post(
-                    name: .editorScrollOffsetDidChange,
-                    object: nil,
-                    userInfo: ["entryId": entryId, "offsetY": offsetY]
-                )
-            }
+            parent.scrollOffset = max(0, offsetY)
         }
         
         func applyIfNeeded(blocks: [Block], imageMap: [UUID: UIImage]) {
