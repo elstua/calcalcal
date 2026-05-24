@@ -22,8 +22,7 @@ struct EntryCard: View {
     var onBlocksChange: (([Block]) -> Void)? = nil
     // Optional override for displaying totals while editing/live-updating
     var overrideTotalCalories: Int? = nil
-    // Callback for scroll offset changes (used for header progressive blur)
-    var onScrollOffsetChange: ((CGFloat) -> Void)? = nil
+    @Binding var scrollOffset: CGFloat
     // Custom top content inset (used by EditorOverlay to leave space for header)
     var topContentInset: CGFloat? = nil
     // Custom bottom content inset (used by EditorOverlay to leave space for footer)
@@ -60,7 +59,7 @@ struct EntryCard: View {
          forceExpanded: Bool = false,
          onBlocksChange: (([Block]) -> Void)? = nil,
          overrideTotalCalories: Int? = nil,
-         onScrollOffsetChange: ((CGFloat) -> Void)? = nil,
+         scrollOffset: Binding<CGFloat> = .constant(0),
          topContentInset: CGFloat? = nil,
          bottomContentInset: CGFloat? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
@@ -79,7 +78,7 @@ struct EntryCard: View {
         self.forceExpanded = forceExpanded
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
-        self.onScrollOffsetChange = onScrollOffsetChange
+        self._scrollOffset = scrollOffset
         self.topContentInset = topContentInset
         self.bottomContentInset = bottomContentInset
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
@@ -98,12 +97,12 @@ struct EntryCard: View {
                 imageMap: effectiveImageMap,
                 isEditable: isEditable,
                 shouldBecomeFirstResponder: $shouldBecomeFirstResponder,
+                scrollOffset: $scrollOffset,
                 entryId: entry.id,
                 onBlocksChange: { newBlocks in
                     self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
                 },
-                onScrollOffsetChange: onScrollOffsetChange,
                 onNewImageOverlayPositioned: onNewImageOverlayPositioned,
                 pendingFlyToAnimation: pendingFlyToAnimation,
                 topContentInset: topContentInset,

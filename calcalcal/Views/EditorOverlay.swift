@@ -31,7 +31,7 @@ struct EditorOverlay: View {
     @State private var pendingRemoteBlocks: [Block]? = nil
     @State private var imageMap: [UUID: UIImage] = [:]
     @State private var keyboardHeight: CGFloat = 0
-    @State private var headerScrollOffsetY: CGFloat = 0  // Drives progressive blur (0 = none, ~60+ = full)
+    @State private var scrollOffset: CGFloat = 0  // Drives progressive blur (0 = none, ~60+ = full)
     @State private var pendingAnimationSourceRect: CGRect? = nil
     @State private var pendingAnimationImage: UIImage? = nil
     @State private var showNutritionPopup: Bool = false
@@ -181,10 +181,7 @@ struct EditorOverlay: View {
                             // triggered by paragraph commit/edit notifications below.
                         },
                         overrideTotalCalories: autosaveService.liveTotalCalories,
-                        onScrollOffsetChange: { offsetY in
-                            // Update header blur based on scroll position
-                            headerScrollOffsetY = max(0, offsetY)
-                        },
+                        scrollOffset: $scrollOffset,
                         topContentInset: 56, // Extra space for the sticky header
                         bottomContentInset: 80, // Extra space for the sticky footer
                         onNewImageOverlayPositioned: { blockID, destRect in
@@ -226,7 +223,7 @@ struct EditorOverlay: View {
             }
         }
         .onAppear {
-            headerScrollOffsetY = 0
+            scrollOffset = 0
 
             // Setup autosave service callbacks
             autosaveService.onEntryIdUpdated = { newId in
@@ -317,13 +314,6 @@ struct EditorOverlay: View {
             guard !autosaveService.isClosing else { return }
             logger.debug("Saved paragraph edited -> schedule autosave")
             autosaveService.scheduleAutosave(blocks: localEntry.blocks)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .editorScrollOffsetDidChange)) { notification in
-            guard let userInfo = notification.userInfo,
-                  let offsetY = userInfo["offsetY"] as? CGFloat else { return }
-            let notifiedId: UUID? = (userInfo["entryId"] as? UUID) ?? (userInfo["entryId"] as? String).flatMap(UUID.init(uuidString:))
-            guard notifiedId == localEntry.id else { return }
-            headerScrollOffsetY = max(0, offsetY)
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorAnalysisError)) { notification in
             guard let userInfo = notification.userInfo else { return }
@@ -439,7 +429,7 @@ extension EditorOverlay {
             EditorFooterView(
                 blocks: localEntry.blocks,
                 remoteTotalCalories: autosaveService.liveTotalCalories ?? localEntry.totalCalories,
-                scrollOffset: headerScrollOffsetY,
+                scrollOffset: scrollOffset,
                 calorieGoal: appState.currentUser?.dailyCalorieGoal,
                 onAddImage: {
                     openImagePicker()

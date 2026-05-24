@@ -779,14 +779,6 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         // Forward scroll events to external delegate (for header blur)
         scrollDelegate?.scrollViewDidScroll?(scrollView)
-        
-        // Also post notification for backward compatibility
-        guard let entryId = entryIdentifier else { return }
-        NotificationCenter.default.post(
-            name: .editorScrollOffsetDidChange,
-            object: nil,
-            userInfo: ["entryId": entryId, "offsetY": scrollView.contentOffset.y]
-        )
     }
 
     @objc private func handleMetadataNotification(_ notification: Notification) {
