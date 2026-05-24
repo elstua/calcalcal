@@ -13,6 +13,9 @@ class EditorAutosaveService: ObservableObject {
     
     /// Flag to prevent autosaves during editor close
     @Published var isClosing: Bool = false
+
+    /// Last analysis error message to surface in the editor.
+    @Published var lastAnalysisError: String? = nil
     
     // MARK: - Private State
     
@@ -206,14 +209,7 @@ class EditorAutosaveService: ObservableObject {
     }
 
     private func postAnalysisError(_ message: String) {
-        NotificationCenter.default.post(
-            name: .editorAnalysisError,
-            object: nil,
-            userInfo: [
-                "entryId": entryId.uuidString,
-                "message": message
-            ]
-        )
+        self.lastAnalysisError = message
     }
 
     private func blocksNeedingAnalysis(currentBlocks: [[String: Any]], analyzedBlocks: [AnalyzedBlock]) -> [[String: Any]] {

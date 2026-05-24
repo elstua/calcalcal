@@ -314,12 +314,10 @@ struct EditorOverlay: View {
             DataFlowLogger.shared.editorDisappeared(entryId: finalEntryId)
             dlog("🟣 onDisappear END")
         }
-        .onReceive(NotificationCenter.default.publisher(for: .editorAnalysisError)) { notification in
-            guard let userInfo = notification.userInfo else { return }
-            let notifiedId: UUID? = (userInfo["entryId"] as? UUID) ?? (userInfo["entryId"] as? String).flatMap(UUID.init(uuidString:))
-            guard notifiedId == localEntry.id else { return }
-            let message = userInfo["message"] as? String ?? "Something went wrong. Please try again."
+        .onReceive(autosaveService.$lastAnalysisError) { newValue in
+            guard let message = newValue else { return }
             showAnalysisToast(message)
+            autosaveService.lastAnalysisError = nil
         }
     }
 }
