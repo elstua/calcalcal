@@ -89,3 +89,25 @@ Summary:
 Caveats:
 - Did not run Xcode/build, per request.
 - `Docs/state-consolidation-audit-2026-05-23.md` was not present in this checkout.
+
+## 2026-05-24 - editor per-block metadata subject
+
+Files changed:
+- `calcalcal/Services/EditorAutosaveService.swift`
+- `calcalcal/Views/EditorOverlay.swift`
+- `calcalcal/DiaryList/EntryCard.swift`
+- `calcalcal/EditorV2/BlockEditorRepresentable.swift`
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+
+Summary:
+- Replaced the `editorApplyPerBlockMetadata` NotificationCenter transport with an `EditorAutosaveService.metadataUpdates` `PassthroughSubject`.
+- Added the co-located `EditorMetadataUpdate` payload while preserving the existing `[[String: Any]]` block dictionaries.
+- Threaded the subject from `EditorOverlay` through `EntryCard` and `BlockEditorRepresentable` to both per-editor subscribers.
+- Kept the subject on the existing per-editor `EditorAutosaveService` instead of adding a parallel `EditorViewModel`, because the service is already the `@StateObject` that owns this editor's save/analyze lifecycle.
+- Replaced the manual calorie edit self-post with a direct `BlockEditorTextView.onMetadataApplied` callback into the coordinator snapshot path.
+- Removed the `editorApplyPerBlockMetadata` notification name and verified no references remain.
+
+Caveats:
+- Did not run Xcode/build, per request.
+- Left `diaryEntryCaloriesUpdated` and `streaksDataUpdated` NotificationCenter usage untouched for future PRs.

@@ -1,5 +1,6 @@
 import UIKit
 import SwiftUI
+import Combine
 
 struct BlockEditorConfiguration {
     var initialText: String = ""
@@ -80,6 +81,9 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Called when editing ends after changing a saved paragraph.
     var onSavedParagraphEdited: (() -> Void)?
 
+    /// Called after manual metadata edits are applied.
+    var onMetadataApplied: (() -> Void)?
+
     /// When true, newly created image overlays start hidden (alpha 0).
     /// The fly-to animation coordinator will unhide them on completion.
     var pendingFlyToAnimation: Bool = false
@@ -91,6 +95,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     private var isApplyingStyles = false
     /// Tracks pending block-style applications to avoid running while TextKit is mid-edit.
     private var isBlockStyleUpdateScheduled = false
+    private var metadataSubscription: AnyCancellable?
 
     init(configuration: BlockEditorConfiguration = BlockEditorConfiguration()) {
         super.init(frame: .zero, textContainer: nil)
@@ -166,20 +171,11 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Force layout invalidation so our custom layout fragments are created.
         textLayoutManager?.textViewportLayoutController.layoutViewport()
 
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(handleMetadataNotification(_:)),
-                                               name: .editorApplyPerBlockMetadata,
-                                               object: nil)
-
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
     }
 
     func updateTextIfNeeded(_ text: String) {
@@ -199,6 +195,29 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         attributedText = NSAttributedString(string: text, attributes: attrs)
         typingAttributes = attrs
         blockDocumentController.forceRebuild()
+    }
+
+    func subscribeToMetadataUpdates(_ publisher: PassthroughSubject<EditorMetadataUpdate, Never>) {
+        metadataSubscription = publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] update in
+                self?.applyMetadataUpdate(update)
+            }
+    }
+
+    func applyMetadataUpdate(_ update: EditorMetadataUpdate) {
+        guard let entryIdentifier,
+              UUID(uuidString: update.entryId) == entryIdentifier else {
+            return
+        }
+
+        let analyzedBlocks = parseAnalyzedBlocks(from: update.analyzedBlocks as Any?)
+        guard !analyzedBlocks.isEmpty else { return }
+        applyAnalyzedMetadata(analyzedBlocks)
+
+        // Explicitly trigger overlay update after applying metadata
+        // This ensures CalorieBlockView overlays are created/updated immediately
+        scheduleCalorieOverlayUpdate()
     }
 
     /// Moves the insertion point to the end of the rendered diary content and
@@ -783,32 +802,6 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         scrollDelegate?.scrollViewDidScroll?(scrollView)
     }
 
-    @objc private func handleMetadataNotification(_ notification: Notification) {
-        guard let entryIdentifier,
-              let userInfo = notification.userInfo else {
-            return
-        }
-        
-        // Handle both UUID and String for backwards compatibility
-        let notifiedEntryID: UUID?
-        if let uuidValue = userInfo["entryId"] as? UUID {
-            notifiedEntryID = uuidValue
-        } else if let stringValue = userInfo["entryId"] as? String {
-            notifiedEntryID = UUID(uuidString: stringValue)
-        } else {
-            return
-        }
-        
-        guard notifiedEntryID == entryIdentifier else { return }
-        let analyzedBlocks = parseAnalyzedBlocks(from: userInfo["analyzedBlocks"])
-        guard !analyzedBlocks.isEmpty else { return }
-        applyAnalyzedMetadata(analyzedBlocks)
-
-        // Explicitly trigger overlay update after applying metadata
-        // This ensures CalorieBlockView overlays are created/updated immediately
-        scheduleCalorieOverlayUpdate()
-    }
-
     /// Called when cursor moves - set typing attributes based on current block type.
     func textViewDidChangeSelection(_ textView: UITextView) {
         let cursorLocation = selectedRange.location
@@ -1364,11 +1357,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             ]
         )
 
-        NotificationCenter.default.post(
-            name: .editorApplyPerBlockMetadata,
-            object: nil,
-            userInfo: ["entryId": entryId]
-        )
+        onMetadataApplied?()
     }
 
     // MARK: - Helper Methods

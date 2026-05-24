@@ -197,6 +197,7 @@ struct EditorOverlay: View {
                             logger.debug("Saved paragraph edited -> schedule autosave")
                             autosaveService.scheduleAutosave(blocks: localEntry.blocks)
                         },
+                        metadataUpdates: autosaveService.metadataUpdates,
                         topContentInset: 56, // Extra space for the sticky header
                         bottomContentInset: 80, // Extra space for the sticky footer
                         onNewImageOverlayPositioned: { blockID, destRect in
@@ -540,19 +541,12 @@ extension EditorOverlay {
                     await autosaveService.saveBlocksWithoutAIAnalysis(blocks: blocksSnapshot)
                     let entryIdString = await MainActor.run { autosaveService.entryId.uuidString }
                     await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: .editorApplyPerBlockMetadata,
-                            object: nil,
-                            userInfo: [
-                                "entryId": entryIdString,
-                                "analyzedBlocks": [[
-                                    "id": blockId.uuidString,
-                                    "position": 0,
-                                    "content": "",
-                                    "isAnalyzing": true
-                                ]]
-                            ]
-                        )
+                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: entryIdString, analyzedBlocks: [[
+                            "id": blockId.uuidString,
+                            "position": 0,
+                            "content": "",
+                            "isAnalyzing": true
+                        ]]))
                     }
                     let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
 
@@ -610,19 +604,12 @@ extension EditorOverlay {
                     dlog("❌ Pipeline error: \(error)")
                     #endif
                     await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: .editorApplyPerBlockMetadata,
-                            object: nil,
-                            userInfo: [
-                                "entryId": autosaveService.entryId.uuidString,
-                                "analyzedBlocks": [[
-                                    "id": blockId.uuidString,
-                                    "position": 0,
-                                    "content": "",
-                                    "isAnalyzing": false
-                                ]]
-                            ]
-                        )
+                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: autosaveService.entryId.uuidString, analyzedBlocks: [[
+                            "id": blockId.uuidString,
+                            "position": 0,
+                            "content": "",
+                            "isAnalyzing": false
+                        ]]))
                         showAnalysisToast("We couldn't analyze that photo. Please try again.")
                     }
                 }
