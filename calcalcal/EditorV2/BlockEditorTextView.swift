@@ -1348,13 +1348,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             total + (nutrition.calories ?? 0)
         }
 
-        NotificationCenter.default.post(
-            name: .diaryEntryCaloriesUpdated,
-            object: nil,
-            userInfo: [
-                "entryId": entryId,
-                "totalCalories": totalCalories
-            ]
+        DiaryEntryUpdatesCoordinator.shared.calorieUpdates.send(
+            EntryCalorieUpdate(entryId: entryId, totalCalories: totalCalories)
         )
 
         onMetadataApplied?()

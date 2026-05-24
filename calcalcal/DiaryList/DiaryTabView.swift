@@ -125,8 +125,8 @@ struct DiaryTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
             handleStreaksUpdated(notification)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCaloriesUpdated)) { notification in
-            handleEntryCaloriesUpdated(notification)
+        .onReceive(DiaryEntryUpdatesCoordinator.shared.calorieUpdates) { update in
+            handleEntryCaloriesUpdated(update)
         }
         .overlay {
             if showStreakSheet {
@@ -515,13 +515,10 @@ struct DiaryTabView: View {
         appState.streaksData = streaks
     }
 
-    private func handleEntryCaloriesUpdated(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let entryId = info["entryId"] as? UUID else { return }
-
+    private func handleEntryCaloriesUpdated(_ update: EntryCalorieUpdate) {
         // Update the entry in the view model with the new calorie data
-        if let totalCalories = info["totalCalories"] as? Int {
-            viewModel.updateEntryCalories(entryId: entryId, totalCalories: totalCalories)
+        if let totalCalories = update.totalCalories {
+            viewModel.updateEntryCalories(entryId: update.entryId, totalCalories: totalCalories)
         }
     }
     
