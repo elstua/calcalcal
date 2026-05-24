@@ -8,10 +8,6 @@ extension Notification.Name {
     /// userInfo: ["entryId": String, "analyzedBlocks": [[String: Any]]]
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")
 
-    /// Posted when editor-side analysis fails and should be surfaced non-blockingly.
-    /// userInfo: ["entryId": UUID/String, "message": String]
-    static let editorAnalysisError = Notification.Name("editorAnalysisError")
-
     /// Posted when a fly-to animation completes and the real image overlay should be revealed
     /// userInfo: ["blockID": UUID]
     static let editorRevealImageOverlay = Notification.Name("editorRevealImageOverlay")

@@ -1,5 +1,22 @@
 # Build Log
 
+## 2026-05-24 - editor analysis error published state
+
+Files changed:
+- `calcalcal/Services/EditorAutosaveService.swift`
+- `calcalcal/Views/EditorOverlay.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+
+Summary:
+- Replaced the editor analysis-error NotificationCenter transport with `EditorAutosaveService.lastAnalysisError`.
+- Kept the existing `postAnalysisError(_:)` call sites and made the helper assign the published message.
+- Updated `EditorOverlay` to show the toast from the per-editor autosave service and reset the message to `nil` so repeated errors can fire.
+- Removed the `editorAnalysisError` notification name declaration and verified no references remain.
+
+Caveats:
+- Did not run Xcode/build, per request.
+- `Docs/state-consolidation-audit-2026-05-23.md` was not present in this checkout.
+
 ## 2026-05-24 - editor scroll offset binding
 
 Files changed:
