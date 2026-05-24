@@ -4,6 +4,10 @@ import os.log
 
 private let logger = Logger(subsystem: "com.calcalcal.app", category: "EditorOverlay")
 
+private final class WeakRef<T: AnyObject> {
+    weak var value: T?
+}
+
 struct EditorOverlay: View {
     @Binding var entry: DiaryEntry
     @Binding var shouldBecomeFirstResponder: Bool
@@ -37,6 +41,7 @@ struct EditorOverlay: View {
     @State private var showNutritionPopup: Bool = false
     @State private var analysisErrorMessage: String?
     @State private var cacheSaveWorkItem: DispatchWorkItem?
+    @State private var textViewRef = WeakRef<BlockEditorTextView>()
 
     // Autosave service handles all save/load operations
     @StateObject private var autosaveService: EditorAutosaveService
@@ -197,6 +202,9 @@ struct EditorOverlay: View {
                         onNewImageOverlayPositioned: { blockID, destRect in
                             guard pendingAnimationSourceRect != nil else { return }
                             startFlyToAnimation(destinationRect: destRect, blockID: blockID)
+                        },
+                        onTextViewReady: { textView in
+                            textViewRef.value = textView
                         },
                         pendingFlyToAnimation: pendingAnimationSourceRect != nil,
                         externalBlocks: blocks
@@ -665,12 +673,7 @@ extension EditorOverlay {
             snapshot.layer.cornerRadius = 8
         } completion: { _ in
             snapshot.removeFromSuperview()
-            // Tell the text view to reveal the real overlay
-            NotificationCenter.default.post(
-                name: .editorRevealImageOverlay,
-                object: nil,
-                userInfo: ["blockID": blockID.rawValue]
-            )
+            textViewRef.value?.revealImageOverlay(for: blockID)
         }
     }
 }
