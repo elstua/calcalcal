@@ -182,6 +182,16 @@ struct EditorOverlay: View {
                         },
                         overrideTotalCalories: autosaveService.liveTotalCalories,
                         scrollOffset: $scrollOffset,
+                        onParagraphCommitted: {
+                            guard !autosaveService.isClosing else { return }
+                            logger.debug("Paragraph committed -> schedule autosave")
+                            autosaveService.scheduleAutosave(blocks: localEntry.blocks)
+                        },
+                        onSavedParagraphEdited: {
+                            guard !autosaveService.isClosing else { return }
+                            logger.debug("Saved paragraph edited -> schedule autosave")
+                            autosaveService.scheduleAutosave(blocks: localEntry.blocks)
+                        },
                         topContentInset: 56, // Extra space for the sticky header
                         bottomContentInset: 80, // Extra space for the sticky footer
                         onNewImageOverlayPositioned: { blockID, destRect in
@@ -303,17 +313,6 @@ struct EditorOverlay: View {
             
             DataFlowLogger.shared.editorDisappeared(entryId: finalEntryId)
             dlog("🟣 onDisappear END")
-        }
-        // Listen for paragraph-level commit/edit notifications to control autosave
-        .onReceive(NotificationCenter.default.publisher(for: .editorParagraphCommitted)) { _ in
-            guard !autosaveService.isClosing else { return }
-            logger.debug("Paragraph committed -> schedule autosave")
-            autosaveService.scheduleAutosave(blocks: localEntry.blocks)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .editorSavedParagraphEdited)) { _ in
-            guard !autosaveService.isClosing else { return }
-            logger.debug("Saved paragraph edited -> schedule autosave")
-            autosaveService.scheduleAutosave(blocks: localEntry.blocks)
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorAnalysisError)) { notification in
             guard let userInfo = notification.userInfo else { return }

@@ -23,6 +23,8 @@ struct EntryCard: View {
     // Optional override for displaying totals while editing/live-updating
     var overrideTotalCalories: Int? = nil
     @Binding var scrollOffset: CGFloat
+    var onParagraphCommitted: (() -> Void)? = nil
+    var onSavedParagraphEdited: (() -> Void)? = nil
     // Custom top content inset (used by EditorOverlay to leave space for header)
     var topContentInset: CGFloat? = nil
     // Custom bottom content inset (used by EditorOverlay to leave space for footer)
@@ -60,6 +62,8 @@ struct EntryCard: View {
          onBlocksChange: (([Block]) -> Void)? = nil,
          overrideTotalCalories: Int? = nil,
          scrollOffset: Binding<CGFloat> = .constant(0),
+         onParagraphCommitted: (() -> Void)? = nil,
+         onSavedParagraphEdited: (() -> Void)? = nil,
          topContentInset: CGFloat? = nil,
          bottomContentInset: CGFloat? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
@@ -79,6 +83,8 @@ struct EntryCard: View {
         self.onBlocksChange = onBlocksChange
         self.overrideTotalCalories = overrideTotalCalories
         self._scrollOffset = scrollOffset
+        self.onParagraphCommitted = onParagraphCommitted
+        self.onSavedParagraphEdited = onSavedParagraphEdited
         self.topContentInset = topContentInset
         self.bottomContentInset = bottomContentInset
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
@@ -103,6 +109,8 @@ struct EntryCard: View {
                     self.effectiveBlocks.wrappedValue = newBlocks
                     self.onBlocksChange?(newBlocks)
                 },
+                onParagraphCommitted: onParagraphCommitted,
+                onSavedParagraphEdited: onSavedParagraphEdited,
                 onNewImageOverlayPositioned: onNewImageOverlayPositioned,
                 pendingFlyToAnimation: pendingFlyToAnimation,
                 topContentInset: topContentInset,

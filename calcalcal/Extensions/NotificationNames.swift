@@ -4,12 +4,6 @@ import Foundation
 extension Notification.Name {
     // MARK: - Editor Notifications
     
-    /// Posted when a paragraph is committed (user presses return or moves to next paragraph)
-    static let editorParagraphCommitted = Notification.Name("editorParagraphCommitted")
-    
-    /// Posted when a previously saved paragraph is edited
-    static let editorSavedParagraphEdited = Notification.Name("editorSavedParagraphEdited")
-    
     /// Posted when AI analysis results arrive with per-block nutrition metadata
     /// userInfo: ["entryId": String, "analyzedBlocks": [[String: Any]]]
     static let editorApplyPerBlockMetadata = Notification.Name("editorApplyPerBlockMetadata")

@@ -74,6 +74,12 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// from the picker to the editor destination.
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
 
+    /// Called when the user commits a paragraph by pressing return.
+    var onParagraphCommitted: (() -> Void)?
+
+    /// Called when editing ends after changing a saved paragraph.
+    var onSavedParagraphEdited: (() -> Void)?
+
     /// When true, newly created image overlays start hidden (alpha 0).
     /// The fly-to animation coordinator will unhide them on completion.
     var pendingFlyToAnimation: Bool = false
@@ -723,7 +729,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             // Always use standard paragraph attributes for new paragraphs.
             // Image blocks are created explicitly via insertImageBlock(), not by pressing Enter.
             typingAttributes = standardParagraphAttributes
-            NotificationCenter.default.post(name: .editorParagraphCommitted, object: nil)
+            onParagraphCommitted?()
         }
         return true
     }
@@ -773,7 +779,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
-        NotificationCenter.default.post(name: .editorSavedParagraphEdited, object: nil)
+        onSavedParagraphEdited?()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

@@ -10,6 +10,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
     var entryId: UUID?
     var onBlocksChange: (([Block]) -> Void)?
     var onTextViewReady: ((BlockEditorTextView) -> Void)?
+    var onParagraphCommitted: (() -> Void)?
+    var onSavedParagraphEdited: (() -> Void)?
     var onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)?
     var pendingFlyToAnimation: Bool = false
     var topContentInset: CGFloat?  // Optional override for top inset (used by EditorOverlay for header space)
@@ -23,6 +25,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
          entryId: UUID? = nil,
          onBlocksChange: (([Block]) -> Void)? = nil,
          onTextViewReady: ((BlockEditorTextView) -> Void)? = nil,
+         onParagraphCommitted: (() -> Void)? = nil,
+         onSavedParagraphEdited: (() -> Void)? = nil,
          onNewImageOverlayPositioned: ((BlockID, CGRect) -> Void)? = nil,
          pendingFlyToAnimation: Bool = false,
          topContentInset: CGFloat? = nil,
@@ -35,6 +39,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         self.entryId = entryId
         self.onBlocksChange = onBlocksChange
         self.onTextViewReady = onTextViewReady
+        self.onParagraphCommitted = onParagraphCommitted
+        self.onSavedParagraphEdited = onSavedParagraphEdited
         self.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         self.pendingFlyToAnimation = pendingFlyToAnimation
         self.topContentInset = topContentInset
@@ -49,6 +55,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         let textView = BlockEditorTextView()
         context.coordinator.parent = self
         context.coordinator.bind(to: textView)
+        textView.onParagraphCommitted = onParagraphCommitted
+        textView.onSavedParagraphEdited = onSavedParagraphEdited
         textView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         textView.pendingFlyToAnimation = pendingFlyToAnimation
         onTextViewReady?(textView)
@@ -69,6 +77,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             uiView.setBottomInset(bottomInset)
         }
         // Update fly-to animation callback
+        uiView.onParagraphCommitted = onParagraphCommitted
+        uiView.onSavedParagraphEdited = onSavedParagraphEdited
         uiView.onNewImageOverlayPositioned = onNewImageOverlayPositioned
         // Only set pendingFlyToAnimation to true, never overwrite back to false
         // (the text view clears it itself after the animation completes)
