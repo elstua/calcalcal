@@ -13,12 +13,14 @@ struct CalorieContextMenuView: View {
     private let originalWeight: Double?
     private let nutrition: NutritionData?
     private let onUpdate: (Int?, Double?) -> Void
+    private let onDismiss: (() -> Void)?
     private let cardWidth: CGFloat = 320
 
     init(
         calories: Int,
         weight: Double? = nil,
         nutrition: NutritionData? = nil,
+        onDismiss: (() -> Void)? = nil,
         onUpdate: @escaping (Int?, Double?) -> Void
     ) {
         // Use weight from nutrition data if available, otherwise use the weight parameter
@@ -28,6 +30,7 @@ struct CalorieContextMenuView: View {
         self.originalCalories = calories
         self.originalWeight = effectiveWeight
         self.nutrition = nutrition
+        self.onDismiss = onDismiss
         self.onUpdate = onUpdate
     }
 
@@ -83,8 +86,17 @@ struct CalorieContextMenuView: View {
             .padding(.bottom, DSSpacing.xl)
         }
         .frame(width: cardWidth)
-        .background(DSColors.surface)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(DSColors.surface)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.82), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.16), radius: 28, x: 0, y: 18)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
         .scaleEffect(isPresented ? 1 : 0.72, anchor: .topTrailing)
         .opacity(isPresented ? 1 : 0)
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isPresented)
@@ -208,7 +220,11 @@ struct CalorieContextMenuView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-            presentationMode.wrappedValue.dismiss()
+            if let onDismiss {
+                onDismiss()
+            } else {
+                presentationMode.wrappedValue.dismiss()
+            }
         }
     }
 

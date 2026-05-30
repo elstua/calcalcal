@@ -1,12 +1,13 @@
-import UIKit
 import SwiftUI
+import UIKit
 
-final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
+final class CalorieBlockView: UIView {
     static let loadingToken = "__calcalcal_analysis_loading__"
 
     private let label = UILabel()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private var lastText: String?
+    private static weak var activeMenuHost: UIViewController?
 
     // Context menu data
     private var currentCalories: Int = 0
@@ -111,33 +112,101 @@ final class CalorieBlockView: UIView, UIPopoverPresentationControllerDelegate {
         guard let presentingViewController = presentingViewController,
               let blockID = blockID else { return }
 
-        let calorieContextMenu = CalorieContextMenuView(
+        dismissActiveContextMenu()
+
+        let sourceFrame = convert(bounds, to: presentingViewController.view)
+        let overlay = CalorieContextMenuOverlayView(
+            sourceFrame: sourceFrame,
             calories: currentCalories,
             weight: currentWeight,
-            nutrition: currentNutrition
-        ) { updatedCalories, updatedWeight in
-            self.onCalorieUpdate?(updatedCalories, updatedWeight, blockID)
-        }
+            nutrition: currentNutrition,
+            onDismiss: { [weak self] in
+                self?.dismissActiveContextMenu()
+            },
+            onUpdate: { [weak self] updatedCalories, updatedWeight in
+                self?.onCalorieUpdate?(updatedCalories, updatedWeight, blockID)
+            }
+        )
 
-        let hostingController = UIHostingController(rootView: calorieContextMenu)
+        let hostingController = UIHostingController(rootView: overlay)
         hostingController.view.backgroundColor = .clear
-        hostingController.preferredContentSize = CGSize(width: 320, height: 404)
-        hostingController.modalPresentationStyle = .popover
+        hostingController.view.frame = presentingViewController.view.bounds
+        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-        if let popover = hostingController.popoverPresentationController {
-            popover.sourceView = self
-            popover.sourceRect = bounds
-            popover.permittedArrowDirections = []
-            popover.backgroundColor = .clear
-            popover.delegate = self
-        }
-
-        presentingViewController.present(hostingController, animated: true)
+        presentingViewController.addChild(hostingController)
+        presentingViewController.view.addSubview(hostingController.view)
+        hostingController.didMove(toParent: presentingViewController)
+        Self.activeMenuHost = hostingController
     }
 
-    // MARK: - UIPopoverPresentationControllerDelegate
+    private func dismissActiveContextMenu() {
+        guard let activeMenuHost = Self.activeMenuHost else { return }
+        Self.activeMenuHost = nil
+        activeMenuHost.willMove(toParent: nil)
+        activeMenuHost.view.removeFromSuperview()
+        activeMenuHost.removeFromParent()
+    }
 
-    func adaptivePresentationStyle(for controller: UIPresentationController) -> UIModalPresentationStyle {
-        return .none // This ensures it's always a popover, even on iPhone.
+    deinit {
+        dismissActiveContextMenu()
+    }
+}
+
+private struct CalorieContextMenuOverlayView: View {
+    let sourceFrame: CGRect
+    let calories: Int
+    let weight: Double?
+    let nutrition: NutritionData?
+    let onDismiss: () -> Void
+    let onUpdate: (Int?, Double?) -> Void
+
+    private let cardSize = CGSize(width: 320, height: 404)
+    private let edgePadding: CGFloat = 12
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = menuFrame(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
+
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture(perform: onDismiss)
+
+                CalorieContextMenuView(
+                    calories: calories,
+                    weight: weight,
+                    nutrition: nutrition,
+                    onDismiss: onDismiss,
+                    onUpdate: onUpdate
+                )
+                .frame(width: cardSize.width, height: cardSize.height, alignment: .top)
+                .position(x: frame.midX, y: frame.midY)
+            }
+        }
+        .background(Color.clear)
+    }
+
+    private func menuFrame(in containerSize: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
+        let minX = safeAreaInsets.leading + edgePadding
+        let maxX = containerSize.width - safeAreaInsets.trailing - edgePadding - cardSize.width
+        let minY = safeAreaInsets.top + edgePadding
+        let maxY = containerSize.height - safeAreaInsets.bottom - edgePadding - cardSize.height
+
+        let proposedX = sourceFrame.maxX - cardSize.width
+        let proposedY = sourceFrame.midY - 112
+
+        return CGRect(
+            x: proposedX.clamped(to: minX...max(minX, maxX)),
+            y: proposedY.clamped(to: minY...max(minY, maxY)),
+            width: cardSize.width,
+            height: cardSize.height
+        )
+    }
+}
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
