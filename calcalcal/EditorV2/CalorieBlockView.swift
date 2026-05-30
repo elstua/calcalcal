@@ -120,8 +120,8 @@ final class CalorieBlockView: UIView {
             calories: currentCalories,
             weight: currentWeight,
             nutrition: currentNutrition,
-            onDismiss: { [weak self] in
-                self?.dismissActiveContextMenu()
+            onDismiss: {
+                Self.dismissActiveContextMenu()
             },
             onUpdate: { [weak self] updatedCalories, updatedWeight in
                 self?.onCalorieUpdate?(updatedCalories, updatedWeight, blockID)
@@ -130,21 +130,21 @@ final class CalorieBlockView: UIView {
 
         let hostingController = UIHostingController(rootView: overlay)
         hostingController.view.backgroundColor = .clear
-        hostingController.view.frame = presentingViewController.view.bounds
-        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hostingController.modalPresentationStyle = .overFullScreen
+        hostingController.modalTransitionStyle = .crossDissolve
 
-        presentingViewController.addChild(hostingController)
-        presentingViewController.view.addSubview(hostingController.view)
-        hostingController.didMove(toParent: presentingViewController)
         Self.activeMenuHost = hostingController
+        presentingViewController.present(hostingController, animated: false)
+    }
+
+    private static func dismissActiveContextMenu() {
+        guard let activeMenuHost else { return }
+        self.activeMenuHost = nil
+        activeMenuHost.dismiss(animated: false)
     }
 
     private func dismissActiveContextMenu() {
-        guard let activeMenuHost = Self.activeMenuHost else { return }
-        Self.activeMenuHost = nil
-        activeMenuHost.willMove(toParent: nil)
-        activeMenuHost.view.removeFromSuperview()
-        activeMenuHost.removeFromParent()
+        Self.dismissActiveContextMenu()
     }
 
     deinit {
