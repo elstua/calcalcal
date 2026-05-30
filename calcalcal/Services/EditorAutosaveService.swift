@@ -422,14 +422,8 @@ class EditorAutosaveService: ObservableObject {
                                 self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
                                 onTotalCaloriesUpdated?(refreshed.total_calories)
                                 
-                                // Notify other UI components that calories have been updated
-                                NotificationCenter.default.post(
-                                    name: .diaryEntryCaloriesUpdated,
-                                    object: nil,
-                                    userInfo: [
-                                        "entryId": entryId,
-                                        "totalCalories": refreshed.total_calories as Any
-                                    ]
+                                DiaryEntryUpdatesCoordinator.shared.calorieUpdates.send(
+                                    EntryCalorieUpdate(entryId: entryId, totalCalories: refreshed.total_calories)
                                 )
                             }
                             if let dbBlocks,

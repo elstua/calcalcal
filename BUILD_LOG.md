@@ -111,3 +111,23 @@ Summary:
 Caveats:
 - Did not run Xcode/build, per request.
 - Left `diaryEntryCaloriesUpdated` and `streaksDataUpdated` NotificationCenter usage untouched for future PRs.
+
+## 2026-05-24 - diary entry calorie updates subject
+
+Files changed:
+- `calcalcal/Models/DiaryEntryUpdatesCoordinator.swift`
+- `calcalcal/Services/EditorAutosaveService.swift`
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+- `calcalcal/DiaryList/DiaryListView.swift`
+- `calcalcal/DiaryList/DiaryTabView.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+
+Summary:
+- Replaced the `diaryEntryCaloriesUpdated` NotificationCenter transport with a typed `DiaryEntryUpdatesCoordinator.calorieUpdates` `PassthroughSubject`.
+- Kept both state holders subscribed: `DiaryTabViewModel` via `DiaryTabView`, and `DiaryListView`'s local `@State entries` for the regular list and `AllDaysOverlay`.
+- Preserved the old nil-total behavior by ignoring `EntryCalorieUpdate.totalCalories == nil` at both receivers.
+- Deferred deletion of the defensive calorie-preservation block in `DiaryTabViewModel.apply(entries:)` to a follow-up PR after observing the new transport in production.
+
+Caveats:
+- Did not run Xcode/build, per request.
+- `streaksDataUpdated` NotificationCenter usage remains for a separate future PR.
