@@ -93,8 +93,6 @@ DesignSystem/                  # Design tokens and components
   Foundation/                  # DSColors, DSSpacing, DSTypography, DSUIKitBridge
   Components/                  # DSButton, DSCard
   Configuration/               # DSConfiguration, DSEnvironment
-Extensions/
-  NotificationNames.swift      # Custom Notification.Name constants
 Utilities/
   VariableBlur.swift           # Variable blur effect
   DataFlowLogger.swift         # Debug logging for data flow
@@ -130,5 +128,5 @@ Threading new parameters requires updating all layers in this chain.
 - **Networking**: All API calls go through `DiaryAPI` → `APIClient` with JWT Bearer tokens
 - **Config**: `Configuration.swift` reads `API_URL` from Info.plist (set by xcconfig). Single-slash URLs in xcconfig are fixed at runtime.
 - **Design system**: Always use `DSColors`, `DSSpacing`, `DSTypography`, `DSCard`, `DSButton` tokens for new UI
-- **Notifications**: Custom names defined in `Extensions/NotificationNames.swift`
+- **App events**: Prefer typed Combine coordinators (for example `EntryIdentityCoordinator` and `DiaryEntryUpdatesCoordinator`) over custom `NotificationCenter` fan-out.
 - **BlockID**: Public struct wrapping UUID, defined in `EditorV2/BlockModels.swift`

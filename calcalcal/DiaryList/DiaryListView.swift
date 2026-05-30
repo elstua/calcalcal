@@ -465,10 +465,8 @@ struct DiaryEntryPopupView: View {
                     do {
                         let streaks = try await DiaryAPI.getStreaks()
                         await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .streaksDataUpdated,
-                                object: nil,
-                                userInfo: ["streaks": streaks]
+                            DiaryEntryUpdatesCoordinator.shared.streakUpdates.send(
+                                StreaksUpdate(streaks: streaks)
                             )
                         }
                     } catch {

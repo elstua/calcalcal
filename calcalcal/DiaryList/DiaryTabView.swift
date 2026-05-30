@@ -122,8 +122,8 @@ struct DiaryTabView: View {
         .onReceive(EntryIdentityCoordinator.shared.canonicalizations) { event in
             handleCanonicalIdResolved(event)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .streaksDataUpdated)) { notification in
-            handleStreaksUpdated(notification)
+        .onReceive(DiaryEntryUpdatesCoordinator.shared.streakUpdates) { update in
+            handleStreaksUpdated(update)
         }
         .onReceive(DiaryEntryUpdatesCoordinator.shared.calorieUpdates) { update in
             handleEntryCaloriesUpdated(update)
@@ -475,10 +475,9 @@ struct DiaryTabView: View {
         viewModel.replaceEntryId(localId: localId, with: serverId)
     }
     
-    private func handleStreaksUpdated(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let streaks = info["streaks"] as? StreaksData else { return }
-        
+    private func handleStreaksUpdated(_ update: StreaksUpdate) {
+        let streaks = update.streaks
+
         let newStreak = streaks.currentStreak
         let oldStreak = appState.streaksData?.currentStreak ?? 0
         
