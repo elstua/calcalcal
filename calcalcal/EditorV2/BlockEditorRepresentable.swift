@@ -106,7 +106,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         var parent: BlockEditorRepresentable
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
-        private var notificationToken: NSObjectProtocol?
         private var metadataSubscription: AnyCancellable?
         private var pendingSnapshot: DispatchWorkItem?
         private var lastAppliedBlocks: [Block] = []
@@ -114,12 +113,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         init(parent: BlockEditorRepresentable) {
             self.parent = parent
             super.init()
-        }
-        
-        deinit {
-            if let token = notificationToken {
-                NotificationCenter.default.removeObserver(token)
-            }
         }
         
         func bind(to textView: BlockEditorTextView) {
@@ -139,12 +132,8 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             #if DEBUG
             dlog("🔧 Coordinator.bind - textView.isEditable after: \(textView.isEditable), isSelectable: \(textView.isSelectable)")
             #endif
-            
-            notificationToken = NotificationCenter.default.addObserver(
-                forName: UITextView.textDidChangeNotification,
-                object: textView,
-                queue: .main
-            ) { [weak self] _ in
+
+            textView.onTextChanged = { [weak self] in
                 self?.scheduleSnapshot()
             }
             
