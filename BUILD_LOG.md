@@ -163,3 +163,16 @@ Summary:
 
 Caveats:
 - System `NotificationCenter` usage for UIKit keyboard show/hide remains intentionally unchanged.
+
+## 2026-05-31 - editor metadata payload helper
+
+Files changed:
+- `calcalcal/Services/EditorAutosaveService.swift`
+
+Summary:
+- Extracted the duplicated backend `DBBlock` → editor metadata dictionary mapping into `metadataPayload(from:)`.
+- Preserved the existing payload shape, including `NSNull()` for missing or zero nutrition fields and the existing `metric_description` / `confidence` handling.
+- Kept both metadata producers intact: initial `loadBlocks()` and autosave polling after AI analysis.
+
+Caveats:
+- This is a transport-shape cleanup only; it does not change analysis timing, polling, or editor rendering behavior.

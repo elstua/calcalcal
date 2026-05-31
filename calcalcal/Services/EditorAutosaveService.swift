@@ -75,24 +75,7 @@ class EditorAutosaveService: ObservableObject {
                 }
                 
                 await MainActor.run {
-                    // Post per-block metadata for this entry using NSDictionary-friendly payload
-                    let payload: [[String: Any]] = dbBlocks.map { block in
-                        return [
-                            "id": block.id ?? "",
-                            "position": block.position ?? 0,
-                            "content": block.content ?? "",
-                            "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
-                            "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
-                            "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
-                            "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
-                            "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
-                            "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
-                            "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
-                            "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
-                            "metric_description": (block.metric_description as Any?) ?? NSNull(),
-                            "confidence": (block.confidence as Any?) ?? NSNull()
-                        ]
-                    }
+                    let payload = self.metadataPayload(from: dbBlocks)
                     self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
                 }
             } catch {
@@ -200,6 +183,39 @@ class EditorAutosaveService: ObservableObject {
             ]
         }
         self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
+    }
+
+    /// Converts backend DB blocks into the NSDictionary-friendly metadata payload
+    /// consumed by the editor. Keep this shape stable: the TextKit bridge expects
+    /// missing/zero nutrition values as `NSNull()` rather than absent keys.
+    private func metadataPayload(from dbBlocks: [DiaryAPI.DBBlock]) -> [[String: Any]] {
+        dbBlocks.map { block in
+            [
+                "id": block.id ?? "",
+                "position": block.position ?? 0,
+                "content": block.content ?? "",
+                "calories": positiveOrNull(block.calories),
+                "protein": positiveOrNull(block.protein),
+                "fat": positiveOrNull(block.fat),
+                "carbs": positiveOrNull(block.carbs),
+                "fiber": positiveOrNull(block.fiber),
+                "sugar": positiveOrNull(block.sugar),
+                "sodium": positiveOrNull(block.sodium),
+                "weight": positiveOrNull(block.weight),
+                "metric_description": (block.metric_description as Any?) ?? NSNull(),
+                "confidence": (block.confidence as Any?) ?? NSNull()
+            ]
+        }
+    }
+
+    private func positiveOrNull<T: BinaryInteger>(_ value: T?) -> Any {
+        guard let value, value > 0 else { return NSNull() }
+        return value
+    }
+
+    private func positiveOrNull<T: BinaryFloatingPoint>(_ value: T?) -> Any {
+        guard let value, value > 0 else { return NSNull() }
+        return value
     }
 
     private func postAnalysisError(_ message: String) {
@@ -429,23 +445,7 @@ class EditorAutosaveService: ObservableObject {
                             if let dbBlocks,
                                dbBlocks.contains(where: { ($0.calories ?? 0) > 0 || ($0.protein ?? 0) > 0 || ($0.fat ?? 0) > 0 || ($0.carbs ?? 0) > 0 }) {
                                 hasReceivedNutritionData = true
-                                let payload: [[String: Any]] = dbBlocks.map { block in
-                                    [
-                                        "id": block.id ?? "",
-                                        "position": block.position ?? 0,
-                                        "content": block.content ?? "",
-                                        "calories": ((block.calories ?? 0) > 0 ? block.calories! : NSNull()),
-                                        "protein": ((block.protein ?? 0) > 0 ? block.protein! : NSNull()),
-                                        "fat": ((block.fat ?? 0) > 0 ? block.fat! : NSNull()),
-                                        "carbs": ((block.carbs ?? 0) > 0 ? block.carbs! : NSNull()),
-                                        "fiber": ((block.fiber ?? 0) > 0 ? block.fiber! : NSNull()),
-                                        "sugar": ((block.sugar ?? 0) > 0 ? block.sugar! : NSNull()),
-                                        "sodium": ((block.sodium ?? 0) > 0 ? block.sodium! : NSNull()),
-                                        "weight": ((block.weight ?? 0) > 0 ? block.weight! : NSNull()),
-                                        "metric_description": (block.metric_description as Any?) ?? NSNull(),
-                                        "confidence": (block.confidence as Any?) ?? NSNull()
-                                    ]
-                                }
+                                let payload = self.metadataPayload(from: dbBlocks)
                                 self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
                             }
                         }
