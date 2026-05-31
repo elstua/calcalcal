@@ -211,7 +211,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
     func applyMetadataUpdate(_ update: EditorMetadataUpdate) {
         guard let entryIdentifier,
-              UUID(uuidString: update.entryId) == entryIdentifier else {
+              update.entryId == entryIdentifier else {
             return
         }
 

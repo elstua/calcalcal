@@ -227,7 +227,7 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         private func handleMetadataUpdate(_ update: EditorMetadataUpdate) {
             guard
                 let entryId = parent.entryId,
-                UUID(uuidString: update.entryId) == entryId
+                update.entryId == entryId
             else {
                 return
             }
