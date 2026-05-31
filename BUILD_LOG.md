@@ -130,4 +130,22 @@ Summary:
 
 Caveats:
 - Did not run Xcode/build, per request.
-- `streaksDataUpdated` NotificationCenter usage remains for a separate future PR.
+- `streaksDataUpdated` NotificationCenter usage remained for a separate future PR.
+
+## 2026-05-30 - streak updates subject
+
+Files changed:
+- `calcalcal/Models/DiaryEntryUpdatesCoordinator.swift`
+- `calcalcal/Services/EditorAutosaveService.swift`
+- `calcalcal/DiaryList/DiaryListView.swift`
+- `calcalcal/DiaryList/DiaryTabView.swift`
+- `calcalcal/Extensions/NotificationNames.swift`
+- `calcalcal/CLAUDE.md`
+
+Summary:
+- Replaced the `streaksDataUpdated` NotificationCenter transport with a typed `DiaryEntryUpdatesCoordinator.streakUpdates` `PassthroughSubject`.
+- Kept both streak refresh producers intact: the legacy popup save path in `DiaryListView` and the editor close flush path in `EditorAutosaveService`.
+- Removed the last custom `Notification.Name` declaration file and updated the iOS guide to point at typed Combine coordinators instead.
+
+Caveats:
+- System `NotificationCenter` usage for UIKit keyboard and text-selection notifications remains intentionally unchanged.
