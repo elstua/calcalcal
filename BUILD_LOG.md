@@ -192,3 +192,17 @@ Summary:
 
 Caveats:
 - Payload dictionaries remain `[[String: Any]]`; this slice only types the event scope identifier.
+
+## 2026-05-31 - editor metadata snapshot callback
+
+Files changed:
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+- `calcalcal/EditorV2/BlockEditorRepresentable.swift`
+
+Summary:
+- Removed the coordinator's duplicate `metadataUpdates` subscription.
+- Moved the non-transient metadata snapshot trigger into `BlockEditorTextView.applyMetadataUpdate(_:)`, immediately after the text view applies metadata.
+- Preserved the existing guard that skips SwiftUI block snapshots for transient `isAnalyzing` loading/error updates.
+
+Caveats:
+- This keeps the text view as the only metadata consumer; loading spinners still update editor UI but are not persisted into SwiftUI blocks.
