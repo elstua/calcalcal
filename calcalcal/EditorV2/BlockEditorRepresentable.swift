@@ -106,7 +106,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
         var parent: BlockEditorRepresentable
         weak var textView: BlockEditorTextView?
         var bridge: BlockEditorBridge?
-        private var metadataSubscription: AnyCancellable?
         private var pendingSnapshot: DispatchWorkItem?
         private var lastAppliedBlocks: [Block] = []
         
@@ -135,14 +134,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
 
             textView.onTextChanged = { [weak self] in
                 self?.scheduleSnapshot()
-            }
-            
-            if let metadataUpdates = parent.metadataUpdates {
-                metadataSubscription = metadataUpdates
-                    .receive(on: DispatchQueue.main)
-                    .sink { [weak self] update in
-                        self?.handleMetadataUpdate(update)
-                    }
             }
         }
         
@@ -222,45 +213,6 @@ struct BlockEditorRepresentable: UIViewRepresentable {
             }
             pendingSnapshot = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
-        }
-        
-        private func handleMetadataUpdate(_ update: EditorMetadataUpdate) {
-            guard
-                let entryId = parent.entryId,
-                update.entryId == entryId
-            else {
-                return
-            }
-
-            if isAnalysisStateOnly(update.analyzedBlocks) {
-                return
-            }
-            scheduleSnapshot()
-        }
-
-        private func isAnalysisStateOnly(_ blocks: [[String: Any]]) -> Bool {
-            guard !blocks.isEmpty else {
-                return false
-            }
-
-            return blocks.allSatisfy { block in
-                guard block["isAnalyzing"] != nil else { return false }
-                let nutritionKeys = [
-                    "calories",
-                    "protein",
-                    "fat",
-                    "carbs",
-                    "fiber",
-                    "sugar",
-                    "sodium",
-                    "weight"
-                ]
-                return nutritionKeys.allSatisfy { key in
-                    guard let value = block[key] else { return true }
-                    if value is NSNull { return true }
-                    return false
-                }
-            }
         }
     }
 }

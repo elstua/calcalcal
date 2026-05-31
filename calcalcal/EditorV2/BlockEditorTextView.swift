@@ -222,6 +222,37 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         // Explicitly trigger overlay update after applying metadata
         // This ensures CalorieBlockView overlays are created/updated immediately
         scheduleCalorieOverlayUpdate()
+
+        // Persist only real metadata changes back through SwiftUI. Loading/error
+        // state updates are transient editor UI and should not snapshot into blocks.
+        if !isAnalysisStateOnly(update.analyzedBlocks) {
+            onMetadataApplied?()
+        }
+    }
+
+    private func isAnalysisStateOnly(_ blocks: [[String: Any]]) -> Bool {
+        guard !blocks.isEmpty else {
+            return false
+        }
+
+        return blocks.allSatisfy { block in
+            guard block["isAnalyzing"] != nil else { return false }
+            let nutritionKeys = [
+                "calories",
+                "protein",
+                "fat",
+                "carbs",
+                "fiber",
+                "sugar",
+                "sodium",
+                "weight"
+            ]
+            return nutritionKeys.allSatisfy { key in
+                guard let value = block[key] else { return true }
+                if value is NSNull { return true }
+                return false
+            }
+        }
     }
 
     /// Moves the insertion point to the end of the rendered diary content and
