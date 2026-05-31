@@ -149,3 +149,17 @@ Summary:
 
 Caveats:
 - System `NotificationCenter` usage for UIKit keyboard and text-selection notifications remains intentionally unchanged.
+
+## 2026-05-31 - editor text change callback
+
+Files changed:
+- `calcalcal/EditorV2/BlockEditorRepresentable.swift`
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+
+Summary:
+- Replaced the local `UITextView.textDidChangeNotification` observer in `BlockEditorRepresentable.Coordinator` with a direct `BlockEditorTextView.onTextChanged` callback.
+- Preserved the existing snapshot timing by keeping `Coordinator.scheduleSnapshot()` as the sole SwiftUI block snapshot path.
+- Kept the existing `UITextViewDelegate.textViewDidChange(_:)` overlay updates intact and appended the callback there, including the manual placeholder-replacement path that already calls `textViewDidChange(_:)`.
+
+Caveats:
+- System `NotificationCenter` usage for UIKit keyboard show/hide remains intentionally unchanged.

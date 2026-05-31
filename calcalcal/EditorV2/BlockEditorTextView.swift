@@ -81,6 +81,10 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     /// Called when editing ends after changing a saved paragraph.
     var onSavedParagraphEdited: (() -> Void)?
 
+    /// Called after the text view's content changes so SwiftUI can snapshot the
+    /// current block document without going through NotificationCenter.
+    var onTextChanged: (() -> Void)?
+
     /// Called after manual metadata edits are applied.
     var onMetadataApplied: (() -> Void)?
 
@@ -791,6 +795,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         updateImageOverlays()
         scheduleCalorieOverlayUpdate()
+        onTextChanged?()
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
