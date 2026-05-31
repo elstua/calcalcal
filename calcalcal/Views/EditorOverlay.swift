@@ -539,16 +539,16 @@ extension EditorOverlay {
                         return localEntry.blocks
                     }
                     await autosaveService.saveBlocksWithoutAIAnalysis(blocks: blocksSnapshot)
-                    let entryIdString = await MainActor.run { autosaveService.entryId.uuidString }
+                    let entryId = await MainActor.run { autosaveService.entryId }
                     await MainActor.run {
-                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: entryIdString, analyzedBlocks: [[
+                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: [[
                             "id": blockId.uuidString,
                             "position": 0,
                             "content": "",
                             "isAnalyzing": true
                         ]]))
                     }
-                    let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryIdString, blockId: blockId.uuidString)
+                    let analysis = try await ImageAPI.analyzeImage(imageUrl: upload.publicUrl, entryId: entryId.uuidString, blockId: blockId.uuidString)
 
                     #if DEBUG
                     dlog("📸 Pipeline: analyze result calories=\(String(describing: analysis.calories)) desc='\(analysis.description)'")
@@ -604,7 +604,7 @@ extension EditorOverlay {
                     dlog("❌ Pipeline error: \(error)")
                     #endif
                     await MainActor.run {
-                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: autosaveService.entryId.uuidString, analyzedBlocks: [[
+                        autosaveService.metadataUpdates.send(EditorMetadataUpdate(entryId: autosaveService.entryId, analyzedBlocks: [[
                             "id": blockId.uuidString,
                             "position": 0,
                             "content": "",

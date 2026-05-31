@@ -3,7 +3,7 @@ import Combine
 import os.log
 
 struct EditorMetadataUpdate {
-    let entryId: String
+    let entryId: UUID
     let analyzedBlocks: [[String: Any]]
 }
 
@@ -76,7 +76,7 @@ class EditorAutosaveService: ObservableObject {
                 
                 await MainActor.run {
                     let payload = self.metadataPayload(from: dbBlocks)
-                    self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
+                    self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: payload))
                 }
             } catch {
                 // Best-effort; ignore if blocks not available yet
@@ -182,7 +182,7 @@ class EditorAutosaveService: ObservableObject {
                 "isAnalyzing": isAnalyzing
             ]
         }
-        self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
+        self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: payload))
     }
 
     /// Converts backend DB blocks into the NSDictionary-friendly metadata payload
@@ -446,7 +446,7 @@ class EditorAutosaveService: ObservableObject {
                                dbBlocks.contains(where: { ($0.calories ?? 0) > 0 || ($0.protein ?? 0) > 0 || ($0.fat ?? 0) > 0 || ($0.carbs ?? 0) > 0 }) {
                                 hasReceivedNutritionData = true
                                 let payload = self.metadataPayload(from: dbBlocks)
-                                self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId.uuidString, analyzedBlocks: payload))
+                                self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: payload))
                             }
                         }
                     }

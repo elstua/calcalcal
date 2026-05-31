@@ -176,3 +176,19 @@ Summary:
 
 Caveats:
 - This is a transport-shape cleanup only; it does not change analysis timing, polling, or editor rendering behavior.
+
+## 2026-05-31 - editor metadata entry IDs as UUID
+
+Files changed:
+- `calcalcal/Services/EditorAutosaveService.swift`
+- `calcalcal/Views/EditorOverlay.swift`
+- `calcalcal/EditorV2/BlockEditorTextView.swift`
+- `calcalcal/EditorV2/BlockEditorRepresentable.swift`
+
+Summary:
+- Tightened `EditorMetadataUpdate.entryId` from `String` to `UUID`.
+- Removed receiver-side `UUID(uuidString:)` parsing in both metadata subscribers.
+- Kept string conversion only at the external `ImageAPI.analyzeImage` boundary where the HTTP API still expects IDs as strings.
+
+Caveats:
+- Payload dictionaries remain `[[String: Any]]`; this slice only types the event scope identifier.
