@@ -15,7 +15,8 @@
     "migrate:dev": "ts-node src/scripts/runMigrations.ts",
     "migrate:pg": "ts-node src/scripts/runMigrationsProgrammatic.ts",
     "test": "jest",
-    "cleanup-images": "ts-node src/scripts/cleanup-images.ts"
+    "cleanup-images": "ts-node src/scripts/cleanup-images.ts",
+    "backfill:smart-cache": "ts-node src/scripts/backfillSmartCache.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
