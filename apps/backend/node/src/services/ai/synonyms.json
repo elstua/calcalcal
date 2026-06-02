@@ -1,0 +1,16 @@
+{
+  "cappuccino": ["cappuccino", "капучино", "каппучино", "kapucino"],
+  "flat white": ["flat white", "флэт уайт", "flatwhite"],
+  "egg": ["egg", "яйцо", "яйца", "яйц"],
+  "banana": ["banana", "банан", "бананы"],
+  "bread": ["bread", "хлеб", "loaf"],
+  "chicken": ["chicken", "курица", "курицы", "куриное"],
+  "rice": ["rice", "рис"],
+  "croissant": ["croissant", "круассан"],
+  "cheese": ["cheese", "сыр", "сыра"],
+  "milk": ["milk", "молоко", "молока"],
+  "coffee": ["coffee", "кофе", "кофe"],
+  "french fries": ["french fries", "картошка фри", "fries", "фри"],
+  "pizza": ["pizza", "пицца", "пиццы"],
+  "salad": ["salad", "салат", "салата"]
+}

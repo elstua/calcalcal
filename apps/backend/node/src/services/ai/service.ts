@@ -4,6 +4,14 @@ import { AIAnalysisCacheModel } from "../../models/AIAnalysisCache";
 import { getNutritionProvider } from "./providers";
 import { PromptContext } from "./prompts";
 import { NutritionAnalysisResult, NutritionProvider } from "./providers/types";
+import { CacheLookupService, CacheLookupResult } from "./cacheLookup";
+import {
+  normalize,
+  extractQuantity,
+  hashNormalized,
+  normalizeForHash,
+  findCanonicalForm,
+} from "./normalization";
 
 export class AIService {
   static async analyzeBlocks(blocks: any[]) {
@@ -115,7 +123,23 @@ export class AIService {
       : undefined;
 
     const hash = AIService.hashContent(content);
+
+    // Smart cache lookup: try normalized + fuzzy match before LLM
     if (!imageUrl) {
+      try {
+        const cacheHit = await CacheLookupService.lookup(content);
+        if (cacheHit) {
+          return {
+            ...block,
+            ...cacheHit.analysis_result,
+            confidence: cacheHit.confidence,
+          };
+        }
+      } catch {
+        // Smart cache failure is non-blocking, fall through to legacy + LLM
+      }
+
+      // Legacy exact content-hash lookup (backward compat)
       const cached = await AIAnalysisCacheModel.getByContentHash(hash);
       if (cached) {
         return {
@@ -139,10 +163,32 @@ export class AIService {
       );
 
       if (!imageUrl) {
+        // Cache the PER-UNIT result for smart cache scaling
+        const qty = extractQuantity(content);
+        const normalizedContent = normalize(content);
+        const canonicalBase = normalizeForHash(content);
+        const normalizedHash = hashNormalized(canonicalBase);
+
+        // Calculate per-unit values by dividing by quantity
+        const perUnitCalories = qty.quantity > 0
+          ? Number(analysis.calories) / qty.quantity
+          : Number(analysis.calories);
+
+        const perUnitResult = {
+          ...analysis,
+          calories: Math.round(perUnitCalories),
+          protein: Math.round((Number(analysis.protein) || 0) / qty.quantity * 10) / 10,
+          fat: Math.round((Number(analysis.fat) || 0) / qty.quantity * 10) / 10,
+          carbs: Math.round((Number(analysis.carbs) || 0) / qty.quantity * 10) / 10,
+          fiber: Math.round((Number(analysis.fiber) || 0) / qty.quantity * 10) / 10,
+          sugar: Math.round((Number(analysis.sugar) || 0) / qty.quantity * 10) / 10,
+          sodium: Math.round((Number(analysis.sodium) || 0) / qty.quantity * 10) / 10,
+        };
+
         await AIAnalysisCacheModel.insert({
           contentHash: hash,
           content,
-          analysisResult: analysis,
+          analysisResult: perUnitResult,
           confidence: analysis.confidence || 0,
           rawResponseText: analysis.rawResponseText,
           providerModel: analysis.providerModel,
@@ -154,6 +200,13 @@ export class AIService {
           usagePromptTokens: analysis.usage?.promptTokens,
           usageCompletionTokens: analysis.usage?.completionTokens,
           usageTotalTokens: analysis.usage?.totalTokens,
+          normalizedContent,
+          originalVariants: [content],
+          hitCount: 0,
+          source: 'llm',
+          unitDescription: `${qty.quantity} ${qty.unit}`,
+          unitCalories: perUnitCalories,
+          normalizedHash,
         });
       }
 
