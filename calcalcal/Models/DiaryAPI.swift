@@ -54,10 +54,11 @@ struct DiaryAPI {
         let total_protein: Double?
         let total_fat: Double?
         let total_carbs: Double?
+        let ai_analysis_status: String?
         let updated_at: String?
 
         enum CodingKeys: String, CodingKey {
-            case id, user_id, date, content, blocks, images, total_calories, total_protein, total_fat, total_carbs, updated_at
+            case id, user_id, date, content, blocks, images, total_calories, total_protein, total_fat, total_carbs, ai_analysis_status, updated_at
         }
 
         init(from decoder: Decoder) throws {
@@ -73,6 +74,7 @@ struct DiaryAPI {
             self.total_protein = c.decodeDoubleForgiving(forKey: .total_protein)
             self.total_fat = c.decodeDoubleForgiving(forKey: .total_fat)
             self.total_carbs = c.decodeDoubleForgiving(forKey: .total_carbs)
+            self.ai_analysis_status = try? c.decode(String.self, forKey: .ai_analysis_status)
             self.updated_at = try? c.decode(String.self, forKey: .updated_at)
         }
     }
@@ -267,26 +269,10 @@ struct DiaryAPI {
     }
 
     static func getBlocksById(_ id: String) async throws -> [DBBlock] {
-        // Get full entry via getById, then extract blocks
         let entry = try await getById(id)
-        // Entry should have blocks field - need to decode it
-        // For now, we'll need to fetch the full entry with blocks
-        // Let's create a helper that gets the full entry including blocks
-        let base = Configuration.apiURL
-        let urlString = "\(base)/api/diary/entries/\(id)"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        let request = try makeRequest(url: url)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-        let decoder = JSONDecoder()
-        struct FullEntry: Codable {
-            let blocks: [DBBlock]?
-        }
-        let fullEntry = try decoder.decode(FullEntry.self, from: data)
-        dlog("🐛 DEBUG: getBlocksById(\(id)) returning \(fullEntry.blocks?.count ?? 0) blocks")
-        return fullEntry.blocks ?? []
+        let blocks = entry?.blocks ?? []
+        dlog("🐛 DEBUG: getBlocksById(\(id)) returning \(blocks.count) blocks")
+        return blocks
     }
 
     /// Get analyzed blocks as AnalyzedBlock structs for change detection
@@ -300,17 +286,20 @@ struct DiaryAPI {
         throw NSError(domain: "DiaryAPI", code: -3, userInfo: [NSLocalizedDescriptionKey: "Use insert(date:content:userId:) overload to insert."])
     }
 
-    static func insert(date: String, content: String, userId: String) async throws -> Row {
+    static func insert(date: String, content: String, userId: String, blocks: [[String: Any]]? = nil) async throws -> Row {
         let base = Configuration.apiURL
         // Backend upserts automatically on (user_id, date) - user_id comes from JWT token
         let urlString = "\(base)/api/diary/entries"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "date": date,
             "content": content
             // user_id comes from JWT token automatically
             // images can be added later if needed
         ]
+        if let blocks = blocks {
+            payload["blocks"] = blocks
+        }
         let body = try JSONSerialization.data(withJSONObject: payload) // Single object, not array
         let request = try makeRequest(url: url, method: "POST", body: body)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -348,11 +337,7 @@ struct DiaryAPI {
     }
 
     static func upsertContent(date: String, userId: String, content: String, blocks: [[String: Any]]? = nil) async throws -> Row {
-        if let existing = try await getByDate(date) {
-            return try await updateContent(id: existing.id, content: content, blocks: blocks)
-        } else {
-            return try await insert(date: date, content: content, userId: userId)
-        }
+        return try await insert(date: date, content: content, userId: userId, blocks: blocks)
     }
 
     static func analyze(entryId: String, blocksPayload: [[String: Any]]) async throws -> AnalyzeResponse {

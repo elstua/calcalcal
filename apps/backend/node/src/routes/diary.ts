@@ -53,15 +53,21 @@ router.get('/entries/:id', async (req: AuthRequest, res) => {
 // POST /api/diary/entries - Create entry
 router.post('/entries', async (req: AuthRequest, res) => {
   try {
-    const { date, content } = req.body;
+    const { date, content, blocks } = req.body;
     const userId = req.userId!;
 
     if (!date) {
       return res.status(400).json({ error: 'date is required' });
     }
 
-    const entry = await DiaryEntryModel.upsert(userId, date, content || '');
+    const entry = Array.isArray(blocks)
+      ? await DiaryEntryModel.upsertContentAndBlocksByDate(userId, date, content || '', blocks)
+      : await DiaryEntryModel.upsert(userId, date, content || '');
     // Note: Streaks update happens when AI analysis completes
+
+    if (!entry) {
+      return res.status(500).json({ error: 'Failed to create entry' });
+    }
 
     res.status(201).json(entry);
   } catch (error) {
@@ -128,5 +134,4 @@ router.delete('/entries/:id', async (req: AuthRequest, res) => {
 });
 
 export default router;
-
 

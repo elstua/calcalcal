@@ -32,6 +32,9 @@ class EditorAutosaveService: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var lastSavedContent: String?
     private var lastSavedAt: Date?
+    private var inFlightSaveSignatures = Set<String>()
+    private var lastSuccessfulSaveSignature: String?
+    private var cachedAnalyzedBlocks: [AnalyzedBlock]?
     private var suppressRemoteBlockUpdates: Bool = false
     private var pendingRemoteBlocks: [Block]?
     private var hasRefreshedStreaksOnClose: Bool = false
@@ -67,6 +70,7 @@ class EditorAutosaveService: ObservableObject {
                 logger.debug("Loading blocks for entryId=\(self.entryId.uuidString)")
                 let dbBlocks = try await DiaryAPI.getBlocksById(entryId.uuidString)
                 logger.debug("getBlocksById returned \(dbBlocks.count) blocks")
+                let analyzedBlocks = dbBlocks.compactMap { $0.toAnalyzedBlock() }
                 
                 // Check if task was cancelled before applying results
                 if Task.isCancelled {
@@ -75,6 +79,7 @@ class EditorAutosaveService: ObservableObject {
                 }
                 
                 await MainActor.run {
+                    self.cachedAnalyzedBlocks = analyzedBlocks
                     let payload = self.metadataPayload(from: dbBlocks)
                     self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: payload))
                 }
@@ -89,6 +94,7 @@ class EditorAutosaveService: ObservableObject {
     func setInitialContent(blocks: [Block]) {
         let initial = blocks.toContentString().trimmingCharacters(in: .whitespacesAndNewlines)
         lastSavedContent = initial
+        lastSuccessfulSaveSignature = saveSignature(content: blocks.toContentString(), blocksPayload: blocks.toAnalyzeBlocks())
     }
     
     /// Schedule autosave if text content has changed (called from text change events)
@@ -170,6 +176,36 @@ class EditorAutosaveService: ObservableObject {
         EntryIdentityCoordinator.shared.canonicalize(localId: entryId, serverId: serverUUID, blocks: blocks)
         entryId = serverUUID
         onEntryIdUpdated?(serverUUID)
+    }
+
+    private func saveSignature(content: String, blocksPayload: [[String: Any]]) -> String {
+        let blockParts = blocksPayload.map { block in
+            block.keys.sorted().map { key in
+                "\(key)=\(String(describing: block[key] ?? ""))"
+            }.joined(separator: ",")
+        }
+        return ([content] + blockParts).joined(separator: "\u{1F}")
+    }
+
+    private func beginSaveSubmission(signature: String, label: String) -> Bool {
+        if inFlightSaveSignatures.contains(signature) {
+            logger.debug("\(label) skipped (identical save already in flight)")
+            return false
+        }
+        if lastSuccessfulSaveSignature == signature {
+            logger.debug("\(label) skipped (identical content already saved)")
+            return false
+        }
+        inFlightSaveSignatures.insert(signature)
+        return true
+    }
+
+    private func markSaveSucceeded(signature: String) {
+        lastSuccessfulSaveSignature = signature
+    }
+
+    private func finishSaveSubmission(signature: String) {
+        inFlightSaveSignatures.remove(signature)
     }
 
     private func postAnalysisState(for blocksPayload: [[String: Any]], isAnalyzing: Bool) {
@@ -284,15 +320,23 @@ class EditorAutosaveService: ObservableObject {
         return block.calorieData?.firstIntegerValueForAnalysis != nil
     }
 
-    private func existingAnalyzedBlocks(forDay day: String) async -> [AnalyzedBlock]? {
-        do {
-            guard let existing = try await DiaryAPI.getByDate(day) else {
-                return nil
+    private func blockHasMeaningfulNutrition(_ block: DiaryAPI.DBBlock) -> Bool {
+        (block.calories ?? 0) > 0 ||
+        (block.protein ?? 0) > 0 ||
+        (block.fat ?? 0) > 0 ||
+        (block.carbs ?? 0) > 0
+    }
+
+    private func hasNutritionForPendingBlocks(dbBlocks: [DiaryAPI.DBBlock], pendingBlocks: [[String: Any]]) -> Bool {
+        guard !pendingBlocks.isEmpty else { return false }
+        return pendingBlocks.allSatisfy { pending in
+            let pendingID = pending["id"] as? String
+            let pendingContent = normalizedContent(pending["content"] as? String)
+            return dbBlocks.contains { dbBlock in
+                let idMatches = pendingID != nil && dbBlock.id == pendingID
+                let contentMatches = !pendingContent.isEmpty && normalizedContent(dbBlock.content) == pendingContent
+                return (idMatches || contentMatches) && blockHasMeaningfulNutrition(dbBlock)
             }
-            return existing.blocks?.compactMap { $0.toAnalyzedBlock() } ?? []
-        } catch {
-            logger.debug("Failed to load pre-save analyzed blocks: \(error.localizedDescription)")
-            return nil
         }
     }
     
@@ -320,6 +364,15 @@ class EditorAutosaveService: ObservableObject {
             logger.debug("Autosave skipped (empty/placeholder content)")
             return
         }
+        let blocksPayload = blocks.toAnalyzeBlocks()
+        let signature = saveSignature(content: content, blocksPayload: blocksPayload)
+        guard beginSaveSubmission(signature: signature, label: "Autosave") else {
+            return
+        }
+        defer {
+            finishSaveSubmission(signature: signature)
+        }
+
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entryDate, offsetMinutes: offsetMinutes)
         logger.debug("Autosave: entryId=\(self.entryId.uuidString), computed day=\(day)")
@@ -331,9 +384,8 @@ class EditorAutosaveService: ObservableObject {
             }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 logger.debug("Upserting content for day \(day)…")
-                let blocksPayload = blocks.toAnalyzeBlocks()
-                let existingAnalyzedBlocks = await existingAnalyzedBlocks(forDay: day)
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content, blocks: blocksPayload)
+                markSaveSucceeded(signature: signature)
                 logger.debug("Autosave result - local_id=\(self.entryId.uuidString), db_id=\(row.id)")
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
@@ -359,12 +411,7 @@ class EditorAutosaveService: ObservableObject {
                 } else {
                     var pendingAnalysisPayload: [[String: Any]] = []
                     do {
-                        let analyzedBlocks: [AnalyzedBlock]
-                        if let existingAnalyzedBlocks {
-                            analyzedBlocks = existingAnalyzedBlocks
-                        } else {
-                            analyzedBlocks = try await DiaryAPI.getAnalyzedBlocksById(row.id)
-                        }
+                        let analyzedBlocks = cachedAnalyzedBlocks ?? row.blocks?.compactMap { $0.toAnalyzedBlock() } ?? []
                         
                         let currentContentBlocks = blocks.toAnalyzeBlocks()
                         let blocksNeedingAnalysis = self.blocksNeedingAnalysis(
@@ -432,7 +479,7 @@ class EditorAutosaveService: ObservableObject {
                         }
                         
                         let refreshed = try? await DiaryAPI.getById(row.id)
-                        let dbBlocks = try? await DiaryAPI.getBlocksById(row.id)
+                        let dbBlocks = refreshed?.blocks
                         await MainActor.run {
                             if let refreshed {
                                 self.liveTotalCalories = refreshed.total_calories ?? self.liveTotalCalories
@@ -442,9 +489,12 @@ class EditorAutosaveService: ObservableObject {
                                     EntryCalorieUpdate(entryId: entryId, totalCalories: refreshed.total_calories)
                                 )
                             }
-                            if let dbBlocks,
-                               dbBlocks.contains(where: { ($0.calories ?? 0) > 0 || ($0.protein ?? 0) > 0 || ($0.fat ?? 0) > 0 || ($0.carbs ?? 0) > 0 }) {
+                            if let refreshed,
+                               refreshed.ai_analysis_status == "completed",
+                               let dbBlocks,
+                               self.hasNutritionForPendingBlocks(dbBlocks: dbBlocks, pendingBlocks: pendingAnalysisPayload) {
                                 hasReceivedNutritionData = true
+                                self.cachedAnalyzedBlocks = dbBlocks.compactMap { $0.toAnalyzedBlock() }
                                 let payload = self.metadataPayload(from: dbBlocks)
                                 self.metadataUpdates.send(EditorMetadataUpdate(entryId: entryId, analyzedBlocks: payload))
                             }
@@ -477,7 +527,7 @@ class EditorAutosaveService: ObservableObject {
     }
     
     /// Save content to database without triggering AI analysis (used during overlay dismissal)
-    private func saveWithoutAIAnalysis(blocks: [Block], refreshStreaks: Bool = true) async {
+    private func saveWithoutAIAnalysis(blocks: [Block], refreshStreaks: Bool = false) async {
         let content = blocks.toContentString()
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasOnlyPlaceholder = blocks.allSatisfy { block in
@@ -492,12 +542,24 @@ class EditorAutosaveService: ObservableObject {
         }
         if trimmed.isEmpty || hasOnlyPlaceholder {
             logger.debug("Flush save skipped (empty/placeholder content)")
-            // Still refresh streaks even if content is empty (user might have deleted content)
             if refreshStreaks {
                 await refreshStreaksAfterSave()
             }
             return
         }
+        if trimmed == lastSavedContent {
+            logger.debug("Flush save skipped (content unchanged)")
+            return
+        }
+        let blocksPayload = blocks.toAnalyzeBlocks()
+        let signature = saveSignature(content: content, blocksPayload: blocksPayload)
+        guard beginSaveSubmission(signature: signature, label: "Flush save") else {
+            return
+        }
+        defer {
+            finishSaveSubmission(signature: signature)
+        }
+
         let offsetMinutes = TimeZone.current.secondsFromGMT() / 60
         let day = LocalDayMath.yyyymmdd(for: entryDate, offsetMinutes: offsetMinutes)
         
@@ -508,8 +570,8 @@ class EditorAutosaveService: ObservableObject {
             }
             if let userId = UserDefaults.standard.string(forKey: "current_user_id") {
                 logger.debug("Flush saving content for day \(day)…")
-                let blocksPayload = blocks.toAnalyzeBlocks()
                 let row = try await DiaryAPI.upsertContent(date: day, userId: userId, content: content, blocks: blocksPayload)
+                markSaveSucceeded(signature: signature)
                 logger.debug("Flush save result - local_id=\(self.entryId.uuidString), db_id=\(row.id)")
                 await MainActor.run {
                     canonicalizeEntryIfNeeded(row: row, blocks: blocks)
@@ -521,8 +583,6 @@ class EditorAutosaveService: ObservableObject {
                 // Save blocks cache on flush as well
                 BlocksCache.shared.save(entryId: entryId, blocks: blocks)
                 
-                // CRITICAL: Refresh streaks AFTER save completes successfully
-                // This ensures the backend has the latest entry data when calculating streaks
                 if refreshStreaks {
                     await refreshStreaksAfterSave()
                 }
@@ -531,7 +591,6 @@ class EditorAutosaveService: ObservableObject {
             }
         } catch {
             logger.error("Flush save error: \(error.localizedDescription)")
-            // Still try to refresh streaks even on error
             if refreshStreaks {
                 await refreshStreaksAfterSave()
             }

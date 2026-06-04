@@ -106,6 +106,31 @@ export class DiaryEntryModel {
     return result.rows[0];
   }
 
+  static async upsertContentAndBlocksByDate(userId: string, date: string, content: string, blocks: any[]) {
+    const existing = await this.getByDate(userId, date);
+    if (existing) {
+      return this.updateContentAndBlocks(existing.id, userId, content, blocks);
+    }
+
+    const inserted = await Database.query(
+      `INSERT INTO diary_entries (user_id, date, content, blocks)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, date) DO NOTHING
+       RETURNING ${this.selectColumns}`,
+      [userId, date, content, JSON.stringify(blocks)]
+    );
+
+    if (inserted.rows[0]) {
+      return inserted.rows[0];
+    }
+
+    const conflicted = await this.getByDate(userId, date);
+    if (!conflicted) {
+      return null;
+    }
+    return this.updateContentAndBlocks(conflicted.id, userId, content, blocks);
+  }
+
   static async updateContent(entryId: string, userId: string, content: string) {
     const result = await Database.query(
       `UPDATE diary_entries
