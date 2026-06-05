@@ -16,7 +16,7 @@ import {
 export class AIService {
   static async analyzeBlocks(blocks: any[]) {
     const provider = getNutritionProvider();
-    const promptVersion = process.env.AI_PROMPT_VERSION || "v2";
+    const promptVersion = process.env.AI_PROMPT_VERSION || "v3";
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
     const providerName = (process.env.AI_PROVIDER || "openai").toLowerCase();
     const model =
