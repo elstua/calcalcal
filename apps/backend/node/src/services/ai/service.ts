@@ -16,7 +16,7 @@ import {
 export class AIService {
   static async analyzeBlocks(blocks: any[]) {
     const provider = getNutritionProvider();
-    const promptVersion = process.env.AI_PROMPT_VERSION || "v1";
+    const promptVersion = process.env.AI_PROMPT_VERSION || "v2";
     const temperature = Number(process.env.AI_TEMPERATURE ?? 0.2);
     const providerName = (process.env.AI_PROVIDER || "openai").toLowerCase();
     const model =
@@ -127,7 +127,7 @@ export class AIService {
     // Smart cache lookup: try normalized + fuzzy match before LLM
     if (!imageUrl) {
       try {
-        const cacheHit = await CacheLookupService.lookup(content);
+        const cacheHit = await CacheLookupService.lookup(content, options.promptVersion);
         if (cacheHit) {
           return {
             ...block,
@@ -140,7 +140,7 @@ export class AIService {
       }
 
       // Legacy exact content-hash lookup (backward compat)
-      const cached = await AIAnalysisCacheModel.getByContentHash(hash);
+      const cached = await AIAnalysisCacheModel.getByContentHash(hash, options.promptVersion);
       if (cached) {
         return {
           ...block,

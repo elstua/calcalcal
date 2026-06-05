@@ -71,6 +71,9 @@ class BaseAnalysisPrompt implements PromptTemplate {
       prompt += `\nText-Only Analysis Instructions:\n`;
       prompt += `- Analyze the food based on the description: "${context.text}"\n`;
       prompt += `- Use nutritional knowledge to estimate portion sizes and nutrients\n`;
+      prompt += `- If the description mentions multiple distinct foods or drinks joined by words like "and", "+", "with", or commas, treat them as separate components and sum them into one combined nutrition estimate for the whole entry.\n`;
+      prompt += `- Do NOT collapse distinct items into a single serving just because they appear in one sentence. Example: "cappuccino and flat white" should be estimated as two drinks combined, not one drink.\n`;
+      prompt += `- Prefer additive interpretation when the items are clearly separate foods/drinks rather than one recipe or one mixed dish.\n`;
     }
 
     // Add meal context if available

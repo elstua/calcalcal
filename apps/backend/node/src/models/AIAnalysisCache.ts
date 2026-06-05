@@ -14,10 +14,13 @@ export interface AIAnalysisCacheRow {
 }
 
 export class AIAnalysisCacheModel {
-  static async getByContentHash(hash: string): Promise<AIAnalysisCacheRow | null> {
+  static async getByContentHash(hash: string, promptVersion: string = 'v1'): Promise<AIAnalysisCacheRow | null> {
     const result = await Database.query<AIAnalysisCacheRow>(
-      `SELECT analysis_result, confidence FROM ai_analysis_cache WHERE content_hash = $1`,
-      [hash]
+      `SELECT analysis_result, confidence
+       FROM ai_analysis_cache
+       WHERE content_hash = $1
+         AND COALESCE(prompt_version, 'v1') = $2`,
+      [hash, promptVersion]
     );
     return result.rows[0] || null;
   }
@@ -26,13 +29,14 @@ export class AIAnalysisCacheModel {
    * Look up a cache entry by its normalized_hash (SHA256 of normalized+canonical item name).
    * Returns the full row including smart cache columns.
    */
-  static async getByNormalizedHash(hash: string): Promise<AIAnalysisCacheRow | null> {
+  static async getByNormalizedHash(hash: string, promptVersion: string = 'v1'): Promise<AIAnalysisCacheRow | null> {
     const result = await Database.query<AIAnalysisCacheRow>(
       `SELECT analysis_result, confidence, normalized_content, original_variants,
               hit_count, source, unit_description, unit_calories, normalized_hash, content
        FROM ai_analysis_cache
-       WHERE normalized_hash = $1`,
-      [hash]
+       WHERE normalized_hash = $1
+         AND COALESCE(prompt_version, 'v1') = $2`,
+      [hash, promptVersion]
     );
     return result.rows[0] || null;
   }
@@ -43,7 +47,8 @@ export class AIAnalysisCacheModel {
    */
   static async getByFuzzyMatch(
     content: string,
-    threshold: number = 0.3
+    threshold: number = 0.3,
+    promptVersion: string = 'v1'
   ): Promise<AIAnalysisCacheRow | null> {
     const result = await Database.query<AIAnalysisCacheRow>(
       `SELECT analysis_result, confidence, normalized_content, original_variants,
@@ -52,9 +57,10 @@ export class AIAnalysisCacheModel {
        FROM ai_analysis_cache
        WHERE normalized_content IS NOT NULL
          AND similarity(normalized_content, $1) > $2
+         AND COALESCE(prompt_version, 'v1') = $3
        ORDER BY sim DESC
        LIMIT 1`,
-      [content, threshold]
+      [content, threshold, promptVersion]
     );
     return result.rows[0] || null;
   }

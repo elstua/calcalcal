@@ -72,14 +72,14 @@ export class CacheLookupService {
    * Tries exact normalized match first, then fuzzy match via pg_trgm.
    * Returns scaled nutrition result on hit, or null on miss.
    */
-  static async lookup(content: string): Promise<CacheLookupResult | null> {
+  static async lookup(content: string, promptVersion: string = 'v1'): Promise<CacheLookupResult | null> {
     const normalized = normalize(content);
     const canonicalBase = normalizeForHash(content);
     const hash = hashNormalized(canonicalBase);
     const qty = extractQuantity(content);
 
     // 1. Exact normalized hash match
-    const exact = await AIAnalysisCacheModel.getByNormalizedHash(hash);
+    const exact = await AIAnalysisCacheModel.getByNormalizedHash(hash, promptVersion);
     if (exact) {
       const effectiveHash = exact.normalized_hash || hash;
       await AIAnalysisCacheModel.incrementHitCount(effectiveHash);
@@ -101,7 +101,7 @@ export class CacheLookupService {
 
     // 2. Fuzzy match via pg_trgm
     try {
-      const fuzzy = await AIAnalysisCacheModel.getByFuzzyMatch(normalized);
+      const fuzzy = await AIAnalysisCacheModel.getByFuzzyMatch(normalized, 0.3, promptVersion);
       if (fuzzy && fuzzy.normalized_hash) {
         await AIAnalysisCacheModel.incrementHitCount(fuzzy.normalized_hash);
         await AIAnalysisCacheModel.updateVariants(fuzzy.normalized_hash, content);
