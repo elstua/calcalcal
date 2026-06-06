@@ -15,6 +15,22 @@ export interface PromptContext {
   scenario: 'text-only' | 'image-only' | 'multimodal' | 'manual-update' | 'voice-validation';
 }
 
+export interface NutritionItem {
+  name: string;
+  source_text?: string;
+  quantity?: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  sugar: number;
+  sodium: number;
+  weight?: number;
+  metric_description?: string;
+  confidence?: number;
+}
+
 export interface NutritionAnalysisResult {
   calories: number;
   protein: number;
@@ -27,6 +43,7 @@ export interface NutritionAnalysisResult {
   metric_description?: string;
   description?: string;
   confidence: number;
+  items?: NutritionItem[];
   // Optional usage/metadata for caching/observability
   rawResponseText?: string;
   usage?: {

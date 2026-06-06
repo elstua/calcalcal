@@ -42,19 +42,29 @@ class BaseAnalysisPrompt implements PromptTemplate {
 
     let prompt = `You are a nutrition expert. Analyze the provided food item and return ONLY a valid JSON object:\n`;
     prompt += `{\n`;
-    prompt += `  "description": "<short food description>",\n`;
-    prompt += `  "calories": <number>,\n`;
-    prompt += `  "protein": <grams>,\n`;
-    prompt += `  "fat": <grams>,\n`;
-    prompt += `  "carbs": <grams>,\n`;
-    prompt += `  "fiber": <grams>,\n`;
-    prompt += `  "sugar": <grams>,\n`;
-    prompt += `  "sodium": <mg>,\n`;
-    prompt += `  "weight": <number in grams, optional but recommended>,\n`;
-    prompt += `  "metric_description": <string with weight unit, e.g., "100 g", "1 cup", "1 serving">,\n`;
+    prompt += `  "description": "<short combined food description>",\n`;
+    prompt += `  "calories": <total calories — sum of all items>,\n`;
+    prompt += `  "protein": <total grams — sum of all items>,\n`;
+    prompt += `  "fat": <total grams — sum of all items>,\n`;
+    prompt += `  "carbs": <total grams — sum of all items>,\n`;
+    prompt += `  "fiber": <total grams — sum of all items>,\n`;
+    prompt += `  "sugar": <total grams — sum of all items>,\n`;
+    prompt += `  "sodium": <total mg — sum of all items>,\n`;
+    prompt += `  "weight": <total weight in grams, optional>,\n`;
+    prompt += `  "metric_description": <string describing total serving, e.g., "2 items", "1 cup + 1 slice">,\n`;
     prompt += `  "confidence": <0..1>,\n`;
-    prompt += `  "groupId": <optional string, unique ID if this item belongs to a group>,\n`;
-    prompt += `  "groupName": <optional string, e.g., "Breakfast", "Lunch", "Recipe: Pasta">\n`;
+    prompt += `  "items": [\n`;
+    prompt += `    {\n`;
+    prompt += `      "name": "<food name>",\n`;
+    prompt += `      "source_text": "<exact phrase from the input that identifies this item>",\n`;
+    prompt += `      "quantity": <number — how many of this item, e.g. 2 for "2 cappuccinos">,\n`;
+    prompt += `      "calories": <calories for this item at stated quantity>,\n`;
+    prompt += `      "protein": <grams>, "fat": <grams>, "carbs": <grams>,\n`;
+    prompt += `      "fiber": <grams>, "sugar": <grams>, "sodium": <mg>,\n`;
+    prompt += `      "weight": <grams, optional>, "metric_description": <string, optional>,\n`;
+    prompt += `      "confidence": <0..1>\n`;
+    prompt += `    }\n`;
+    prompt += `  ]\n`;
     prompt += `}\n`;
 
     // Add scenario-specific instructions
@@ -72,10 +82,13 @@ class BaseAnalysisPrompt implements PromptTemplate {
       prompt += `- Analyze the food based on the description: "${context.text}"\n`;
       prompt += `- Use nutritional knowledge to estimate portion sizes and nutrients\n`;
       prompt += `- Treat explicit quantities as real multipliers. If the text says "2 cups", "3 eggs", "2 cappuccinos", or similar, double/triple the estimate accordingly. Do not ignore numeric quantities.\n`;
-      prompt += `- If the description mentions multiple distinct foods or drinks joined by words like "and", "+", "with", or commas, treat them as separate components and sum them into one combined nutrition estimate for the whole entry.\n`;
-      prompt += `- When both a quantity and multiple components are present, apply the quantity to each relevant component before summing. Example: "flat white, 2 cups" means two cups of flat white; "flat white and cappuccino" means both drinks counted together; "2 cups flat white and cappuccino" means two cups of flat white plus one cappuccino if that is the most natural reading.\n`;
+      prompt += `- If the description mentions multiple distinct foods or drinks joined by words like "and", "+", "with", or commas, treat them as separate components.\n`;
+      prompt += `- When both a quantity and multiple components are present, apply the quantity to each relevant component. Example: "flat white and cappuccino" = two separate items; "2 cappuccinos" = one item with quantity 2.\n`;
       prompt += `- Do NOT collapse distinct items into a single serving just because they appear in one sentence.\n`;
       prompt += `- Prefer additive interpretation when the items are clearly separate foods/drinks rather than one recipe or one mixed dish.\n`;
+      prompt += `- Populate "items" with one entry per distinct food/drink. Set source_text to the exact phrase from the input (e.g. "flat white", "cappuccino"). Set quantity to the stated count (default 1). The nutrition in each item should reflect the total for that item at its stated quantity.\n`;
+      prompt += `- The top-level calories/protein/fat/carbs/fiber/sugar/sodium MUST equal the sum of all items' values.\n`;
+      prompt += `- If the input is a single food with no multiples, still populate items with that one entry.\n`;
     }
 
     // Add meal context if available
@@ -112,12 +125,11 @@ class BaseAnalysisPrompt implements PromptTemplate {
       prompt += `If the input clearly refers to a previous item, provide nutrition for that referenced item.\n`;
     }
 
-    // Add grouping detection instructions
-    prompt += `\nGrouping Detection:\n`;
-    prompt += `- If the input suggests a meal grouping (e.g., "For breakfast:", "My lunch:", "Recipe for pasta:"), set groupId and groupName.\n`;
-    prompt += `- groupId should be a short unique identifier (e.g., "breakfast-1", "lunch", "recipe-pasta").\n`;
-    prompt += `- groupName should be human-readable (e.g., "Breakfast", "Lunch", "Recipe: Pasta").\n`;
-    prompt += `- If no grouping is detected, omit these fields.\n`;
+    // Add items reminder for non-text scenarios
+    prompt += `\nItems Array:\n`;
+    prompt += `- Always include the "items" array even for a single food.\n`;
+    prompt += `- Each item must have: name, source_text, quantity, calories, protein, fat, carbs, fiber, sugar, sodium.\n`;
+    prompt += `- Top-level totals must be the arithmetic sum of all items.\n`;
 
     // Add user data constraints
     if (hasUserData) {

@@ -316,6 +316,24 @@ fileprivate extension String {
     }
 }
 
+// MARK: - Per-item nutrition breakdown
+
+struct NutritionItem: Codable, Equatable {
+    var name: String
+    var source_text: String?
+    var quantity: Int?
+    var calories: Int?
+    var protein: Double?
+    var fat: Double?
+    var carbs: Double?
+    var fiber: Double?
+    var sugar: Double?
+    var sodium: Double?
+    var weight: Double?
+    var metric_description: String?
+    var confidence: Double?
+}
+
 // MARK: - Nutrition data container
 struct NutritionData: Codable, Equatable {
     var calories: Int?
@@ -329,4 +347,5 @@ struct NutritionData: Codable, Equatable {
     var metric_description: String?
     var confidence: Double?
     var userModified: Bool?
+    var items: [NutritionItem]?
 }

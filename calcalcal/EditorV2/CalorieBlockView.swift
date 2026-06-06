@@ -13,10 +13,11 @@ final class CalorieBlockView: UIView {
     private var currentCalories: Int = 0
     private var currentWeight: Double?
     private var currentNutrition: NutritionData?
+    private var blockText: String = ""
     private var blockID: BlockID?
 
     // Callbacks
-    private var onCalorieUpdate: ((Int?, Double?, BlockID) -> Void)?
+    private var onSave: ((NutritionData, BlockID) -> Void)?
     private var presentingViewController: UIViewController?
 
     override init(frame: CGRect) {
@@ -94,17 +95,19 @@ final class CalorieBlockView: UIView {
         calories: Int,
         weight: Double? = nil,
         nutrition: NutritionData?,
+        blockText: String,
         blockID: BlockID,
         presentingViewController: UIViewController,
-        onUpdate: @escaping (Int?, Double?, BlockID) -> Void
+        onSave: @escaping (NutritionData, BlockID) -> Void
     ) {
         self.currentCalories = calories
         // Use weight from nutrition data if available, otherwise use the weight parameter
         self.currentWeight = nutrition?.weight ?? weight
         self.currentNutrition = nutrition
+        self.blockText = blockText
         self.blockID = blockID
         self.presentingViewController = presentingViewController
-        self.onCalorieUpdate = onUpdate
+        self.onSave = onSave
     }
 
     @objc private func handleTap() {
@@ -114,21 +117,17 @@ final class CalorieBlockView: UIView {
 
         dismissActiveContextMenu()
 
-        let sourceFrame = convert(bounds, to: presentingViewController.view)
-        let overlay = CalorieContextMenuOverlayView(
-            sourceFrame: sourceFrame,
-            calories: currentCalories,
-            weight: currentWeight,
-            nutrition: currentNutrition,
-            onDismiss: {
-                Self.dismissActiveContextMenu()
+        let sheet = NutritionSheetContainer(
+            items: currentNutrition?.items ?? [],
+            blockText: blockText,
+            baseNutrition: currentNutrition,
+            onSave: { [weak self] nutrition in
+                self?.onSave?(nutrition, blockID)
             },
-            onUpdate: { [weak self] updatedCalories, updatedWeight in
-                self?.onCalorieUpdate?(updatedCalories, updatedWeight, blockID)
-            }
+            onDismiss: { Self.dismissActiveContextMenu() }
         )
 
-        let hostingController = UIHostingController(rootView: overlay)
+        let hostingController = UIHostingController(rootView: sheet)
         hostingController.view.backgroundColor = .clear
         hostingController.modalPresentationStyle = .overFullScreen
         hostingController.modalTransitionStyle = .crossDissolve
@@ -152,61 +151,3 @@ final class CalorieBlockView: UIView {
     }
 }
 
-private struct CalorieContextMenuOverlayView: View {
-    let sourceFrame: CGRect
-    let calories: Int
-    let weight: Double?
-    let nutrition: NutritionData?
-    let onDismiss: () -> Void
-    let onUpdate: (Int?, Double?) -> Void
-
-    private let cardSize = CGSize(width: 320, height: 404)
-    private let edgePadding: CGFloat = 12
-
-    var body: some View {
-        GeometryReader { proxy in
-            let frame = menuFrame(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
-
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture(perform: onDismiss)
-
-                CalorieContextMenuView(
-                    calories: calories,
-                    weight: weight,
-                    nutrition: nutrition,
-                    onDismiss: onDismiss,
-                    onUpdate: onUpdate
-                )
-                .frame(width: cardSize.width, height: cardSize.height, alignment: .top)
-                .position(x: frame.midX, y: frame.midY)
-            }
-        }
-        .background(Color.clear)
-    }
-
-    private func menuFrame(in containerSize: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
-        let minX = safeAreaInsets.leading + edgePadding
-        let maxX = containerSize.width - safeAreaInsets.trailing - edgePadding - cardSize.width
-        let minY = safeAreaInsets.top + edgePadding
-        let maxY = containerSize.height - safeAreaInsets.bottom - edgePadding - cardSize.height
-
-        let proposedX = sourceFrame.maxX - cardSize.width
-        let proposedY = sourceFrame.midY - 112
-
-        return CGRect(
-            x: proposedX.clamped(to: minX...max(minX, maxX)),
-            y: proposedY.clamped(to: minY...max(minY, maxY)),
-            width: cardSize.width,
-            height: cardSize.height
-        )
-    }
-}
-
-private extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
-        min(max(self, range.lowerBound), range.upperBound)
-    }
-}

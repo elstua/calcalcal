@@ -114,13 +114,16 @@ export class AIService {
         ? block.imageUrl.trim()
         : undefined;
 
-    const promptContext: PromptContext | undefined = imageUrl
+    const promptContext: PromptContext = imageUrl
       ? {
           text: content,
           imageUrl,
           scenario: "multimodal",
         }
-      : undefined;
+      : {
+          text: content,
+          scenario: "text-only",
+        };
 
     const hash = AIService.hashContent(content);
 
@@ -174,8 +177,11 @@ export class AIService {
           ? Number(analysis.calories) / qty.quantity
           : Number(analysis.calories);
 
+        // Strip items from the cached per-unit result — the per-unit scaling
+        // would make item quantities incorrect, so cache hits return totals only.
+        const { items: _strippedItems, ...analysisWithoutItems } = analysis;
         const perUnitResult = {
-          ...analysis,
+          ...analysisWithoutItems,
           calories: Math.round(perUnitCalories),
           protein: Math.round((Number(analysis.protein) || 0) / qty.quantity * 10) / 10,
           fat: Math.round((Number(analysis.fat) || 0) / qty.quantity * 10) / 10,

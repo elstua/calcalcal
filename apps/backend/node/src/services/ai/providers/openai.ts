@@ -1,5 +1,5 @@
 import { OpenAI } from "openai";
-import { NutritionAnalysisResult, NutritionProvider, PromptContext } from "./types";
+import { NutritionAnalysisResult, NutritionItem, NutritionProvider, PromptContext } from "./types";
 import { loadPrompt } from "../prompt/index";
 import { PromptTemplateBuilder } from "../prompts";
 import fs from "fs";
@@ -101,7 +101,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
       completion = await client.chat.completions.create({
         model,
         temperature,
-        max_tokens: 1000, // Limit tokens to prevent long responses
+        max_tokens: 2000,
         messages,
       });
     } catch (err: any) {
@@ -150,6 +150,24 @@ export class OpenAINutritionProvider implements NutritionProvider {
       parsed = {};
     }
 
+    const items: NutritionItem[] | undefined = Array.isArray(parsed.items)
+      ? parsed.items.map((item: any) => ({
+          name: String(item.name || ''),
+          source_text: item.source_text ? String(item.source_text) : undefined,
+          quantity: item.quantity != null ? Number(item.quantity) : undefined,
+          calories: Number(item.calories || 0),
+          protein: Number(item.protein || 0),
+          fat: Number(item.fat || 0),
+          carbs: Number(item.carbs || 0),
+          fiber: Number(item.fiber || 0),
+          sugar: Number(item.sugar || 0),
+          sodium: Number(item.sodium || 0),
+          weight: item.weight != null ? Number(item.weight) : undefined,
+          metric_description: item.metric_description ? String(item.metric_description) : undefined,
+          confidence: item.confidence != null ? Number(item.confidence) : undefined,
+        }))
+      : undefined;
+
     const result: NutritionAnalysisResult = {
       calories: Number(parsed.calories || 0),
       protein: Number(parsed.protein || 0),
@@ -162,6 +180,7 @@ export class OpenAINutritionProvider implements NutritionProvider {
       metric_description: parsed.metric_description || undefined,
       description: parsed.description || undefined,
       confidence: Number(parsed.confidence ?? 0.5),
+      items,
       rawResponseText: responseText,
       usage: {
         promptTokens: completion.usage?.prompt_tokens,

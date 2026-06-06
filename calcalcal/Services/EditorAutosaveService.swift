@@ -239,7 +239,8 @@ class EditorAutosaveService: ObservableObject {
                 "sodium": positiveOrNull(block.sodium),
                 "weight": positiveOrNull(block.weight),
                 "metric_description": (block.metric_description as Any?) ?? NSNull(),
-                "confidence": (block.confidence as Any?) ?? NSNull()
+                "confidence": (block.confidence as Any?) ?? NSNull(),
+                "items": (block.items as Any?) ?? NSNull()
             ]
         }
     }

@@ -544,16 +544,17 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
 
             // Configure context menu
             let nutritionData = self.nutritionData(for: block.id)
+            let blockText = self.textForBlock(block, in: textStorage.string as NSString)
             overlay.configureContextMenu(
                 calories: nutritionData?.calories ?? 0,
                 weight: nutritionData?.weight, // Use weight from nutrition data if available
                 nutrition: nutritionData,
+                blockText: blockText,
                 blockID: block.id,
                 presentingViewController: self.findViewController() ?? UIViewController(),
-                onUpdate: { [weak self] updatedCalories, updatedWeight, blockID in
-                    self?.handleCalorieUpdate(
-                        calories: updatedCalories,
-                        weight: updatedWeight,
+                onSave: { [weak self] nutrition, blockID in
+                    self?.handleManualNutritionSave(
+                        nutrition: nutrition,
                         blockID: blockID
                     )
                 }
@@ -1042,6 +1043,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         let sodium: Double?
         let weight: Double?
         let confidence: Double?
+        let items: [NutritionItem]?
         let aiAnalysis: String?
         let isAnalyzing: Bool
     }
@@ -1087,6 +1089,7 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
                 sodium: parseDouble(dict["sodium"]),
                 weight: parseDouble(dict["weight"]),
                 confidence: parseDouble(dict["confidence"]),
+                items: dict["items"] as? [NutritionItem],
                 aiAnalysis: nil,
                 isAnalyzing: parseBool(dict["isAnalyzing"])
             )
@@ -1246,7 +1249,8 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
             sugar: analyzed.sugar,
             sodium: analyzed.sodium,
             weight: analyzed.weight,
-            confidence: analyzed.confidence
+            confidence: analyzed.confidence,
+            items: analyzed.items
         )
     }
 
@@ -1346,6 +1350,44 @@ final class BlockEditorTextView: UITextView, UITextViewDelegate {
         scheduleCalorieOverlayUpdate()
 
         publishCalorieMetadataChange(nutritionMap: nutritionMap)
+    }
+
+    /// Persists a manual edit from the unified nutrition sheet (per-item edits,
+    /// re-summed totals). Applies the change locally first for instant feedback,
+    /// then writes it to the backend without running AI.
+    private func handleManualNutritionSave(nutrition: NutritionData, blockID: BlockID) {
+        guard let entryIdentifier = entryIdentifier else {
+            dlog("Error: No entry identifier available for manual nutrition save")
+            return
+        }
+
+        let calories = nutrition.calories ?? 0
+
+        // Optimistic local update so the overlay + totals reflect the edit instantly.
+        var nutritionMap = currentNutritionMap()
+        nutritionMap[blockID] = nutrition
+        blockDocumentController.setNutritionData(nutritionMap)
+        if let calorieOverlay = calorieOverlays[blockID] {
+            calorieOverlay.setCaloriesAnimated(String(calories))
+        }
+        blockDocumentController.setCalorieLabel(String(calories), for: blockID)
+        scheduleCalorieOverlayUpdate()
+        publishCalorieMetadataChange(nutritionMap: nutritionMap)
+
+        Task { [weak self] in
+            do {
+                _ = try await DiaryAPI.updateBlockNutrition(
+                    entryId: entryIdentifier.uuidString,
+                    blockId: blockID.rawValue.uuidString,
+                    nutrition: nutrition
+                )
+            } catch {
+                dlog("Error saving manual nutrition: \(error)")
+                await MainActor.run {
+                    self?.showErrorAlert(message: "Failed to save nutrition changes. Please try again.")
+                }
+            }
+        }
     }
 
     private func applyVisibleCalorieUpdate(calories: Int, blockID: BlockID) {

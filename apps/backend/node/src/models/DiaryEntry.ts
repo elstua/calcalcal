@@ -373,6 +373,123 @@ export class DiaryEntryModel {
     return result.rows[0] || null;
   }
 
+  /**
+   * Manually overwrite a single block's nutrition (calories, macros, items)
+   * without running AI. Used by the editable nutrition sheet: the client sends
+   * the recomputed per-item breakdown and totals, we persist it, mark the block
+   * userModified, and recompute entry-level totals from all blocks.
+   */
+  static async updateBlockManualNutrition(
+    entryId: string,
+    userId: string,
+    blockId: string,
+    nutrition: {
+      calories?: number;
+      protein?: number;
+      fat?: number;
+      carbs?: number;
+      fiber?: number;
+      sugar?: number;
+      sodium?: number;
+      weight?: number;
+      metric_description?: string;
+      items?: any[];
+    }
+  ) {
+    const entry = await this.getById(entryId);
+    if (!entry || entry.user_id !== userId) {
+      return null;
+    }
+
+    let matched = false;
+    const updatedBlocks = (entry.blocks || []).map((block: any) => {
+      if (block.id !== blockId) {
+        return block;
+      }
+      matched = true;
+      return {
+        ...block,
+        calories: Number(nutrition.calories) || 0,
+        protein: Number(nutrition.protein) || 0,
+        fat: Number(nutrition.fat) || 0,
+        carbs: Number(nutrition.carbs) || 0,
+        fiber: Number(nutrition.fiber) || 0,
+        sugar: Number(nutrition.sugar) || 0,
+        sodium: Number(nutrition.sodium) || 0,
+        weight:
+          nutrition.weight !== undefined && nutrition.weight !== null
+            ? Number(nutrition.weight)
+            : block.weight,
+        metric_description:
+          nutrition.metric_description ?? block.metric_description,
+        items: Array.isArray(nutrition.items) ? nutrition.items : block.items,
+        userModified: true,
+        lastAnalyzedAt: new Date().toISOString(),
+      };
+    });
+
+    if (!matched) {
+      return null;
+    }
+
+    const totals = updatedBlocks.reduce(
+      (acc: any, block: any) => ({
+        total_calories: acc.total_calories + (Number(block.calories) || 0),
+        total_protein: acc.total_protein + (Number(block.protein) || 0),
+        total_fat: acc.total_fat + (Number(block.fat) || 0),
+        total_carbs: acc.total_carbs + (Number(block.carbs) || 0),
+        total_fiber: acc.total_fiber + (Number(block.fiber) || 0),
+        total_sugar: acc.total_sugar + (Number(block.sugar) || 0),
+        total_sodium: acc.total_sodium + (Number(block.sodium) || 0),
+      }),
+      {
+        total_calories: 0,
+        total_protein: 0,
+        total_fat: 0,
+        total_carbs: 0,
+        total_fiber: 0,
+        total_sugar: 0,
+        total_sodium: 0,
+      }
+    );
+
+    const result = await Database.query(
+      `UPDATE diary_entries SET
+         blocks = $1,
+         total_calories = $2,
+         total_protein = $3,
+         total_fat = $4,
+         total_carbs = $5,
+         total_fiber = $6,
+         total_sugar = $7,
+         total_sodium = $8,
+         updated_at = NOW()
+       WHERE id = $9 AND user_id = $10
+       RETURNING ${this.selectColumns}`,
+      [
+        JSON.stringify(updatedBlocks),
+        totals.total_calories,
+        totals.total_protein,
+        totals.total_fat,
+        totals.total_carbs,
+        totals.total_fiber,
+        totals.total_sugar,
+        totals.total_sodium,
+        entryId,
+        userId,
+      ]
+    );
+
+    const updatedEntry = result.rows[0] || null;
+    if (!updatedEntry) {
+      return null;
+    }
+
+    const updatedBlock =
+      (updatedEntry.blocks || []).find((b: any) => b.id === blockId) || null;
+    return { entry: updatedEntry, block: updatedBlock, totals };
+  }
+
   static async delete(entryId: string, userId: string) {
     const result = await Database.query(
       `DELETE FROM diary_entries

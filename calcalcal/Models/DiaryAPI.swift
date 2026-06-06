@@ -20,6 +20,7 @@ struct DiaryAPI {
         let weight: Double?
         let metric_description: String?
         let confidence: Double?
+        let items: [NutritionItem]?
         let totals: EntryTotals?
         let streaks: StreaksData?
     }
@@ -93,12 +94,13 @@ struct DiaryAPI {
         let weight: Double?
         let metric_description: String?
         let confidence: Double?
+        let items: [NutritionItem]?
 
         enum CodingKeys: String, CodingKey {
-            case id, position, content, calories, protein, fat, carbs, fiber, sugar, sodium, weight, metric_description, confidence
+            case id, position, content, calories, protein, fat, carbs, fiber, sugar, sodium, weight, metric_description, confidence, items
         }
 
-        init(id: String?, position: Int?, content: String?, calories: Int?, protein: Double?, fat: Double?, carbs: Double?, fiber: Double?, sugar: Double?, sodium: Double?, weight: Double?, metric_description: String?, confidence: Double?) {
+        init(id: String?, position: Int?, content: String?, calories: Int?, protein: Double?, fat: Double?, carbs: Double?, fiber: Double?, sugar: Double?, sodium: Double?, weight: Double?, metric_description: String?, confidence: Double?, items: [NutritionItem]? = nil) {
             self.id = id
             self.position = position
             self.content = content
@@ -112,6 +114,7 @@ struct DiaryAPI {
             self.weight = weight
             self.metric_description = metric_description
             self.confidence = confidence
+            self.items = items
         }
 
         init(from decoder: Decoder) throws {
@@ -129,6 +132,7 @@ struct DiaryAPI {
             self.weight = c.decodeDoubleForgiving(forKey: .weight)
             self.metric_description = try? c.decode(String.self, forKey: .metric_description)
             self.confidence = c.decodeDoubleForgiving(forKey: .confidence)
+            self.items = try? c.decode([NutritionItem].self, forKey: .items)
         }
 
         func encode(to encoder: Encoder) throws {
@@ -146,6 +150,7 @@ struct DiaryAPI {
             try c.encodeIfPresent(weight, forKey: .weight)
             try c.encodeIfPresent(metric_description, forKey: .metric_description)
             try c.encodeIfPresent(confidence, forKey: .confidence)
+            try c.encodeIfPresent(items, forKey: .items)
         }
 
         /// Convert to AnalyzedBlock for comparison
@@ -186,7 +191,8 @@ struct DiaryAPI {
                     weight: weight,
                     metric_description: metric_description,
                     confidence: confidence,
-                    userModified: nil
+                    userModified: nil,
+                    items: items
                 )
             )
             block.stableId = id.flatMap(UUID.init(uuidString:))
@@ -444,6 +450,47 @@ struct DiaryAPI {
             ])
         }
         
+        let decoder = JSONDecoder()
+        return try decoder.decode(AnalyzeBlockResponse.self, from: data)
+    }
+
+    /// Manually overwrite a block's nutrition (calories, macros, per-item breakdown)
+    /// without running AI. Used by the editable nutrition sheet.
+    static func updateBlockNutrition(entryId: String, blockId: String, nutrition: NutritionData) async throws -> AnalyzeBlockResponse {
+        let base = Configuration.apiURL
+        let urlString = "\(base)/api/diary/entries/\(entryId)/blocks/\(blockId)/nutrition"
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+
+        var nutritionPayload: [String: Any] = [
+            "calories": nutrition.calories ?? 0,
+            "protein": nutrition.protein ?? 0,
+            "fat": nutrition.fat ?? 0,
+            "carbs": nutrition.carbs ?? 0,
+            "fiber": nutrition.fiber ?? 0,
+            "sugar": nutrition.sugar ?? 0,
+            "sodium": nutrition.sodium ?? 0
+        ]
+        if let weight = nutrition.weight { nutritionPayload["weight"] = weight }
+        if let metric = nutrition.metric_description { nutritionPayload["metric_description"] = metric }
+        if let items = nutrition.items, let itemsData = try? JSONEncoder().encode(items),
+           let itemsJSON = try? JSONSerialization.jsonObject(with: itemsData) {
+            nutritionPayload["items"] = itemsJSON
+        }
+
+        let payload: [String: Any] = ["nutrition": nutritionPayload]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let request = try makeRequest(url: url, method: "PATCH", body: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if !(200..<300).contains(http.statusCode) {
+            let bodyText = String(data: data, encoding: .utf8) ?? "<no body>"
+            dlog("❌ updateBlockNutrition failed HTTP=\(http.statusCode) body=\(bodyText)")
+            throw NSError(domain: "DiaryAPI", code: http.statusCode, userInfo: [
+                NSLocalizedDescriptionKey: "updateBlockNutrition failed (HTTP \(http.statusCode)): \(bodyText)"
+            ])
+        }
+
         let decoder = JSONDecoder()
         return try decoder.decode(AnalyzeBlockResponse.self, from: data)
     }

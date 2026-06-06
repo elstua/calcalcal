@@ -109,6 +109,52 @@ router.patch('/entries/:id', async (req: AuthRequest, res) => {
   }
 });
 
+// PATCH /api/diary/entries/:entryId/blocks/:blockId/nutrition
+// Manual nutrition override for a single block (editable nutrition sheet, no AI).
+router.patch('/entries/:entryId/blocks/:blockId/nutrition', async (req: AuthRequest, res) => {
+  try {
+    const { entryId, blockId } = req.params;
+    const { nutrition } = req.body;
+    const userId = req.userId!;
+
+    if (!nutrition || typeof nutrition !== 'object') {
+      return res.status(400).json({ error: 'nutrition object is required' });
+    }
+
+    const result = await DiaryEntryModel.updateBlockManualNutrition(
+      entryId,
+      userId,
+      blockId,
+      nutrition
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: 'Entry or block not found' });
+    }
+
+    const { block, totals } = result;
+    res.json({
+      blockId,
+      entryId,
+      calories: Number(block?.calories) || 0,
+      protein: Number(block?.protein) || 0,
+      fat: Number(block?.fat) || 0,
+      carbs: Number(block?.carbs) || 0,
+      fiber: Number(block?.fiber) || 0,
+      sugar: Number(block?.sugar) || 0,
+      sodium: Number(block?.sodium) || 0,
+      weight: block?.weight ?? null,
+      metric_description: block?.metric_description ?? null,
+      confidence: block?.confidence ?? null,
+      items: block?.items ?? null,
+      totals,
+    });
+  } catch (error) {
+    console.error('Error updating block nutrition:', error);
+    res.status(500).json({ error: 'Failed to update block nutrition' });
+  }
+});
+
 // DELETE /api/diary/entries/:id - Delete entry
 router.delete('/entries/:id', async (req: AuthRequest, res) => {
   try {
