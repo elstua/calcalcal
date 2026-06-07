@@ -86,6 +86,33 @@ export interface ExtractedQuantity {
 }
 
 /**
+ * Split a free-form food block into individual item segments for per-item cache lookup.
+ *
+ * Splits on: "and" (word-bounded), "+", "&", "," and newlines.
+ * Does NOT split on "with" — "coffee with milk" is one item, not two.
+ * Returns [content] unchanged when splitting would yield only one piece.
+ *
+ * Examples:
+ *   "cappuccino and banana"       → ["cappuccino", "banana"]
+ *   "chicken, rice and beans"     → ["chicken", "rice", "beans"]
+ *   "flat white + croissant"      → ["flat white", "croissant"]
+ *   "coffee with milk"            → ["coffee with milk"]
+ *   "2.5 eggs"                    → ["2.5 eggs"]
+ */
+export function splitIntoSegments(content: string): string[] {
+  // Word-bounded "and", plus "+", "&", "," separators and newlines.
+  // The \b ensures we don't split on "sandwich" or "bland".
+  const SEPARATOR_RE = /\band\b|\s*[+&,]\s*|\n+/gi;
+
+  const pieces = content.split(SEPARATOR_RE);
+  const segments = pieces.map(s => s.trim()).filter(s => s.length > 0);
+
+  if (segments.length <= 1) return [content.trim() || content];
+
+  return segments;
+}
+
+/**
  * Normalize a food content string:
  * - Lowercase
  * - Unicode normalization (NFC)

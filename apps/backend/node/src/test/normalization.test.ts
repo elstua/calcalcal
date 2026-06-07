@@ -4,6 +4,7 @@ import {
   findCanonicalForm,
   hashNormalized,
   normalizeForHash,
+  splitIntoSegments,
 } from '../services/ai/normalization';
 
 describe('normalize', () => {
@@ -162,6 +163,54 @@ describe('hashNormalized', () => {
     const h1 = hashNormalized('cappuccino');
     const h2 = hashNormalized('flat white');
     expect(h1).not.toBe(h2);
+  });
+});
+
+describe('splitIntoSegments', () => {
+  it('splits on "and" (word-bounded)', () => {
+    expect(splitIntoSegments('cappuccino and banana')).toEqual(['cappuccino', 'banana']);
+  });
+
+  it('splits on comma', () => {
+    expect(splitIntoSegments('chicken, rice')).toEqual(['chicken', 'rice']);
+  });
+
+  it('splits on plus sign', () => {
+    expect(splitIntoSegments('flat white + croissant')).toEqual(['flat white', 'croissant']);
+  });
+
+  it('splits on ampersand', () => {
+    expect(splitIntoSegments('eggs & bacon')).toEqual(['eggs', 'bacon']);
+  });
+
+  it('splits three items: comma then and', () => {
+    expect(splitIntoSegments('chicken, rice and beans')).toEqual(['chicken', 'rice', 'beans']);
+  });
+
+  it('does NOT split on "with"', () => {
+    expect(splitIntoSegments('coffee with milk')).toEqual(['coffee with milk']);
+  });
+
+  it('does NOT split a single-item string', () => {
+    expect(splitIntoSegments('cappuccino')).toEqual(['cappuccino']);
+  });
+
+  it('does NOT split on "and" inside a word like "sandwich"', () => {
+    const result = splitIntoSegments('sandwich');
+    expect(result).toEqual(['sandwich']);
+  });
+
+  it('handles a quantity without splitting it', () => {
+    expect(splitIntoSegments('2.5 eggs')).toEqual(['2.5 eggs']);
+  });
+
+  it('splits on newlines', () => {
+    expect(splitIntoSegments('apple\nbanana')).toEqual(['apple', 'banana']);
+  });
+
+  it('trims whitespace from each segment', () => {
+    const result = splitIntoSegments('  cappuccino  and  banana  ');
+    expect(result).toEqual(['cappuccino', 'banana']);
   });
 });
 
