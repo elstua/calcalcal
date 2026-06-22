@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+private enum ItemMacroColor {
+    static let carbs = Color(hex: 0x5CB8C4)
+    static let protein = Color(hex: 0x3B8A5E)
+    static let fat = Color(hex: 0xE0854A)
+}
+
 // MARK: - Editable item view model
 
 private struct EditableItem: Identifiable {
@@ -10,6 +16,7 @@ private struct EditableItem: Identifiable {
     var quantity: Int?
     var caloriesText: String
     var weightText: String
+    var weightUnit: WeightUnit
     // Macros are displayed read-only and rescaled with weight or calories.
     var protein: Double?
     var fat: Double?
@@ -37,7 +44,7 @@ private struct EditableItem: Identifiable {
     var lastCaloriesText: String = ""
 
     var calories: Int { Int(caloriesText) ?? 0 }
-    var weight: Double? { Double(weightText) }
+    var weight: Double? { weightInGrams }
 
     /// True when we have a positive baseline weight to scale against.
     var canScaleByWeight: Bool { (baseWeight ?? 0) > 0 }
@@ -45,7 +52,7 @@ private struct EditableItem: Identifiable {
     /// Rescales calories and macros proportionally to the edited weight.
     mutating func rescaleFromWeight() {
         guard let base = baseWeight, base > 0,
-              let newWeight = Double(weightText), newWeight > 0 else { return }
+              let newWeight = weightInGrams, newWeight > 0 else { return }
         let factor = newWeight / base
         caloriesText = String(Int((Double(baseCalories) * factor).rounded()))
         lastCaloriesText = caloriesText
@@ -85,6 +92,89 @@ private struct EditableItem: Identifiable {
             confidence: confidence
         )
     }
+
+    mutating func selectWeightUnit(_ newUnit: WeightUnit) {
+        let currentWeight = weightInGrams
+        weightUnit = newUnit
+        weightText = currentWeight.map { formattedWeightText(forGrams: $0) } ?? ""
+    }
+
+    var weightUnitLabel: String {
+        switch weightUnit {
+        case .grams:
+            return "g"
+        case .ounces:
+            return "oz"
+        case .serving:
+            return servingUnitName
+        }
+    }
+
+    var availableWeightUnits: [WeightUnit] {
+        var units: [WeightUnit] = [.grams, .ounces]
+        if hasServingUnit { units.append(.serving) }
+        return units
+    }
+
+    private var weightInGrams: Double? {
+        guard let value = Double(weightText), value > 0 else { return nil }
+        switch weightUnit {
+        case .grams:
+            return value
+        case .ounces:
+            return value * Self.gramsPerOunce
+        case .serving:
+            guard let baseWeight, baseWeight > 0 else { return nil }
+            return value * baseWeight
+        }
+    }
+
+    private var hasServingUnit: Bool {
+        guard let metricDescription else { return false }
+        return !metricDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (baseWeight ?? 0) > 0
+    }
+
+    private var servingUnitName: String {
+        guard let metricDescription else { return "item" }
+        let cleaned = metricDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"^\d+(\.\d+)?\s*"#, with: "", options: .regularExpression)
+        return cleaned.isEmpty ? "item" : cleaned
+    }
+
+    private func formattedWeightText(forGrams grams: Double) -> String {
+        switch weightUnit {
+        case .grams:
+            return Self.formatWeight(grams)
+        case .ounces:
+            return Self.formatWeight(grams / Self.gramsPerOunce)
+        case .serving:
+            guard let baseWeight, baseWeight > 0 else { return Self.formatWeight(grams) }
+            return Self.formatWeight(grams / baseWeight)
+        }
+    }
+
+    private static func formatWeight(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
+    }
+
+    private static let gramsPerOunce = 28.349523125
+}
+
+private enum WeightUnit: String, CaseIterable, Identifiable {
+    case grams
+    case ounces
+    case serving
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .grams: return "Grams"
+        case .ounces: return "Ounces"
+        case .serving: return "Serving"
+        }
+    }
 }
 
 // MARK: - Item card
@@ -97,10 +187,11 @@ private struct ItemCard: View {
         VStack(alignment: .leading, spacing: DSSpacing.smd) {
             HStack(alignment: .firstTextBaseline, spacing: DSSpacing.sm) {
                 Text(item.name.isEmpty ? "Item" : item.name)
-                    .font(.dsBodyEmphasized)
+                    .font(.dsTitle3)
                     .foregroundColor(DSColors.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let qty = item.quantity, qty > 1 {
                     Text("×\(qty)")
@@ -111,7 +202,7 @@ private struct ItemCard: View {
                 Spacer(minLength: DSSpacing.sm)
             }
 
-            HStack(spacing: DSSpacing.sm) {
+            VStack(spacing: DSSpacing.sm) {
                 fieldPill(title: "Calories", text: $item.caloriesText, unit: "kcal", keyboard: .numberPad)
                     .onChange(of: item.caloriesText) { newValue in
                         // Skip programmatic changes written by a weight edit.
@@ -119,11 +210,12 @@ private struct ItemCard: View {
                         item.lastCaloriesText = newValue
                         item.rescaleFromCalories()
                     }
-                fieldPill(title: "Weight", text: $item.weightText, unit: "g", keyboard: .decimalPad)
+                weightField
                     .onChange(of: item.weightText) { _ in
                         item.rescaleFromWeight()
                     }
             }
+            .padding(.top, DSSpacing.xs)
 
             if item.canScaleByWeight {
                 Text("Editing calories or weight rescales the macros")
@@ -132,17 +224,24 @@ private struct ItemCard: View {
             }
 
             if hasMacros {
-                HStack(spacing: DSSpacing.xs) {
-                    if let p = item.protein, p > 0 { macroChip("P", p) }
-                    if let f = item.fat, f > 0 { macroChip("F", f) }
-                    if let c = item.carbs, c > 0 { macroChip("C", c) }
+                VStack(spacing: DSSpacing.xs) {
+                    if let c = item.carbs, c > 0 { macroRow(title: "Carbs", value: c, color: ItemMacroColor.carbs) }
+                    if let p = item.protein, p > 0 { macroRow(title: "Proteins", value: p, color: ItemMacroColor.protein) }
+                    if let f = item.fat, f > 0 { macroRow(title: "Fats", value: f, color: ItemMacroColor.fat) }
                 }
+                .padding(.top, DSSpacing.xxs)
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(DSSpacing.md)
+        .padding(.horizontal, DSSpacing.lg)
+        .padding(.vertical, DSSpacing.mlg)
+        .frame(maxWidth: .infinity, minHeight: 350, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: DSCornerRadius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: DSCornerRadius.xl, style: .continuous)
                 .fill(DSColors.surfaceSecondary)
+                .shadow(color: DSColors.shadowMedium, radius: 14, x: 0, y: 8)
+                .shadow(color: DSColors.shadowLight, radius: 2, x: 0, y: 1)
         )
         .opacity(isDisabled ? 0.6 : 1)
         .allowsHitTesting(!isDisabled)
@@ -152,8 +251,57 @@ private struct ItemCard: View {
         (item.protein ?? 0) > 0 || (item.fat ?? 0) > 0 || (item.carbs ?? 0) > 0
     }
 
+    private var weightField: some View {
+        fieldPill(
+            title: "Weight",
+            text: $item.weightText,
+            unit: item.weightUnitLabel,
+            keyboard: .decimalPad,
+            unitMenu: {
+                Menu {
+                    ForEach(item.availableWeightUnits) { unit in
+                        Button {
+                            item.selectWeightUnit(unit)
+                            item.rescaleFromWeight()
+                        } label: {
+                            if unit == item.weightUnit {
+                                Label(unit.menuTitle, systemImage: "checkmark")
+                            } else {
+                                Text(unit.menuTitle)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(item.weightUnitLabel)
+                        Image(systemName: "chevron.down")
+                            .font(Font.dsCustom(weight: .semiBold, size: 9))
+                    }
+                    .font(.dsCaption)
+                    .foregroundColor(DSColors.textSecondary)
+                    .frame(minWidth: 40, minHeight: 40, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+            }
+        )
+    }
+
     private func fieldPill(title: String, text: Binding<String>, unit: String, keyboard: UIKeyboardType) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        fieldPill(title: title, text: text, unit: unit, keyboard: keyboard) {
+            Text(unit)
+                .font(.dsCaption)
+                .foregroundColor(DSColors.textSecondary)
+        }
+    }
+
+    private func fieldPill<UnitView: View>(
+        title: String,
+        text: Binding<String>,
+        unit: String,
+        keyboard: UIKeyboardType,
+        @ViewBuilder unitMenu: () -> UnitView
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.dsCaption)
                 .foregroundColor(DSColors.textSecondary)
@@ -163,13 +311,12 @@ private struct ItemCard: View {
                     .font(.dsBodyEmphasized)
                     .foregroundColor(DSColors.textPrimary)
                     .monospacedDigit()
-                Text(unit)
-                    .font(.dsCaption)
-                    .foregroundColor(DSColors.textSecondary)
+                unitMenu()
             }
         }
         .padding(.horizontal, DSSpacing.smd)
-        .frame(minHeight: 44)
+        .padding(.vertical, DSSpacing.xs)
+        .frame(minHeight: 64)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DSCornerRadius.md, style: .continuous)
@@ -177,21 +324,25 @@ private struct ItemCard: View {
         )
     }
 
-    private func macroChip(_ label: String, _ value: Double) -> some View {
-        HStack(spacing: 3) {
-            Text(label)
-                .font(Font.dsCustom(weight: .semiBold, size: 11))
+    private func macroRow(title: String, value: Double, color: Color) -> some View {
+        HStack(spacing: DSSpacing.sm) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(title)
+                .font(.dsSubheadline)
                 .foregroundColor(DSColors.textSecondary)
-            Text(String(format: "%.0fg", value))
-                .font(Font.dsCustom(weight: .medium, size: 12))
+            Spacer()
+            Text(formatMacro(value))
+                .font(.dsHeadline)
                 .foregroundColor(DSColors.textPrimary)
                 .monospacedDigit()
         }
-        .padding(.horizontal, DSSpacing.sm)
-        .padding(.vertical, 4)
-        .background(
-            Capsule(style: .continuous).fill(DSColors.surface)
-        )
+        .frame(minHeight: 30)
+    }
+
+    private func formatMacro(_ value: Double) -> String {
+        value == value.rounded() ? "\(Int(value))g" : String(format: "%.1fg", value)
     }
 }
 
@@ -206,6 +357,7 @@ struct NutritionSheetView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
     @State private var isSaving = false
+    @State private var selectedPage = 0
 
     private let dragThreshold: CGFloat = 100
 
@@ -230,22 +382,30 @@ struct NutritionSheetView: View {
         VStack(spacing: 0) {
             dragHandle
             header
-            ScrollView {
-                VStack(spacing: DSSpacing.sm) {
-                    ForEach($items) { $item in
-                        ItemCard(item: $item, isDisabled: isSaving)
-                    }
+            pageIndicator
+                .padding(.bottom, DSSpacing.sm)
+
+            TabView(selection: $selectedPage) {
+                ForEach(loopedPageIndices, id: \.self) { page in
+                    ItemCard(item: itemBinding(at: realItemIndex(for: page)), isDisabled: isSaving)
+                        .padding(.horizontal, DSSpacing.lg)
+                        .tag(page)
                 }
-                .padding(.horizontal, DSSpacing.lg)
-                .padding(.top, DSSpacing.xs)
-                .padding(.bottom, DSSpacing.md)
             }
-            .frame(maxHeight: 360)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 410)
+            .padding(.bottom, DSSpacing.xs)
 
             saveButton
                 .padding(.horizontal, DSSpacing.lg)
-                .padding(.bottom, DSSpacing.xl)
+                .padding(.bottom, DSSpacing.mlg)
                 .padding(.top, DSSpacing.xs)
+        }
+        .onAppear {
+            selectedPage = 0
+        }
+        .onChange(of: selectedPage) { page in
+            wrapLoopedPageIfNeeded(page)
         }
         .background(
             RoundedRectangle(cornerRadius: DSCornerRadius.xxl, style: .continuous)
@@ -253,16 +413,20 @@ struct NutritionSheetView: View {
                 .shadow(color: DSColors.shadowMedium, radius: 1, x: 0, y: 0)
         )
         .offset(y: max(0, dragOffset))
-        .gesture(
+        .simultaneousGesture(
             DragGesture()
                 .onChanged { value in
                     isDragging = true
-                    if value.translation.height > 0 { dragOffset = value.translation.height }
+                    if value.translation.height > 0,
+                       abs(value.translation.height) > abs(value.translation.width) {
+                        dragOffset = value.translation.height
+                    }
                 }
                 .onEnded { value in
                     isDragging = false
                     let velocity = value.predictedEndLocation.y - value.location.y
-                    if dragOffset > dragThreshold || velocity > 300 {
+                    let mostlyVertical = abs(value.translation.height) > abs(value.translation.width)
+                    if mostlyVertical && (dragOffset > dragThreshold || velocity > 300) {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             dragOffset = UIScreen.main.bounds.height
                         } completion: { onClose() }
@@ -276,6 +440,40 @@ struct NutritionSheetView: View {
         .animation(isDragging ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
     }
 
+    private var loopedPageIndices: [Int] {
+        guard items.count > 1 else { return [0] }
+        return [-1] + Array(items.indices) + [items.count]
+    }
+
+    private var selectedItemIndex: Int {
+        realItemIndex(for: selectedPage)
+    }
+
+    private func realItemIndex(for page: Int) -> Int {
+        guard !items.isEmpty else { return 0 }
+        if page < 0 { return items.count - 1 }
+        if page >= items.count { return 0 }
+        return page
+    }
+
+    private func itemBinding(at index: Int) -> Binding<EditableItem> {
+        Binding(
+            get: { items[index] },
+            set: { items[index] = $0 }
+        )
+    }
+
+    private func wrapLoopedPageIfNeeded(_ page: Int) {
+        guard items.count > 1, page == -1 || page == items.count else { return }
+        DispatchQueue.main.async {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                selectedPage = page == -1 ? items.count - 1 : 0
+            }
+        }
+    }
+
     private var dragHandle: some View {
         RoundedRectangle(cornerRadius: DSCornerRadius.full)
             .fill(DSColors.textSecondary.opacity(0.2))
@@ -285,30 +483,47 @@ struct NutritionSheetView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Nutrition")
-                    .font(.dsHeadline)
-                    .foregroundColor(DSColors.textPrimary)
-                if items.count > 1 {
-                    Text("\(items.count) items")
-                        .font(.dsCaption)
-                        .foregroundColor(DSColors.textSecondary)
-                }
+        VStack(spacing: DSSpacing.xxs) {
+            HStack {
+                Text(itemCountText)
+                    .dsTypography(.subheadline)
+                    .foregroundColor(DSColors.textSecondary)
+                Spacer()
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+
+            HStack(alignment: .firstTextBaseline) {
                 Text("\(totalCalories)")
-                    .font(.dsTitle3)
+                    .font(.dsLargeNumber)
                     .foregroundColor(DSColors.primary)
                     .monospacedDigit()
+
                 Text("kcal total")
-                    .font(.dsCaption)
+                    .font(.dsSubheadline)
                     .foregroundColor(DSColors.textSecondary)
+                Spacer()
             }
         }
         .padding(.horizontal, DSSpacing.lg)
         .padding(.bottom, DSSpacing.sm)
+    }
+
+    private var pageIndicator: some View {
+        HStack(spacing: 6) {
+            ForEach(items.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(DSColors.primary.opacity(index == selectedItemIndex ? 1 : 0.22))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 3)
+            }
+        }
+        .padding(.horizontal, DSSpacing.lg)
+        .frame(maxWidth: .infinity)
+        .opacity(items.count > 1 ? 1 : 0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.85), value: selectedItemIndex)
+    }
+
+    private var itemCountText: String {
+        "\(items.count) \(items.count == 1 ? "item" : "items")"
     }
 
     private var saveButton: some View {
@@ -378,6 +593,7 @@ struct NutritionSheetView: View {
                     quantity: item.quantity,
                     caloriesText: item.calories.map(String.init) ?? "",
                     weightText: item.weight.map { formatWeight($0) } ?? "",
+                    weightUnit: .grams,
                     protein: item.protein,
                     fat: item.fat,
                     carbs: item.carbs,
@@ -406,6 +622,7 @@ struct NutritionSheetView: View {
                 quantity: nil,
                 caloriesText: base?.calories.map(String.init) ?? "",
                 weightText: base?.weight.map { formatWeight($0) } ?? "",
+                weightUnit: .grams,
                 protein: base?.protein,
                 fat: base?.fat,
                 carbs: base?.carbs,
